@@ -1,0 +1,65 @@
+site_name: IncidentRelay Docs
+site_description: IncidentRelay self-hosted on-call and alert routing service
+repo_url: https://github.com/roxy-wi/IncidentRelay
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+    - content.tabs.link
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - tables
+  - fenced_code
+  - attr_list
+
+nav:
+  - Home: index.md
+  - Project README: project-readme.md
+  - Getting Started:
+      - Overview: getting-started/index.md
+      - Installation: getting-started/installation.md
+      - Configuration: getting-started/configuration.md
+      - First Login and Setup: getting-started/first-login.md
+      - Quickstart Checklist: getting-started/quickstart.md
+  - Main Concepts:
+      - Overview: concepts/index.md
+      - Groups and RBAC: concepts/groups-and-rbac.md
+      - Teams, Rotations and Routes: concepts/teams-rotations-routes.md
+      - Channels: concepts/channels.md
+      - Route Intake Tokens: concepts/route-intake-tokens.md
+  - Integrations:
+      - Overview: integrations/index.md
+      - Alertmanager: integrations/alertmanager.md
+      - Generic Webhook: integrations/generic-webhook.md
+      - Zabbix: integrations/zabbix.md
+      - Mattermost: integrations/mattermost.md
+  - Usage:
+      - Overview: usage/index.md
+      - Alerts: usage/alerts.md
+      - Silences: usage/silences.md
+      - Calendar: usage/calendar.md
+      - Profile and Personal API Tokens: usage/profile-and-tokens.md
+      - Rotation Overrides: usage/rotation-overrides.md
+  - Voice Providers:
+      - Overview: voice-providers/index.md
+      - Provider API: voice-providers/provider-api.md
+      - Configuration: voice-providers/configuration.md
+      - Callbacks and DTMF: voice-providers/callbacks.md
+      - Security: voice-providers/security.md
+      - Troubleshooting: voice-providers/troubleshooting.md
+  - API:
+      - Overview: api/index.md
+      - Voice Call OpenAPI Notes: api/voice-call-openapi.md
+  - Administration:
+      - Overview: administration/index.md
+      - Demo Data: administration/demo-data.md
+      - Schema Check: administration/schema-check.md
+      - Logging: administration/logging.md
+      - Troubleshooting: administration/troubleshooting.md

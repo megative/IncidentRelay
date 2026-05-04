@@ -1,3 +1,4 @@
+import re
 from typing import Any, Dict
 
 from pydantic import Field, model_validator
@@ -42,10 +43,20 @@ class ChannelBaseSchema(ApiModel):
                 raise ValueError("email channel requires recipients list")
 
         if self.channel_type == "voice_call":
+            provider = str(config.get("provider") or "").strip()
+
+            if not provider:
+                raise ValueError("voice_call channel requires provider")
+
+            provider_config = config.get("provider_config") or {}
+
+            if not isinstance(provider_config, dict):
+                raise ValueError("voice_call provider_config must be an object")
+
             severities = config.get("call_on_severities") or []
 
-            if not isinstance(severities, list) or not severities:
-                raise ValueError("voice_call channel requires call_on_severities list")
+            if not isinstance(severities, list):
+                raise ValueError("voice_call call_on_severities must be a list")
 
             allowed = {"critical", "high", "medium", "warning", "low", "info"}
             invalid = [item for item in severities if item not in allowed]
@@ -53,7 +64,19 @@ class ChannelBaseSchema(ApiModel):
             if invalid:
                 raise ValueError(f"voice_call has invalid severities: {', '.join(invalid)}")
 
+            dtmf_actions = config.get("dtmf_actions") or {}
+
+            if not isinstance(dtmf_actions, dict):
+                raise ValueError("voice_call dtmf_actions must be an object")
+
+            allowed_actions = {"acknowledge", "resolve"}
+
+            for digit, action in dtmf_actions.items():
+                if str(action) not in allowed_actions:
+                    raise ValueError(f"voice_call has invalid DTMF action for digit {digit}")
+
             rules = config.get("notification_rules", [])
+
             if not isinstance(rules, list):
                 raise ValueError("voice_call notification_rules must be a list")
 

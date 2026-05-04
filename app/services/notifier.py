@@ -72,6 +72,8 @@ def notify_alert(alert, event_type="notification"):
                     external_message_id=result.get("external_message_id"),
                     external_channel_id=result.get("external_channel_id"),
                     event_type=event_type,
+                    provider_status=result.get("provider_status"),
+                    provider_payload=result.get("provider_payload"),
                 )
                 alerts_repo.create_alert_event(alert.id, f"{event_type}_message_updated", f"Updated {channel.channel_type}:{channel.name}")
                 logger.info("notification message updated", extra={"extra": {"alert_id": alert.id, "channel_id": channel.id, "event_type": event_type}})
@@ -100,6 +102,8 @@ def notify_alert(alert, event_type="notification"):
                 external_message_id=result.get("external_message_id"),
                 external_channel_id=result.get("external_channel_id"),
                 event_type=event_type,
+                provider_status=result.get("provider_status"),
+                provider_payload=result.get("provider_payload"),
             )
             alerts_repo.create_alert_event(alert.id, f"{event_type}_sent", f"Sent to {channel.channel_type}:{channel.name}")
             logger.info("notification sent", extra={"extra": {"alert_id": alert.id, "channel_id": channel.id, "event_type": event_type}})
@@ -160,6 +164,8 @@ def update_alert_messages(alert, event_type):
                 external_message_id=result.get("external_message_id"),
                 external_channel_id=result.get("external_channel_id"),
                 event_type=event_type,
+                provider_status=result.get("provider_status"),
+                provider_payload=result.get("provider_payload"),
             )
             alerts_repo.create_alert_event(alert.id, f"{event_type}_message_updated", f"Updated {channel.channel_type}:{channel.name}")
             logger.info("notification message updated", extra={"extra": {"alert_id": alert.id, "channel_id": channel.id, "event_type": event_type}})

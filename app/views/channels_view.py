@@ -9,6 +9,7 @@ from app.services.audit import write_audit
 from app.services.rbac import get_allowed_team_ids, require_team_read, require_team_write
 from app.services.serializers import serialize_channel
 from app.services.validation import validate_body
+from app.notifiers.voice.loader import list_voice_providers
 
 
 channels_bp = Blueprint("channels_api", __name__)
@@ -212,3 +213,10 @@ def test_channel(channel_id):
     )
 
     return jsonify({"status": "sent"})
+
+
+@channels_bp.route("/voice-providers", methods=["GET"])
+def list_voice_call_providers():
+    """Return available voice providers and their capabilities."""
+
+    return jsonify(list_voice_providers())

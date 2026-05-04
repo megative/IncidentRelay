@@ -8,6 +8,8 @@ import requests
 
 from app.settings import Config
 from app.notifiers.base import BaseNotifier
+from app.notifiers.voice.base import VoiceCallRequest
+from app.notifiers.voice.loader import create_voice_provider, resolve_env_values
 
 logger = logging.getLogger("oncall.alerts")
 
@@ -456,12 +458,7 @@ class EmailNotifier(BaseNotifier):
 
 
 class VoiceCallNotifier(BaseNotifier):
-    """
-    Voice call notification stub.
-
-    This notifier does not call any provider yet.
-    It only logs that a phone call should be placed.
-    """
+    """Send voice call notifications through a pluggable provider."""
 
     name = "voice_call"
     supports_update = False
@@ -481,22 +478,9 @@ class VoiceCallNotifier(BaseNotifier):
         "information": "info",
     }
 
-    @staticmethod
-    def _get_voice_call_provider() -> str:
-        """
-        Return an admin-configured voice call provider.
-        """
-        return os.getenv("INCIDENTRELAY_VOICE_PROVIDER", "stub")
-
     def send(self, channel, alert, text, event_type="notification"):
-        """
-        Log that a voice call should be made.
+        """Send a voice call through a configured provider."""
 
-        Future implementation:
-        - apply notification_rules before severity fallback;
-        - call provider adapter;
-        - store provider call id in external_message_id.
-        """
         config = channel.config or {}
 
         if event_type not in self.allowed_events:
@@ -508,70 +492,158 @@ class VoiceCallNotifier(BaseNotifier):
         if event_type != "test" and not self._matches_severity(config, alert):
             return self._skip("severity_not_matched", channel, alert, event_type)
 
-        rules = config.get("notification_rules") or []
-        if rules:
-            logger.info(
-                "voice notification_rules are configured but not implemented yet; "
-                "falling back to call_on_severities",
-                extra={
-                    "extra": {
-                        "channel_id": channel.id,
-                        "alert_id": getattr(alert, "id", None),
-                        "rules_count": len(rules),
-                    }
-                },
+        phone = self._get_phone(config, alert, event_type)
+
+        if not phone:
+            raise RuntimeError(
+                "voice_call phone is missing: set user.phone or channel config phone/test_phone"
             )
 
-        assignee = getattr(alert, "assignee", None)
-        phone = getattr(assignee, "phone", None) if assignee else None
-        username = getattr(assignee, "username", None) if assignee else None
-        provider = self._get_voice_call_provider()
+        provider_name = (
+            config.get("provider")
+            or os.getenv("INCIDENTRELAY_VOICE_PROVIDER")
+            or getattr(Config, "VOICE_PROVIDER", "stub")
+        )
 
-        logger.warning(
-            "VOICE CALL STUB: should call on-call user",
-            extra={
-                "extra": {
-                    "channel_id": channel.id,
-                    "channel_name": channel.name,
-                    "alert_id": getattr(alert, "id", None),
-                    "event_type": event_type,
-                    "severity": getattr(alert, "severity", None),
-                    "status": getattr(alert, "status", None),
-                    "assignee": username,
-                    "phone": phone,
-                    "provider": provider,
-                    "call_on_severities": config.get("call_on_severities") or [],
-                    "future_notification_rules": rules,
-                }
+        provider_config = resolve_env_values(config.get("provider_config") or {})
+        provider = create_voice_provider(provider_name, provider_config)
+
+        call_text = self._build_call_text(config, alert, text, event_type)
+        callback_secret = self._callback_secret(config)
+        callback_url = self._callback_url(channel, callback_secret)
+
+        request = VoiceCallRequest(
+            phone=phone,
+            text=call_text,
+            alert_id=getattr(alert, "id", None),
+            event_type=event_type,
+            callback_url=callback_url,
+            callback_secret=callback_secret,
+            severity=getattr(alert, "severity", None),
+            title=getattr(alert, "title", None),
+            message=getattr(alert, "message", None),
+            assignee=self._assignee_name(alert),
+            team=alert.team.slug if getattr(alert, "team", None) else None,
+            action_hints=self._dtmf_actions(config),
+            metadata={
+                "channel_id": getattr(channel, "id", None),
+                "channel_name": getattr(channel, "name", None),
+                "channel_type": getattr(channel, "channel_type", None),
             },
         )
 
+        result = provider.place_call(request)
+
         return {
-            "provider": self.name,
-            "external_message_id": f"voice-stub-alert-{getattr(alert, 'id', 0)}-{event_type}",
+            "provider": f"{self.name}:{provider.name}",
+            "external_message_id": result.call_id,
             "external_channel_id": str(channel.id),
+            "provider_status": result.status,
+            "provider_payload": result.raw,
         }
 
+    def _get_phone(self, config, alert, event_type):
+        """Return the phone number for a real alert or a test call."""
+
+        assignee = getattr(alert, "assignee", None)
+        assignee_phone = getattr(assignee, "phone", None) if assignee else None
+
+        if event_type == "test":
+            return config.get("test_phone") or config.get("phone") or assignee_phone
+
+        return assignee_phone or config.get("phone")
+
     def _matches_severity(self, config, alert):
-        """
-        Return True if alert severity should trigger voice call.
-        """
+        """Return True if alert severity should trigger a voice call."""
+
         call_on_severities = config.get("call_on_severities") or []
+
+        if not call_on_severities:
+            return False
+
+        configured = {
+            self._normalize_severity(item)
+            for item in call_on_severities
+            if str(item or "").strip()
+        }
+
         severity = self._normalize_severity(getattr(alert, "severity", None))
 
-        return severity in call_on_severities
+        return severity in configured
 
     def _normalize_severity(self, severity):
-        """
-        Normalize severity aliases.
-        """
+        """Normalize severity aliases."""
+
         value = str(severity or "").lower().strip()
         return self.severity_aliases.get(value, value)
 
+    def _build_call_text(self, config, alert, fallback_text, event_type):
+        """Build the text that the voice provider should say."""
+
+        template = config.get("text_template") or (
+            "IncidentRelay alert {alert_id}. "
+            "{title}. "
+            "Severity {severity}. "
+            "{message}. "
+            "Press 1 to acknowledge. "
+            "Press 2 to resolve."
+        )
+
+        values = _SafeFormatDict(
+            alert_id=getattr(alert, "id", None) or "test",
+            event_type=event_type,
+            title=getattr(alert, "title", None) or "Alert",
+            message=getattr(alert, "message", None) or fallback_text or "",
+            severity=getattr(alert, "severity", None) or "-",
+            status=getattr(alert, "status", None) or "-",
+            team=alert.team.slug if getattr(alert, "team", None) else "-",
+            assignee=self._assignee_name(alert) or "-",
+            source=getattr(alert, "source", None) or "-",
+        )
+
+        return template.format_map(values)
+
+    def _assignee_name(self, alert):
+        """Return a human-readable assignee name."""
+
+        assignee = getattr(alert, "assignee", None)
+
+        if not assignee:
+            return None
+
+        return getattr(assignee, "display_name", None) or getattr(
+            assignee,
+            "username",
+            None,
+        )
+
+    def _callback_secret(self, config):
+        """Return callback secret for voice provider callbacks."""
+
+        return config.get("callback_secret") or getattr(Config, "VOICE_CALLBACK_SECRET", "")
+
+    def _callback_url(self, channel, callback_secret):
+        """Return callback URL for this voice channel."""
+
+        if not callback_secret:
+            return None
+
+        return (
+            f"{Config.PUBLIC_BASE_URL.rstrip()}"
+            f"/api/integrations/voice/callback/{channel.id}/{callback_secret}"
+        )
+
+    def _dtmf_actions(self, config):
+        """Return digit-to-action mapping."""
+
+        return config.get("dtmf_actions") or {
+            "1": "acknowledge",
+            "2": "resolve",
+        }
+
     def _skip(self, reason, channel, alert, event_type):
-        """
-        Return a generic skipped result for notifier pipeline.
-        """
+        """Return a skipped notification result."""
+
         logger.debug(
             "voice call skipped",
             extra={
@@ -591,3 +663,10 @@ class VoiceCallNotifier(BaseNotifier):
             "skipped": True,
             "skip_reason": reason,
         }
+
+
+class _SafeFormatDict(dict):
+    """Keep unknown template placeholders unchanged."""
+
+    def __missing__(self, key):
+        return "{" + key + "}"

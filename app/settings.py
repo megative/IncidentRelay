@@ -103,3 +103,11 @@ class Config:
     SMTP_PASSWORD = settings.get("smtp", "password", "")
     SMTP_FROM = settings.get("smtp", "from", "incedentrelay@example.com")
     SMTP_USE_TLS = settings.get_bool("smtp", "use_tls", True)
+
+    VOICE_PROVIDER = settings.get("voice", "provider", "stub")
+    VOICE_PROVIDERS_DIR = settings.get(
+        "voice",
+        "providers_dir",
+        "/usr/local/lib/incidentrelay/voice_providers",
+    )
+    VOICE_CALLBACK_SECRET = settings.get("voice", "callback_secret", "")

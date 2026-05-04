@@ -391,12 +391,42 @@ class AlertNotification(BaseModel):
     external_channel_id = CharField(null=True)
     last_event_type = CharField(null=True)
     last_error = TextField(null=True)
+
+    provider_status = CharField(null=True)
+    provider_payload = JSONTextField(null=True)
+    last_callback_at = DateTimeField(null=True)
+    callback_count = IntegerField(default=0)
+
     created_at = DateTimeField(default=datetime.utcnow)
     updated_at = DateTimeField(default=datetime.utcnow)
 
     class Meta:
         indexes = (
             (("alert", "channel"), True),
+            (("channel", "external_message_id"), False),
+        )
+
+
+class AlertNotificationEvent(BaseModel):
+    """Provider callback history for a notification delivery."""
+
+    id = AutoField()
+    notification = ForeignKeyField(
+        AlertNotification,
+        backref="callback_events",
+        on_delete="CASCADE",
+    )
+    event_type = CharField()
+    provider_status = CharField(null=True)
+    digit = CharField(null=True)
+    action = CharField(null=True)
+    message = TextField(null=True)
+    payload = JSONTextField(null=True)
+    created_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        indexes = (
+            (("notification", "created_at"), False),
         )
 
 
