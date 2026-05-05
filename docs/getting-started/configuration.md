@@ -1,111 +1,85 @@
 ---
 title: Configuration
-description: Basic IncidentRelay configuration
+description: IncidentRelay configuration
 ---
 
 # Configuration
 
-The sample configuration file is here:
+## Configuration file
+
+IncidentRelay reads the config path from:
 
 ```text
-etc/incedentrelay/incedentrelay.conf
+INCEDENTRELAY_CONFIG_FILE
 ```
 
-For local development you can use it directly:
+Example:
 
 ```bash
-export ONCALL_CONFIG_FILE=$PWD/etc/incedentrelay/incedentrelay.conf
+export INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf
 ```
 
-For a server installation, copy it to `/etc`:
-
-```bash
-sudo mkdir -p /etc/incedentrelay
-sudo cp etc/incedentrelay/incedentrelay.conf /etc/incedentrelay/incedentrelay.conf
-sudo editor /etc/incedentrelay/incedentrelay.conf
-```
-
-If `ONCALL_CONFIG_FILE` is not set, the service reads:
-
-```text
-/etc/incedentrelay/incedentrelay.conf
-```
-
-## Minimal SQLite configuration
+For systemd:
 
 ```ini
-[main]
-secret_key = change-me
-timezone = UTC
-public_base_url = http://127.0.0.1:8080
+Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf
+```
 
+For Docker Compose:
+
+```yaml
+environment:
+  INCEDENTRELAY_CONFIG_FILE: /etc/incedentrelay/incedentrelay.conf
+```
+
+The old `ONCALL_CONFIG_FILE` name should not be used for IncidentRelay.
+
+## Server section
+
+```ini
+[server]
+host = 0.0.0.0
+port = 8080
+public_base_url = https://incidentrelay.example.com
+```
+
+`host` and `port` define where the service listens.
+
+`public_base_url` is used for generated links and external callbacks. In production, set it to the real external URL.
+
+## SQLite section
+
+```ini
 [database]
 type = sqlite
-name = incedentrelay.db
+path = /var/lib/incidentrelay/incidentrelay.db
 
-[auth]
-api_auth_required = true
-rbac_enforced = true
-jwt_secret = change-me-too
-jwt_expire_minutes = 1440
-jwt_cookie_name = incedentrelay_jwt
-jwt_cookie_secure = false
+[sqlite]
+wal = true
+busy_timeout = 5000
+```
 
-[alerts]
-reminder_after_seconds = 300
-reminder_interval_seconds = 60
-alert_group_window_seconds = 3600
+SQLite is the default database for small self-hosted installations.
 
-[scheduler]
-lock_ttl_seconds = 120
+## PostgreSQL section
 
-[logging]
-log_file = ./logs/incedentrelay.log
-log_level = INFO
-json = true
-requests = false
+```ini
+[database]
+type = postgresql
+host = postgres
+port = 5432
+name = incidentrelay
+user = incidentrelay
+password = incidentrelay-change-me
+```
 
-[mattermost]
-action_secret = change-me
+Use PostgreSQL for larger installations, higher alert volume, or multiple web workers.
 
+## Voice section
+
+```ini
 [voice]
 provider = stub
 providers_dir = /usr/local/lib/incidentrelay/voice_providers
 callback_secret = change-me
 ```
-
-## public_base_url
-
-`public_base_url` is the public URL of IncidentRelay itself.
-
-Example:
-
-```ini
-[main]
-public_base_url = https://incidentrelay.example.com
-```
-
-Mattermost buttons and voice provider callbacks use this URL to call IncidentRelay back.
-
-For Mattermost buttons:
-
-```text
-https://incidentrelay.example.com/api/integrations/mattermost/actions
-```
-
-For voice callbacks:
-
-```text
-https://incidentrelay.example.com/api/integrations/voice/callback/{channel_id}/{secret}
-```
-
-The Mattermost server URL in a Mattermost channel is different. It is the URL where IncidentRelay sends Mattermost API requests.
-
-In short:
-
-```text
-public_base_url = where external services call IncidentRelay back
-Mattermost URL = where IncidentRelay sends messages to Mattermost
-```
-
-For callbacks to work, `public_base_url` must be reachable from the external service.

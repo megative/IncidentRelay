@@ -1,12 +1,12 @@
 from flask import Blueprint, jsonify, request
+from peewee import DoesNotExist
 
 from app.login import hash_password
-
+from app.db import database_proxy as db
 from app.api.schemas.users import UserUpdateSchema, UserCreateSchema
-from app.modules.db import users_repo
+from app.modules.db import users_repo, groups_repo
 from app.services.audit import write_audit
-from app.services.rbac import require_admin_user
-from app.services.rbac import require_permission
+from app.services.rbac import require_admin_user, require_permission, require_group_write
 from app.services.serializers import serialize_user
 from app.services.validation import validate_body
 
@@ -27,33 +27,66 @@ def admin_list_users():
 @admin_users_bp.route("", methods=["POST"])
 @require_permission("users:admin")
 def admin_create_user():
-    """
-    Create a user from the admin workspace.
-    """
-    admin_error = require_admin_user()
-    if admin_error:
-        return admin_error
+    """Create a user and optionally add it to a group."""
 
     payload, error = validate_body(UserCreateSchema)
     if error:
         return error
 
     data = payload.model_dump()
-    password = data.pop("password", None)
 
+    group_id = data.pop("group_id", None)
+    group_role = data.pop("group_role", "read_only")
+
+    password = data.pop("password", None)
     if password:
         data["password_hash"] = hash_password(password)
 
-    user = users_repo.create_user(**data)
+    group = None
+    if group_id:
+        error = require_group_write(group_id)
+        if error:
+            return error
+
+        try:
+            group = groups_repo.get_group(group_id)
+        except DoesNotExist:
+            return jsonify({
+                "error": "group_not_found",
+                "message": "Selected group was not found",
+            }), 404
+
+        if not group.active:
+            return jsonify({
+                "error": "group_inactive",
+                "message": "Selected group is inactive",
+            }), 400
+
+    with db.atomic():
+        user = users_repo.create_user(**data)
+
+        if group_id:
+            groups_repo.add_user_to_group(
+                user_id=user.id,
+                group_id=group_id,
+                role=group_role,
+            )
+            users_repo.set_active_group(user.id, group_id)
+            user = users_repo.get_user(user.id)
+
+    audit_data = {
+        **data,
+        "password_hash": "***" if password else None,
+        "group_id": group_id,
+        "group_role": group_role if group_id else None,
+    }
 
     write_audit(
-        "admin.user.create",
+        "user.create",
         object_type="user",
         object_id=user.id,
-        data={
-            **data,
-            "password_hash": "***" if password else None,
-        },
+        group_id=group.id if group else None,
+        data=audit_data,
     )
 
     return jsonify(serialize_user(user)), 201

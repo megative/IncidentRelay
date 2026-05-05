@@ -1,0 +1,53 @@
+import logging
+import signal
+import time
+
+from app import create_app
+
+logger = logging.getLogger("oncall.scheduler")
+
+_shutdown = False
+
+
+def _handle_shutdown(signum, frame):
+    """Handle container shutdown signals."""
+
+    global _shutdown
+    _shutdown = True
+
+    logger.info(
+        "scheduler shutdown requested",
+        extra={"extra": {"signal": signum}},
+    )
+
+    try:
+        from app.services.scheduler import stop_scheduler
+
+        stop_scheduler()
+    except Exception:
+        logger.exception("failed to stop scheduler cleanly")
+
+
+def main():
+    """Start IncidentRelay scheduler as a standalone process."""
+
+    signal.signal(signal.SIGTERM, _handle_shutdown)
+    signal.signal(signal.SIGINT, _handle_shutdown)
+
+    app = create_app()
+
+    with app.app_context():
+        from app.services.scheduler import start_scheduler
+
+        start_scheduler()
+
+        logger.info("scheduler started")
+
+        while not _shutdown:
+            time.sleep(1)
+
+    logger.info("scheduler stopped")
+
+
+if __name__ == "__main__":
+    main()

@@ -247,6 +247,36 @@ USER_DELETE_RESPONSE_SCHEMA = {
     },
 }
 
+USER_CREATE_SCHEMA = {
+    "type": "object",
+    "required": ["username"],
+    "properties": {
+        **USER_WRITE_SCHEMA["properties"],
+        "group_id": {
+            "type": "integer",
+            "nullable": True,
+            "minimum": 1,
+            "description": (
+                "Optional group id. If provided, the new user is added "
+                "to this group immediately."
+            ),
+            "example": 1,
+        },
+        "group_role": {
+            "type": "string",
+            "enum": ["read_only", "rw"],
+            "default": "read_only",
+            "description": (
+                "Role assigned to the user in the selected group. "
+                "Used only when group_id is provided."
+            ),
+            "example": "read_only",
+        },
+    },
+}
+
+USER_UPDATE_SCHEMA = USER_WRITE_SCHEMA
+
 
 def tags():
     """
@@ -336,13 +366,14 @@ def paths():
                 "description": (
                     "Creates a local user account from the admin namespace. "
                     "Admin permission is required. The regular /api/users "
-                    "namespace does not allow creating users."
+                    "namespace does not allow creating users. If group_id is provided, "
+                    "the user is added to that group immediately."
                 ),
                 "operationId": "createAdminUser",
                 "security": [{"bearerAuth": []}],
                 "requestBody": json_body(
-                    "User properties.",
-                    USER_WRITE_SCHEMA,
+                    "User properties. Optionally include group_id to add the user to a group immediately.",
+                    USER_CREATE_SCHEMA,
                 ),
                 "responses": {
                     "201": response("User created.", USER_RESPONSE_SCHEMA),
@@ -387,8 +418,8 @@ def paths():
                     path_param("user_id", "User id."),
                 ],
                 "requestBody": json_body(
-                    "Updated user properties.",
-                    USER_WRITE_SCHEMA,
+                    "Updated user properties. Group membership is not changed by this endpoint.",
+                    USER_UPDATE_SCHEMA,
                 ),
                 "responses": {
                     "200": response("User updated.", USER_RESPONSE_SCHEMA),

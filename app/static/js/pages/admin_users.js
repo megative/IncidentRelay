@@ -5,6 +5,7 @@ function loadAdminUsers() {
     /*
      * Load admin users page.
      */
+    fillAdminUserGroupSelect();
     refreshAdminUsers();
 }
 
@@ -265,10 +266,10 @@ function openNewAdminUserModal() {
      * Open modal for a new user.
      */
     resetAdminUserForm();
+    setAdminUserGroupControlsEnabled(true);
 
     $("#admin-user-modal-title").text("New user");
     $("#admin-user-modal-subtitle").text("Create local user account.");
-
     $("#admin-user-password").attr("placeholder", "Password");
     openAdminUserModal();
 }
@@ -279,10 +280,10 @@ function openExistingAdminUserModal(user) {
      * Open modal for an existing user.
      */
     fillAdminUserForm(user);
+    setAdminUserGroupControlsEnabled(false);
 
     $("#admin-user-modal-title").text("User details");
     $("#admin-user-modal-subtitle").text(user.display_name || user.username || ("User #" + user.id));
-
     $("#admin-user-password").attr("placeholder", "Leave empty to keep current password");
     openAdminUserModal();
 }
@@ -292,7 +293,7 @@ function collectAdminUserPayload() {
     /*
      * Build user payload.
      */
-    return {
+    const payload = {
         username: $("#admin-user-username").val().trim(),
         display_name: $("#admin-user-display").val().trim() || null,
         email: $("#admin-user-email").val().trim() || null,
@@ -304,6 +305,16 @@ function collectAdminUserPayload() {
         is_admin: $("#admin-user-is-admin").is(":checked"),
         active: $("#admin-user-active").is(":checked")
     };
+
+    const isCreate = !$("#admin-user-id").val();
+    const groupId = $("#admin-user-group").val();
+
+    if (isCreate && groupId) {
+        payload.group_id = Number(groupId);
+        payload.group_role = $("#admin-user-group-role").val() || "read_only";
+    }
+
+    return payload;
 }
 
 
@@ -418,6 +429,10 @@ function resetAdminUserForm() {
     $("#admin-user-password").val("");
     $("#admin-user-is-admin").prop("checked", false);
     $("#admin-user-active").prop("checked", true);
+
+    $("#admin-user-group").val("");
+    $("#admin-user-group-role").val("read_only");
+    setAdminUserGroupControlsEnabled(true);
 }
 
 
@@ -465,4 +480,38 @@ function removeAdminUser(user) {
         refreshAdminUsers();
     });
 }
+function fillAdminUserGroupSelect() {
+    /* Fill group selector for new user creation. */
+    apiGet("/api/groups", function (groups) {
+        const select = $("#admin-user-group");
+        select.empty();
 
+        select.append(
+            $("<option>")
+                .val("")
+                .text("Do not add to group")
+        );
+
+        groups = asArray(groups);
+        groups.forEach(function (group) {
+            select.append(
+                $("<option>")
+                    .val(group.id)
+                    .text("#" + group.id + " " + group.name + " (" + group.slug + ")")
+            );
+        });
+    });
+}
+function setAdminUserGroupControlsEnabled(enabled) {
+    /*
+     * Enable group selection only for new user creation.
+     */
+    $("#admin-user-group").prop("disabled", !enabled);
+    $("#admin-user-group-role").prop("disabled", !enabled);
+
+    $("#admin-user-group-help").text(
+        enabled
+            ? "Optional. The user will be added to this group immediately after creation."
+            : "Group membership is managed on the Groups page."
+    );
+}

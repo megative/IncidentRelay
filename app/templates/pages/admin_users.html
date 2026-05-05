@@ -86,7 +86,7 @@
                 <div>
                     <h2 id="admin-user-modal-title">User details</h2>
                     <div id="admin-user-modal-subtitle" class="card-subtitle">
-                        Create or update user account.
+                        Create or update a user account.
                     </div>
                 </div>
 
@@ -138,6 +138,18 @@
                                 autocomplete="new-password"
                                 placeholder="Leave empty to keep current password"
                             >
+                            <label for="admin-user-group">
+                                Group
+                                <select id="admin-user-group" class="input"></select>
+                            </label>
+
+                            <label for="admin-user-group-role">
+                                Group role
+                                <select id="admin-user-group-role" class="input">
+                                    <option value="read_only">read_only</option>
+                                    <option value="rw">rw</option>
+                                </select>
+                            </label>
 
                             <label>
                                 <input id="admin-user-is-admin" type="checkbox">

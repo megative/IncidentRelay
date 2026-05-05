@@ -104,68 +104,110 @@ IncidentRelay includes Swagger/OpenAPI documentation and personal API tokens wit
 
 ## Quick start
 
-Clone the repository:
+## Systemd installation
 
-```bash
-git clone https://github.com/roxy-wi/IncidentRelay.git
-cd IncidentRelay
-```
-
-Create a virtual environment:
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Use the sample configuration for local development:
-
-```bash
-export INCEDENTRELAY_CONFIG_FILE=$PWD/etc/incedentrelay/incedentrelay.conf
-```
-
-Run migrations:
-
-```bash
-python app/migrate.py migrate
-```
-
-Create the first administrator:
-
-```bash
-python manage.py create-admin \
-  --username admin \
-  --password 'change-me-123' \
-  --email admin@example.com
-```
-
-Start the service:
-
-```bash
-python run.py
-```
-
-Open:
+IncidentRelay can be installed as two systemd services:
 
 ```text
-http://127.0.0.1:8080/login
+incidentrelay-web.service        # HTTP API, UI, webhooks
+incidentrelay-scheduler.service  # reminders, escalations, periodic jobs
 ```
 
-For production web serving, use Gunicorn or your preferred WSGI deployment model:
+Quick start:
 
 ```bash
-gunicorn -w 4 -b 0.0.0.0:8080 'app:create_app()'
+sudo git clone https://github.com/roxy-wi/IncidentRelay.git /var/www/incedentrelay
+cd /var/www/incedentrelay
+
+sudo python3 -m venv /var/www/incedentrelay/venv
+sudo /var/www/incedentrelay/venv/bin/pip install --upgrade pip
+sudo /var/www/incedentrelay/venv/bin/pip install -r requirements.txt
+sudo /var/www/incedentrelay/venv/bin/pip install gunicorn
+
+sudo mkdir -p /etc/incedentrelay /var/lib/incidentrelay /var/log/incidentrelay
+sudo cp etc/incedentrelay/incedentrelay.conf /etc/incedentrelay/incedentrelay.conf
+
+sudo chown -R www-data:www-data /var/www/incedentrelay
+sudo chown -R www-data:www-data /var/lib/incidentrelay
+sudo chown -R www-data:www-data /var/log/incidentrelay
+
+sudo cp systemd/incidentrelay-web.service /etc/systemd/system/
+sudo cp systemd/incidentrelay-scheduler.service /etc/systemd/system/
+sudo systemctl daemon-reload
+
+sudo -u www-data \
+  INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf \
+  /var/www/incedentrelay/venv/bin/python app/migrate.py migrate
+
+sudo systemctl enable --now incidentrelay-web
+sudo systemctl enable --now incidentrelay-scheduler
 ```
 
-Read the full installation guide:
+Create the first admin user:
 
-[Installation](docs/getting-started/installation.md)
+```bash
+sudo -u www-data \
+  INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf \
+  /var/www/incedentrelay/venv/bin/python manage.py create-admin \
+    --username admin \
+    --password 'change-me-123' \
+    --email admin@example.com
+```
+
+Read more:
+
+[Systemd Installation](docs/getting-started/systemd.md)
+
+
+## Docker installation
+
+The recommended self-hosted installation method is Docker Compose.
+
+By default, IncidentRelay starts with SQLite and two containers:
+
+```text
+incidentrelay-web        # HTTP API, UI, webhooks
+incidentrelay-scheduler  # reminders, escalations, periodic jobs
+```
+
+Start:
+
+```bash
+docker compose up -d --build
+```
+
+SQLite data is stored in the `incidentrelay-data` Docker volume.
+
+The scheduler runs in a separate container, so reminder and escalation jobs are not duplicated by web workers.
+
+For PostgreSQL:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.postgres.yml \
+  up -d
+```
+
+For production behind Nginx/HAProxy, bind the container port to localhost:
+
+```yaml
+ports:
+  - "127.0.0.1:8080:8080"
+```
+
+and set:
+
+```ini
+[server]
+public_base_url = https://incidentrelay.example.com
+```
+
+Read more:
+
+- [Docker installation](docs/getting-started/docker.md)
+- [Scheduler](docs/administration/scheduler.md)
+
 
 ---
 

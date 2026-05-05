@@ -547,11 +547,14 @@ function deleteRoute(id) {
     /*
      * Disable a route.
      */
-    if (!confirm("Disable this route?")) {
-        return;
-    }
-
-    apiDelete("/api/routes/" + id, refreshRoutes);
+    showAppConfirm({
+        title: "Disable this route?",
+        message: "Disable this route?",
+        confirmText: "Disable",
+        confirmClass: "btn-warning",
+    }).done(function () {
+        apiDelete("/api/routes/" + id, refreshRoutes);
+    });
 }
 
 
@@ -601,13 +604,16 @@ function regenerateRouteToken(routeId) {
     /*
      * Regenerate route intake token.
      */
-    if (!confirm("Regenerate route intake token? Existing token will stop working.")) {
-        return;
-    }
-
-    apiPost("/api/routes/" + routeId + "/intake-token", {}, function (response) {
-        showRouteToken(response.intake_token);
-        refreshRoutes();
+    showAppConfirm({
+        title: "Regenerate route intake token?",
+        message: "Regenerate route intake token? Existing token will stop working.",
+        confirmText: "Regenerate",
+        confirmClass: "btn-warning",
+    }).done(function () {
+        apiPost("/api/routes/" + routeId + "/intake-token", {}, function (response) {
+            showRouteToken(response.intake_token);
+            refreshRoutes();
+        });
     });
 }
 

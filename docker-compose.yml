@@ -1,0 +1,51 @@
+services:
+  incidentrelay-web:
+    image: roxywi/incidentrelay:latest
+    build:
+      context: docker
+      dockerfile: Dockerfile
+    container_name: incidentrelay-web
+    restart: unless-stopped
+    environment:
+      INCEDENTRELAY_CONFIG_FILE: /etc/incedentrelay/incedentrelay.conf
+      INCIDENTRELAY_SERVICE: web
+      INCIDENTRELAY_RUN_MIGRATIONS: "1"
+      INCIDENTRELAY_PORT: "8080"
+      INCIDENTRELAY_WEB_WORKERS: "1"
+      INCIDENTRELAY_WEB_THREADS: "4"
+      INCIDENTRELAY_WEB_TIMEOUT: "120"
+    ports:
+      - "8080:8080"
+    volumes:
+      - incidentrelay-data:/var/lib/incidentrelay
+      - incidentrelay-logs:/var/log/incidentrelay
+      - ./custom_voice_providers:/usr/local/lib/incidentrelay/voice_providers:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/health || curl -fsS http://127.0.0.1:8080/login >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  incidentrelay-scheduler:
+    image: roxywi/incidentrelay:latest
+    build:
+      context: docker
+      dockerfile: Dockerfile
+    container_name: incidentrelay-scheduler
+    restart: unless-stopped
+    environment:
+      INCEDENTRELAY_CONFIG_FILE: /etc/incedentrelay/incedentrelay.conf
+      INCIDENTRELAY_SERVICE: scheduler
+      INCIDENTRELAY_RUN_MIGRATIONS: "0"
+    volumes:
+      - incidentrelay-data:/var/lib/incidentrelay
+      - incidentrelay-logs:/var/log/incidentrelay
+      - ./custom_voice_providers:/usr/local/lib/incidentrelay/voice_providers:ro
+    depends_on:
+      incidentrelay-web:
+        condition: service_healthy
+
+volumes:
+  incidentrelay-data:
+  incidentrelay-logs:
