@@ -1,4 +1,3 @@
-import os
 import logging
 import smtplib
 from email.message import EmailMessage
@@ -499,12 +498,7 @@ class VoiceCallNotifier(BaseNotifier):
                 "voice_call phone is missing: set user.phone or channel config phone/test_phone"
             )
 
-        provider_name = (
-            config.get("provider")
-            or os.getenv("INCIDENTRELAY_VOICE_PROVIDER")
-            or getattr(Config, "VOICE_PROVIDER", "stub")
-        )
-
+        provider_name = config.get("provider") or Config.VOICE_PROVIDER
         provider_config = resolve_env_values(config.get("provider_config") or {})
         provider = create_voice_provider(provider_name, provider_config)
 

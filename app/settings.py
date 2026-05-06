@@ -13,7 +13,6 @@ class Settings:
         """
         Initialize settings from a config file path.
         """
-
         self.path = Path(path or CONFIG_FILE)
         self.parser = configparser.ConfigParser()
         self.parser.optionxform = str
@@ -25,7 +24,6 @@ class Settings:
         """
         Return a string setting value.
         """
-
         if not self.parser.has_section(section):
             return default
 
@@ -35,7 +33,6 @@ class Settings:
         """
         Return an integer setting value.
         """
-
         value = self.get(section, option, default)
 
         if value in (None, ""):
@@ -47,7 +44,6 @@ class Settings:
         """
         Return a boolean setting value.
         """
-
         value = self.get(section, option, None)
 
         if value is None:
@@ -68,6 +64,12 @@ class Config:
     """
 
     SECRET_KEY = settings.get("main", "secret_key", "dev-secret-key")
+    DEFAULT_TIMEZONE = settings.get("main", "timezone", "UTC")
+
+    SERVER_HOST = settings.get("server", "host", "0.0.0.0")
+    SERVER_PORT = settings.get_int("server", "port", 8080)
+    PUBLIC_BASE_URL = settings.get("server", "public_base_url", "http://127.0.0.1:8080")
+
     DB_TYPE = settings.get("database", "type", "sqlite")
     DB_NAME = settings.get("database", "name", "incedentrelay.db")
     DB_USER = settings.get("database", "user", "")
@@ -75,12 +77,13 @@ class Config:
     DB_HOST = settings.get("database", "host", "127.0.0.1")
     DB_PORT = settings.get_int("database", "port", 0)
 
-    DEFAULT_TIMEZONE = settings.get("main", "timezone", "UTC")
-    PUBLIC_BASE_URL = settings.get("main", "public_base_url", "http://127.0.0.1:8080")
+    LOG_FILE = settings.get("logging", "file", "./logs/incedentrelay.log")
+    LOG_LEVEL = settings.get("logging", "level", "INFO")
+    LOG_REQUESTS = False
 
     API_AUTH_REQUIRED = settings.get_bool("auth", "api_auth_required", False)
     RBAC_ENFORCED = settings.get_bool("auth", "rbac_enforced", False)
-    JWT_SECRET_KEY = settings.get("auth", "jwt_secret", SECRET_KEY)
+    JWT_SECRET_KEY = settings.get("auth", "jwt_secret", SECRET_KEY) or SECRET_KEY
     JWT_EXPIRE_MINUTES = settings.get_int("auth", "jwt_expire_minutes", 1440)
     JWT_COOKIE_NAME = settings.get("auth", "jwt_cookie_name", "incedentrelay_jwt")
     JWT_COOKIE_SECURE = settings.get_bool("auth", "jwt_cookie_secure", False)
@@ -90,10 +93,6 @@ class Config:
     ALERT_GROUP_WINDOW_SECONDS = settings.get_int("alerts", "alert_group_window_seconds", 3600)
 
     SCHEDULER_LOCK_TTL_SECONDS = settings.get_int("scheduler", "lock_ttl_seconds", 120)
-
-    LOG_FILE = settings.get("logging", "file", "./logs/incedentrelay.log")
-    LOG_LEVEL = settings.get("logging", "level", "INFO")
-    LOG_REQUESTS = False
 
     MATTERMOST_ACTION_SECRET = settings.get("mattermost", "action_secret", SECRET_KEY)
 

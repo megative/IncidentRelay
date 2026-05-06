@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from peewee import DatabaseProxy, MySQLDatabase, PostgresqlDatabase, SqliteDatabase
 
 from app.settings import Config
@@ -6,12 +8,29 @@ from app.settings import Config
 database_proxy = DatabaseProxy()
 
 
+def ensure_sqlite_directory(database_name):
+    """
+    Create parent directory for SQLite database files.
+    """
+    if database_name in ("", ":memory:"):
+        return
+
+    database_path = Path(database_name)
+
+    if database_path.parent == Path("."):
+        return
+
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+
+
 def create_database():
     """
     Create a database instance for the configured backend.
     """
 
     if Config.DB_TYPE == "sqlite":
+        ensure_sqlite_directory(Config.DB_NAME)
+
         return SqliteDatabase(
             Config.DB_NAME,
             pragmas={
@@ -47,7 +66,6 @@ def init_database():
     """
     Initialize the database proxy.
     """
-
     if database_proxy.obj is not None:
         return database_proxy.obj
 

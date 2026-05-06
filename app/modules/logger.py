@@ -6,6 +6,7 @@ from datetime import datetime
 
 from flask import jsonify, request
 from werkzeug.exceptions import HTTPException
+from peewee import DoesNotExist
 
 from app.settings import Config
 
@@ -53,6 +54,9 @@ class EventOnlyFilter(logging.Filter):
         "oncall.audit",
         "oncall.alerts",
         "oncall.error",
+        "oncall.scheduler",
+        "oncall.notifications",
+        "oncall.voice",
     }
 
     def filter(self, record):
@@ -131,6 +135,21 @@ def register_error_handlers(app):
             "message": error.description,
             "status": error.code,
         }), error.code
+
+    @app.errorhandler(DoesNotExist)
+    def handle_model_not_found(error):
+        """
+        Return 404 for missing database objects instead of logging them as 500.
+
+        Peewee DoesNotExist often means that the requested resource was deleted,
+        hidden by soft-delete filters, or never existed. This is a normal API
+        404 case, not an unhandled server error.
+        """
+        return jsonify({
+            "error": "not_found",
+            "message": "Requested resource was not found.",
+            "status": 404,
+        }), 404
 
     @app.errorhandler(Exception)
     def log_unhandled_exception(error):

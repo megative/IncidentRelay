@@ -3,6 +3,8 @@ import signal
 import time
 
 from app import create_app
+from app.config import CONFIG_FILE
+from app.settings import Config
 
 logger = logging.getLogger("oncall.scheduler")
 
@@ -35,13 +37,23 @@ def main():
     signal.signal(signal.SIGINT, _handle_shutdown)
 
     app = create_app()
-
+    logger.info("starting scheduler")
     with app.app_context():
         from app.services.scheduler import start_scheduler
 
         start_scheduler()
-
-        logger.info("scheduler started")
+        logger.info(
+            "scheduler worker started",
+            extra={
+                "extra": {
+                    "event_type": "scheduler",
+                    "config_file": CONFIG_FILE,
+                    "db_type": Config.DB_TYPE,
+                    "db_name": Config.DB_NAME,
+                    "log_file": Config.LOG_FILE,
+                }
+            },
+        )
 
         while not _shutdown:
             time.sleep(1)
