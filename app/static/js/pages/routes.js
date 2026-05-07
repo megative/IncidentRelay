@@ -53,13 +53,25 @@ function loadRoutes() {
 
 function loadRouteDependencies(callback) {
     /*
-     * Load rotations and channels for selected route team.
+     * Load rotations and channels for the selected route team.
+     *
+     * The callback is called only after both selects are filled. This is
+     * important for edit mode, because route channel ids can be selected only
+     * after channel <option> elements exist in the DOM.
      */
     const teamId = $("#route-team").val();
+    const rotationSelect = $("#route-rotation");
+    const channelSelect = $("#route-channels");
+
+    rotationSelect.empty();
+    channelSelect.empty();
 
     if (!teamId) {
-        $("#route-rotation").empty().append($("<option>").val("").text("No rotation"));
-        $("#route-channels").empty();
+        rotationSelect.append(
+            $("<option>")
+                .val("")
+                .text("No rotation")
+        );
 
         if (typeof callback === "function") {
             callback();
@@ -68,43 +80,64 @@ function loadRouteDependencies(callback) {
         return;
     }
 
-    apiGet("/api/rotations?team_id=" + teamId, function (rotations) {
-        const select = $("#route-rotation");
-        select.empty();
-        select.append($("<option>").val("").text("No rotation"));
+    let rotationsLoaded = false;
+    let channelsLoaded = false;
 
-        rotations = asArray(rotations);
-
-        rotations.forEach(function (rotation) {
-            if (rotation.enabled) {
-                select.append(
-                    $("<option>")
-                        .val(rotation.id)
-                        .text(rotation.name)
-                );
-            }
-        });
+    function finishWhenReady() {
+        /*
+         * Run callback after both async requests have completed.
+         */
+        if (!rotationsLoaded || !channelsLoaded) {
+            return;
+        }
 
         if (typeof callback === "function") {
             callback();
         }
+    }
+
+    apiGet("/api/rotations?team_id=" + encodeURIComponent(teamId), function (rotations) {
+        rotationSelect.empty();
+
+        rotationSelect.append(
+            $("<option>")
+                .val("")
+                .text("No rotation")
+        );
+
+        asArray(rotations).forEach(function (rotation) {
+            if (!rotation.enabled) {
+                return;
+            }
+
+            rotationSelect.append(
+                $("<option>")
+                    .val(String(rotation.id))
+                    .text(rotation.name)
+            );
+        });
+
+        rotationsLoaded = true;
+        finishWhenReady();
     });
 
-    apiGet("/api/channels?team_id=" + teamId, function (channels) {
-        const select = $("#route-channels");
-        select.empty();
+    apiGet("/api/channels?team_id=" + encodeURIComponent(teamId), function (channels) {
+        channelSelect.empty();
 
-        channels = asArray(channels);
-
-        channels.forEach(function (channel) {
-            if (channel.enabled) {
-                select.append(
-                    $("<option>")
-                        .val(channel.id)
-                        .text(channel.name + " (" + channel.channel_type + ")")
-                );
+        asArray(channels).forEach(function (channel) {
+            if (!channel.enabled) {
+                return;
             }
+
+            channelSelect.append(
+                $("<option>")
+                    .val(String(channel.id))
+                    .text(channel.name + " (" + channel.channel_type + ")")
+            );
         });
+
+        channelsLoaded = true;
+        finishWhenReady();
     });
 }
 

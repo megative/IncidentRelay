@@ -73,6 +73,11 @@ def process_incoming_alerts(normalized_alerts):
             alert_data["team_slug"] = intake_route.team.slug
 
         alert, created = upsert_alert(alert_data)
+        if alert is None:
+            return jsonify({
+                "status": "ignored",
+                "reason": "orphan_resolved",
+            }), 202
         result.append({
             "id": alert.id,
             "team_id": alert.team.id if alert.team else None,

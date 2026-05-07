@@ -35,6 +35,19 @@ def upsert_alert(alert_data):
             logger.info("alert updated", extra={"extra": {"alert_id": existing_alert.id, "source": existing_alert.source}})
         return existing_alert, False
 
+    if status == "resolved":
+        logger.info(
+            "orphan resolved alert ignored",
+            extra={
+                "extra": {
+                    "source": alert_data["source"],
+                    "dedup_key": alert_data["dedup_key"],
+                    "title": alert_data.get("title"),
+                }
+            },
+        )
+        return None, False
+
     assignee = get_current_oncall_user(rotation) if rotation else None
     silence = find_active_silence(team.id if team else None, alert_data)
     if silence and status == "firing":

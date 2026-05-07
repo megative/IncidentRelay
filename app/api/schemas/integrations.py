@@ -62,6 +62,8 @@ class GenericWebhookSchema(ApiModel):
     Validate generic webhook payload.
     """
 
+    model_config = ConfigDict(extra="ignore")
+
     title: str = Field(min_length=1, max_length=255)
     message: str | None = None
     severity: str | None = None

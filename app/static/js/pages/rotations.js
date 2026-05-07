@@ -617,23 +617,107 @@ function setRotationMemberActive(member, active) {
     );
 }
 
-function selectOverrideRotation(rotationId) {
-    /*
-     * Select a rotation, load eligible users, load overrides and open modal.
-     */
-    $("#override-rotation").val(String(rotationId));
+let rotationOverridesAfterChange = null;
 
-    const rotation = rotationsCache.find(function (item) {
+
+function findRotationInCache(rotationId) {
+    /*
+     * Return a rotation from local cache.
+     */
+    return rotationsCache.find(function (item) {
         return Number(item.id) === Number(rotationId);
     });
+}
 
-    if (!rotation) {
+
+function rememberRotationInCache(rotation) {
+    /*
+     * Add or replace one rotation in rotationsCache.
+     */
+    const rotationId = Number(rotation.id);
+    const index = rotationsCache.findIndex(function (item) {
+        return Number(item.id) === rotationId;
+    });
+
+    if (index >= 0) {
+        rotationsCache[index] = rotation;
         return;
     }
 
-    fillRotationEligibleUserSelect("#override-user", rotationId, function () {
-        loadOverrides();
-        openRotationOverridesModal();
+    rotationsCache.push(rotation);
+}
+
+
+function ensureOverrideRotationOption(rotation) {
+    /*
+     * Ensure the overrides modal rotation selector has the selected rotation.
+     */
+    const select = $("#override-rotation");
+    const rotationId = String(rotation.id);
+
+    if (!select.find('option[value="' + rotationId + '"]').length) {
+        select.append(
+            $("<option>")
+                .val(rotationId)
+                .text((rotation.team_slug || rotation.team_name || "-") + " / " + rotation.name)
+        );
+    }
+
+    select.val(rotationId);
+}
+
+
+function loadRotationForOverride(rotationId, callback) {
+    /*
+     * Load rotation for override modal if it is not already cached.
+     */
+    const cachedRotation = findRotationInCache(rotationId);
+
+    if (cachedRotation) {
+        callback(cachedRotation);
+        return;
+    }
+
+    apiGet("/api/rotations/" + encodeURIComponent(rotationId), function (rotation) {
+        if (!rotation || !rotation.id) {
+            showAppError("Rotation was not found.");
+            return;
+        }
+
+        rememberRotationInCache(rotation);
+        callback(rotation);
+    });
+}
+
+
+function selectOverrideRotation(rotationId, options) {
+    /*
+     * Select a rotation, load eligible users, prefill override fields
+     * and open the existing overrides modal.
+     */
+    options = options || {};
+
+    if (!rotationId) {
+        showAppError("Rotation was not found.");
+        return;
+    }
+
+    loadRotationForOverride(rotationId, function (rotation) {
+        rotationOverridesAfterChange = typeof options.afterChange === "function"
+            ? options.afterChange
+            : null;
+
+        ensureOverrideRotationOption(rotation);
+
+        fillRotationEligibleUserSelect("#override-user", rotation.id, function () {
+            openRotationOverridesModal();
+
+            $("#override-rotation").val(String(rotation.id));
+
+            applyOverridePrefill(options);
+
+            loadOverrides();
+        });
     });
 }
 
@@ -678,7 +762,9 @@ function loadOverrides() {
 }
 
 function createOverride() {
-    /* Create a temporary rotation override. */
+    /*
+     * Create a temporary rotation override.
+     */
     const rotationId = $("#override-rotation").val();
 
     if (!rotationId) {
@@ -694,16 +780,33 @@ function createOverride() {
     }, function () {
         $("#override-reason").val("");
         loadOverrides();
+
+        if (typeof rotationOverridesAfterChange === "function") {
+            rotationOverridesAfterChange();
+        }
+
+        showAppSuccess("Override created.");
     });
 }
 
+
 function deleteOverride(overrideId) {
-    /* Delete a rotation override. */
+    /*
+     * Delete a rotation override.
+     */
     if (!confirm("Delete this override?")) {
         return;
     }
 
-    apiDelete("/api/rotations/overrides/" + overrideId, loadOverrides);
+    apiDelete("/api/rotations/overrides/" + overrideId, function () {
+        loadOverrides();
+
+        if (typeof rotationOverridesAfterChange === "function") {
+            rotationOverridesAfterChange();
+        }
+
+        showAppSuccess("Override deleted.");
+    });
 }
 
 $(document).on("change", "#rotation-type", updateRotationCadenceFields);
@@ -965,6 +1068,7 @@ function closeRotationOverridesModal() {
         .removeClass("is-open");
 
     $("body").removeClass("modal-open");
+    rotationOverridesAfterChange = null;
 }
 $(document).on("click", "#close-rotation-members-modal, #close-rotation-members-modal-footer", closeRotationMembersModal);
 
@@ -1191,4 +1295,31 @@ function fillRotationEligibleUserSelect(selector, rotationId, callback) {
             callback(users);
         }
     });
+}
+function applyOverridePrefill(options) {
+    /*
+     * Apply optional override form prefill.
+     *
+     * This must be called after:
+     *   - override modal exists in DOM
+     *   - rotation select has the rotation option
+     *   - eligible users select is filled
+     */
+    options = options || {};
+
+    if (options.userId) {
+        $("#override-user").val(String(options.userId));
+    }
+
+    if (options.startsAt) {
+        $("#override-starts-at").val(options.startsAt);
+    }
+
+    if (options.endsAt) {
+        $("#override-ends-at").val(options.endsAt);
+    }
+
+    if (options.reason !== undefined) {
+        $("#override-reason").val(options.reason || "");
+    }
 }

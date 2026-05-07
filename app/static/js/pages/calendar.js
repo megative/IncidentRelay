@@ -2,6 +2,9 @@ let calendarTeamsCache = [];
 let calendarEventsCache = [];
 let calendarSelectedTeamId = null;
 let calendarMode = "week";
+let selectedCalendarEvent = null;
+let selectedCalendarClippedStart = null;
+let selectedCalendarClippedEnd = null;
 
 const calendarWeekdaysShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -882,6 +885,19 @@ function renderCalendarDetails(event, clippedStart, clippedEnd) {
             .append(calendarDetailsItem("Start", formatDateTimeMinutes(clippedStart || event.start)))
             .append(calendarDetailsItem("End", formatDateTimeMinutes(clippedEnd || event.end)))
     );
+    body.append(
+        $("<div>")
+            .addClass("details-actions")
+            .append(
+                makeIconButton({
+                    icon: "fas fa-user-clock",
+                    label: "Create override",
+                    onClick: function () {
+                        openCalendarOverrideModal(event, clippedStart, clippedEnd);
+                    }
+                })
+            )
+    );
 }
 
 
@@ -910,3 +926,41 @@ $(document).on("input", "#calendar-search", function () {
 $(document).on("change", "#calendar-start, #calendar-end", function () {
     refreshCalendar();
 });
+function calendarDateTimeLocalValue(value) {
+    /*
+     * Format a calendar datetime for datetime-local inputs.
+     */
+    const date = value instanceof Date ? value : new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return "";
+    }
+
+    return [
+        date.getFullYear(),
+        padDateTimePart(date.getMonth() + 1),
+        padDateTimePart(date.getDate())
+    ].join("-") + "T" + [
+        padDateTimePart(date.getHours()),
+        padDateTimePart(date.getMinutes())
+    ].join(":");
+}
+function openCalendarOverrideModal(event, clippedStart, clippedEnd) {
+    /*
+     * Open the existing rotation overrides modal from calendar details.
+     */
+    if (!event || !event.rotation_id) {
+        showAppError("This calendar item is not linked to a rotation.");
+        return;
+    }
+
+    selectOverrideRotation(event.rotation_id, {
+        startsAt: calendarDateTimeLocalValue(clippedStart || event.start),
+        endsAt: calendarDateTimeLocalValue(clippedEnd || event.end),
+        reason: event.type === "override" ? (event.reason || "") : "",
+        afterChange: function () {
+            refreshCalendar();
+        }
+    });
+}
+

@@ -352,18 +352,19 @@ def get_alert(alert_id):
     return Alert.get_by_id(alert_id)
 
 
-def find_existing_alert(source, dedup_key, window_seconds):
+def find_existing_alert(source, dedup_key, window_seconds=None):
     """
-    Return an existing alert inside the deduplication window.
-    """
+    Return an existing non-resolved alert by source and dedup key.
 
-    threshold = datetime.utcnow() - timedelta(seconds=window_seconds)
+    Resolved alerts are final occurrences. If the same fingerprint fires again
+    after resolve, a new alert must be created with a new id and first_seen_at.
+    """
     return (
         Alert.select()
         .where(
             (Alert.source == source)
             & (Alert.dedup_key == dedup_key)
-            & ((Alert.status != "resolved") | (Alert.last_seen_at >= threshold))
+            & (Alert.status != "resolved")
         )
         .order_by(Alert.id.desc())
         .first()

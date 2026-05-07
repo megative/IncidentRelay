@@ -301,3 +301,20 @@
         flex-direction: column;
     }
 }
+.calendar-override-section {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+.calendar-override-section label {
+    display: grid;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.calendar-override-section select,
+.calendar-override-section input,
+.calendar-override-section textarea {
+    width: 100%;
+}

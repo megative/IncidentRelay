@@ -68,6 +68,7 @@ def build_override_events(rotation, start_at, end_at):
     events = []
     for override in rotations_repo.list_rotation_overrides(rotation.id, start_at, end_at):
         events.append({
+            "override_id": override.id,
             "rotation_id": rotation.id,
             "rotation_name": rotation.name,
             "team_id": rotation.team.id,
