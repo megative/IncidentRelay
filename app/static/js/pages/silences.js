@@ -363,13 +363,13 @@ function renderSilenceDetails(silence) {
             $("<div>")
                 .addClass("details-actions")
                 .append(
-                    $("<button>")
-                        .attr("type", "button")
-                        .addClass("btn btn-small")
-                        .text("Edit silence")
-                        .on("click", function () {
+                    makeIconButton({
+                        icon: "fas fa-edit",
+                        label: "Edit silence",
+                        onClick: function () {
                             editSilence(silence.id);
-                        })
+                        }
+                    })
                 )
         );
 }

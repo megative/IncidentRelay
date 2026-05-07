@@ -181,24 +181,52 @@ def set_route_intake_token(route_id, token_prefix, token_hash):
     return route
 
 
+def set_route_enabled(route_id, enabled):
+    """
+    Enable or disable a route without deleting it.
+
+    Disabled routes stay visible in route management UI and can be enabled
+    again later. Alert intake only uses enabled routes.
+    """
+    route = get_route(route_id)
+    route.enabled = enabled
+    route.save()
+
+    return route
+
+
 def disable_route(route_id):
     """
-    Soft-delete a route without removing historical alert references.
+    Disable a route without deleting it.
     """
+    return set_route_enabled(route_id, False)
 
-    return soft_delete_route(route_id)
+
+def enable_route(route_id):
+    """
+    Enable a previously disabled route.
+    """
+    return set_route_enabled(route_id, True)
 
 
 def soft_delete_route(route_id):
     """
     Soft-delete a route without removing historical alert references.
-    """
 
+    Deleted routes are hidden from active route lists. Historical alerts keep
+    their route reference.
+    """
     route = get_route(route_id)
+
     route.enabled = False
     route.deleted = True
     route.deleted_at = datetime.utcnow()
     route.save()
+
+    AlertRouteChannel.delete().where(
+        AlertRouteChannel.route == route_id
+    ).execute()
+
     return route
 
 

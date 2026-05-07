@@ -21,7 +21,7 @@ def list_groups():
     user = request.current_user
 
     if user and user.is_admin:
-        return jsonify([serialize_group(group) for group in groups_repo.list_groups(active_only=True)])
+        return jsonify([serialize_group(group) for group in groups_repo.list_groups(active_only=False)])
 
     allowed_group_ids = get_allowed_group_ids()
     groups = [group for group in groups_repo.list_groups(active_only=True) if group.id in allowed_group_ids]
@@ -208,9 +208,10 @@ def disable_group_user(membership_id):
 def delete_group(group_id):
     """
     Soft-delete a group and all resources under it.
-    """
 
-    error = require_group_write(group_id)
+    Admin only because a group is an access boundary.
+    """
+    error = require_admin_user()
     if error:
         return error
 
@@ -221,6 +222,16 @@ def delete_group(group_id):
         object_type="group",
         object_id=group.id,
         group_id=group.id,
+        data={
+            "slug": group.slug,
+            "name": group.name,
+            "deleted": True,
+        },
     )
 
-    return jsonify(serialize_group(group))
+    return jsonify({
+        "deleted": True,
+        "id": group.id,
+        "slug": group.slug,
+        "name": group.name,
+    })

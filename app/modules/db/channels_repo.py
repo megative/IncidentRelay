@@ -89,31 +89,58 @@ def update_channel(channel_id, data):
     return channel
 
 
+def set_channel_enabled(channel_id, enabled):
+    """
+    Enable or disable a notification channel without deleting it.
+
+    Disabled channels stay visible in channel management UI and can be enabled
+    again later. Delivery code should use enabled channels only.
+    """
+    channel = get_channel(channel_id)
+    channel.enabled = enabled
+    channel.save()
+
+    return channel
+
+
 def disable_channel(channel_id):
     """
-    Soft-delete a notification channel without removing historical references.
+    Disable a notification channel without deleting it.
     """
+    return set_channel_enabled(channel_id, False)
 
-    return soft_delete_channel(channel_id)
+
+def enable_channel(channel_id):
+    """
+    Enable a previously disabled notification channel.
+    """
+    return set_channel_enabled(channel_id, True)
 
 
 def soft_delete_channel(channel_id):
     """
     Soft-delete a notification channel without removing historical references.
     """
-
     channel = get_channel(channel_id)
+
     channel.enabled = False
     channel.deleted = True
     channel.deleted_at = datetime.utcnow()
     channel.save()
+
     return channel
 
 
 def delete_channel(channel_id):
     """
-    Soft-delete a notification channel and remove its route links.
-    """
+    Soft-delete a notification channel and remove active route links.
 
-    AlertRouteChannel.delete().where(AlertRouteChannel.channel == channel_id).execute()
+    Route/channel links are active configuration, so they are removed when the
+    channel is deleted. Historical alerts remain preserved.
+    """
+    AlertRouteChannel.delete().where(
+        AlertRouteChannel.channel == channel_id
+    ).execute()
+
     return soft_delete_channel(channel_id)
+

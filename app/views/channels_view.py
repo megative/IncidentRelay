@@ -140,12 +140,11 @@ def update_channel(channel_id):
     return jsonify(serialize_channel(channel))
 
 
-@channels_bp.route("/<int:channel_id>", methods=["DELETE"])
-def delete_channel(channel_id):
+@channels_bp.route("/<int:channel_id>/disable", methods=["POST"])
+def disable_channel(channel_id):
     """
-    Disable a notification channel.
+    Disable a notification channel without deleting it.
     """
-
     channel_before = channels_repo.get_channel(channel_id)
 
     if channel_before.team_id:
@@ -160,9 +159,76 @@ def delete_channel(channel_id):
         object_type="channel",
         object_id=channel.id,
         team_id=channel.team.id if channel.team else None,
+        data={
+            "name": channel.name,
+            "enabled": False,
+        },
     )
 
     return jsonify(serialize_channel(channel))
+
+
+@channels_bp.route("/<int:channel_id>/enable", methods=["POST"])
+def enable_channel(channel_id):
+    """
+    Enable a disabled notification channel.
+    """
+    channel_before = channels_repo.get_channel(channel_id)
+
+    if channel_before.team_id:
+        error = require_team_write(channel_before.team_id)
+        if error:
+            return error
+
+    channel = channels_repo.enable_channel(channel_id)
+
+    write_audit(
+        "channel.enable",
+        object_type="channel",
+        object_id=channel.id,
+        team_id=channel.team.id if channel.team else None,
+        data={
+            "name": channel.name,
+            "enabled": True,
+        },
+    )
+
+    return jsonify(serialize_channel(channel))
+
+
+@channels_bp.route("/<int:channel_id>", methods=["DELETE"])
+def delete_channel(channel_id):
+    """
+    Delete a notification channel.
+
+    The channel is soft-deleted so historical data remains preserved.
+    """
+    channel_before = channels_repo.get_channel(channel_id)
+
+    if channel_before.team_id:
+        error = require_team_write(channel_before.team_id)
+        if error:
+            return error
+
+    channel = channels_repo.delete_channel(channel_id)
+
+    write_audit(
+        "channel.delete",
+        object_type="channel",
+        object_id=channel.id,
+        team_id=channel.team.id if channel.team else None,
+        data={
+            "name": channel.name,
+            "channel_type": channel.channel_type,
+            "deleted": True,
+        },
+    )
+
+    return jsonify({
+        "deleted": True,
+        "id": channel.id,
+        "name": channel.name,
+    })
 
 
 @channels_bp.route("/<int:channel_id>/test", methods=["POST"])

@@ -228,6 +228,15 @@ VOICE_PROVIDER_SCHEMA = {
     },
 }
 
+CHANNEL_DELETE_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "deleted": {"type": "boolean", "example": True},
+        "id": {"type": "integer", "example": 1},
+        "name": {"type": "string", "example": "infra-telegram"},
+    },
+}
+
 
 def tags():
     """
@@ -301,11 +310,53 @@ def paths():
             },
             "delete": {
                 "tags": ["channels"],
+                "summary": "Delete channel",
+                "description": (
+                    "Soft-deletes a notification channel by setting deleted=true and "
+                    "enabled=false. Deleted channels are hidden from active channel lists "
+                    "and detached from routes. Historical alerts are preserved."
+                ),
+                "operationId": "deleteChannel",
+                "parameters": [path_param("channel_id", "Channel id.")],
+                "responses": {
+                    "200": response("Channel deleted.", CHANNEL_DELETE_RESPONSE_SCHEMA),
+                    "403": response("Access denied."),
+                    "404": response("Channel not found."),
+                },
+            },
+        },
+        "/api/channels/{channel_id}/disable": {
+            "post": {
+                "tags": ["channels"],
                 "summary": "Disable channel",
-                "description": "Soft-deletes a channel by setting enabled=false. Route/channel history remains intact.",
+                "description": (
+                    "Disables a notification channel by setting enabled=false. "
+                    "The channel stays visible and can be enabled again."
+                ),
                 "operationId": "disableChannel",
                 "parameters": [path_param("channel_id", "Channel id.")],
-                "responses": {"200": response("Channel disabled.")},
+                "responses": {
+                    "200": response("Channel disabled.", CHANNEL_SCHEMA),
+                    "403": response("Access denied."),
+                    "404": response("Channel not found."),
+                },
+            },
+        },
+        "/api/channels/{channel_id}/enable": {
+            "post": {
+                "tags": ["channels"],
+                "summary": "Enable channel",
+                "description": (
+                    "Enables a previously disabled notification channel by setting "
+                    "enabled=true."
+                ),
+                "operationId": "enableChannel",
+                "parameters": [path_param("channel_id", "Channel id.")],
+                "responses": {
+                    "200": response("Channel enabled.", CHANNEL_SCHEMA),
+                    "403": response("Access denied."),
+                    "404": response("Channel not found."),
+                },
             },
         },
         "/api/channels/{channel_id}/test": {

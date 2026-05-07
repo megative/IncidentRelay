@@ -71,22 +71,22 @@
         <div id="alerts-active-filters" class="alerts-active-filters"></div>
 
         <div class="table-wrapper">
-            <table class="data-table alerts-table alerts-inbox-table">
-                <thead>
+            <table id="alerts-table-view" class="data-table alerts-table sortable-table">
+              <thead>
                 <tr>
-                    <th>Status</th>
-                    <th>ID</th>
-                    <th>Alert</th>
-                    <th>Severity</th>
-                    <th>Team</th>
-                    <th>Assignee</th>
-                    <th>Created</th>
-                    <th>Last seen</th>
-                    <th>Reminders</th>
-                    <th class="alerts-actions-th">Actions</th>
+                  <th data-sort="status" scope="col">Status</th>
+                  <th data-sort="id" scope="col">ID</th>
+                  <th data-sort="title" scope="col">Alert</th>
+                  <th data-sort="severity" scope="col">Severity</th>
+                  <th data-sort="team" scope="col">Team</th>
+                  <th data-sort="assignee" scope="col">Assignee</th>
+                  <th data-sort="created" scope="col">Created</th>
+                  <th data-sort="last_seen" scope="col">Last seen</th>
+                  <th data-sort="reminders" scope="col">Reminders</th>
+                  <th scope="col">Actions</th>
                 </tr>
-                </thead>
-                <tbody id="alerts-table"></tbody>
+              </thead>
+              <tbody id="alerts-table"></tbody>
             </table>
         </div>
         <div class="alerts-pagination">

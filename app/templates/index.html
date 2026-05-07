@@ -10,6 +10,7 @@
     <meta charset="utf-8">
     <title>IncidentRelay</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='/css/vendor/fontawesome/all.min.css') }}">
     <link rel="stylesheet" href="/static/css/oncall.css">
     <link rel="stylesheet" href="/static/css/alerts_modal.css">
     <link rel="stylesheet" href="/static/css/alerts_summary.css">
@@ -214,9 +215,17 @@
         </div>
     </main>
 </div>
-<script src="/static/js/common.js"></script>
+<script src="/static/js/core/state.js"></script>
+<script src="/static/js/core/dialogs.js"></script>
+<script src="/static/js/core/api.js"></script>
+<script src="/static/js/core/dates.js"></script>
+<script src="/static/js/core/ui.js"></script>
+<script src="/static/js/core/selects.js"></script>
+<script src="/static/js/core/sortable_table.js"></script>
+<script src="/static/js/core/router.js"></script>
 <script src="/static/js/sidebar.js"></script>
 <script src="/static/js/components/alerts_summary_grid.js"></script>
+<script src="/static/js/components/buttons.js"></script>
 <script src="/static/js/pages/alerts.js"></script>
 <script src="/static/js/pages/rotations.js"></script>
 <script src="/static/js/pages/calendar.js"></script>

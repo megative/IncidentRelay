@@ -54,3 +54,40 @@ function renderAlertsSummaryGrid(containerSelector, alerts) {
     container.find('[data-summary-value="reminders"]').text(counters.reminders);
     container.find('[data-summary-value="total"]').text(counters.total);
 }
+function openClickableSummaryCard(card) {
+    /*
+     * Open a summary card target.
+     */
+    const href = $(card).data("href");
+
+    if (!href) {
+        return;
+    }
+
+    navigate(String(href), true);
+}
+
+
+$(document).on("click", ".clickable-summary-card", function (event) {
+    /*
+     * Navigate when a summary card is clicked.
+     */
+    if ($(event.target).closest("a, button, input, select, textarea").length) {
+        return;
+    }
+
+    openClickableSummaryCard(this);
+});
+
+
+$(document).on("keydown", ".clickable-summary-card", function (event) {
+    /*
+     * Support keyboard navigation for clickable summary cards.
+     */
+    if (event.key !== "Enter" && event.key !== " ") {
+        return;
+    }
+
+    event.preventDefault();
+    openClickableSummaryCard(this);
+});

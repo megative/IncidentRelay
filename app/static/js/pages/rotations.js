@@ -1058,50 +1058,69 @@ function renderRotationDetails(rotation) {
         $("<div>")
             .addClass("details-actions")
             .append(
-                $("<button>")
-                    .attr("type", "button")
-                    .addClass("btn btn-small")
-                    .text("Edit rotation")
-                    .on("click", function () {
+                makeIconButton({
+                    icon: "fas fa-edit",
+                    label: "Edit rotation",
+                    onClick: function () {
                         editRotation(rotation.id);
-                    })
+                    }
+                })
             )
             .append(
-                $("<button>")
-                    .attr("type", "button")
-                    .addClass("btn btn-small")
-                    .text("Members")
-                    .on("click", function () {
+                makeIconButton({
+                    icon: "fas fa-users",
+                    label: "Rotation members",
+                    onClick: function () {
                         selectMemberRotation(rotation.id);
-                    })
+                    }
+                })
             )
             .append(
-                $("<button>")
-                    .attr("type", "button")
-                    .addClass("btn btn-small")
-                    .text("Overrides")
-                    .on("click", function () {
+                makeIconButton({
+                    icon: "fas fa-user-clock",
+                    label: "Rotation overrides",
+                    onClick: function () {
                         selectOverrideRotation(rotation.id);
-                    })
+                    }
+                })
+            )
+            .append(
+                makeIconButton({
+                    icon: "fas fa-calendar-alt",
+                    label: "Open calendar",
+                    onClick: function () {
+                        navigate("/calendar?team_id=" + encodeURIComponent(rotation.team_id), true);
+                    }
+                })
+            )
+            .append(
+                makeIconButton({
+                    icon: "fas fa-pause",
+                    label: "Disable rotation",
+                    className: "btn-danger",
+                    onClick: function () {
+                        deleteRotation(rotation.id);
+                    }
+                })
             )
     );
 }
 
-
-function renderRotationDetailsEmpty() {
-    /*
-     * Render empty details state.
-     */
-    selectedRotationDetailsId = null;
-
-    $("#rotation-details-subtitle").text("Select a rotation");
-
-    $("#rotation-details-body").html(
-        '<div class="details-empty">' +
-        'Click a rotation name to see current on-call user, cadence, reminder and quick actions.' +
-        '</div>'
-    );
-}
+//
+// function renderRotationDetailsEmpty() {
+//     /*
+//      * Render empty details state.
+//      */
+//     selectedRotationDetailsId = null;
+//
+//     $("#rotation-details-subtitle").text("Select a rotation");
+//
+//     $("#rotation-details-body").html(
+//         '<div class="details-empty">' +
+//         'Click a rotation name to see current on-call user, cadence, reminder and quick actions.' +
+//         '</div>'
+//     );
+// }
 function renderRotationsInboxCounter(filteredRotations, allRotations) {
     /*
      * Render "Showing X of Y rotations" counter.

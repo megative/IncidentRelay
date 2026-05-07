@@ -13,9 +13,8 @@ alerts_bp = Blueprint("alerts_api", __name__)
 @alerts_bp.route("", methods=["GET"])
 def list_alerts():
     """
-    Return alerts with optional filters.
+    Return alerts with backend pagination, filters and sorting.
     """
-
     team_id = request.args.get("team_id", type=int)
     if team_id:
         error = require_team_read(team_id)
@@ -25,14 +24,25 @@ def list_alerts():
     else:
         team_ids = get_allowed_team_ids()
 
-    alerts = alerts_repo.list_alerts(
+    page = alerts_repo.paginate_alerts(
         team_id=team_id,
         team_ids=team_ids,
         status=request.args.get("status"),
         source=request.args.get("source"),
         severity=request.args.get("severity"),
+        search=request.args.get("search"),
+        page=request.args.get("page", 1, type=int),
+        page_size=request.args.get("page_size", 25, type=int),
+        sort=request.args.get("sort", "activity"),
+        order=request.args.get("order", "desc"),
     )
-    return jsonify([serialize_alert(alert) for alert in alerts])
+
+    return jsonify({
+        "items": [serialize_alert(alert) for alert in page["items"]],
+        "pagination": page["pagination"],
+        "summary": page["summary"],
+        "sort": page["sort"],
+    })
 
 
 @alerts_bp.route("/<int:alert_id>", methods=["GET"])

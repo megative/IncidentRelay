@@ -357,23 +357,23 @@ function renderTeamDetails(team) {
             $("<div>")
                 .addClass("details-actions")
                 .append(
-                    $("<button>")
-                        .attr("type", "button")
-                        .addClass("btn btn-small")
-                        .text("Edit team")
-                        .on("click", function () {
+                    makeIconButton({
+                        icon: "fas fa-edit",
+                        label: "Edit team",
+                        onClick: function () {
                             editTeam(team.id);
-                        })
+                        }
+                    })
                 )
-                .append(
-                    $("<button>")
-                        .attr("type", "button")
-                        .addClass("btn btn-small")
-                        .text("Members")
-                        .on("click", function () {
+            .append(
+                makeIconButton({
+                    icon: "fas fa-users",
+                    label: "Members",
+                    onClick: function () {
                             openTeamMembers(team.id, team.name);
-                        })
-                )
+                    }
+                })
+            )
         );
 }
 

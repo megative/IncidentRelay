@@ -168,22 +168,92 @@ def update_route(route_id):
     return jsonify(serialize_route(route))
 
 
-@routes_bp.route("/<int:route_id>", methods=["DELETE"])
-def delete_route(route_id):
+@routes_bp.route("/<int:route_id>/disable", methods=["POST"])
+def disable_route(route_id):
     """
-    Disable an alert route.
+    Disable an alert route without deleting it.
     """
-
     route_before = routes_repo.get_route(route_id)
-    error = require_team_write(route_before.team_id)
 
+    error = require_team_write(route_before.team_id)
     if error:
         return error
 
     route = routes_repo.disable_route(route_id)
 
-    write_audit("route.disable", object_type="route", object_id=route.id, team_id=route.team.id)
+    write_audit(
+        "route.disable",
+        object_type="route",
+        object_id=route.id,
+        team_id=route.team.id,
+        data={
+            "name": route.name,
+            "enabled": False,
+        },
+    )
+
     return jsonify(serialize_route(route))
+
+
+@routes_bp.route("/<int:route_id>/enable", methods=["POST"])
+def enable_route(route_id):
+    """
+    Enable a disabled alert route.
+    """
+    route_before = routes_repo.get_route(route_id)
+
+    error = require_team_write(route_before.team_id)
+    if error:
+        return error
+
+    route = routes_repo.enable_route(route_id)
+
+    write_audit(
+        "route.enable",
+        object_type="route",
+        object_id=route.id,
+        team_id=route.team.id,
+        data={
+            "name": route.name,
+            "enabled": True,
+        },
+    )
+
+    return jsonify(serialize_route(route))
+
+
+@routes_bp.route("/<int:route_id>", methods=["DELETE"])
+def delete_route(route_id):
+    """
+    Delete an alert route.
+
+    The route is soft-deleted so historical alerts keep their route reference.
+    """
+    route_before = routes_repo.get_route(route_id)
+
+    error = require_team_write(route_before.team_id)
+    if error:
+        return error
+
+    route = routes_repo.soft_delete_route(route_id)
+
+    write_audit(
+        "route.delete",
+        object_type="route",
+        object_id=route.id,
+        team_id=route.team.id,
+        data={
+            "name": route.name,
+            "source": route.source,
+            "deleted": True,
+        },
+    )
+
+    return jsonify({
+        "deleted": True,
+        "id": route.id,
+        "name": route.name,
+    })
 
 
 @routes_bp.route("/<int:route_id>/intake-token", methods=["POST"])

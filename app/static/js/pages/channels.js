@@ -337,8 +337,7 @@ function renderChannelActions(channel) {
     /*
      * Render channel action buttons.
      */
-
-    const actions = $("<td>").addClass("actions");
+    const actions = $("<div>").addClass("actions");
 
     actions.append(
         $("<button>")
@@ -360,13 +359,35 @@ function renderChannelActions(channel) {
             })
     );
 
+    if (channel.enabled) {
+        actions.append(
+            $("<button>")
+                .attr("type", "button")
+                .addClass("btn btn-warning btn-small")
+                .text("Disable")
+                .on("click", function () {
+                    disableChannel(channel);
+                })
+        );
+    } else {
+        actions.append(
+            $("<button>")
+                .attr("type", "button")
+                .addClass("btn btn-success btn-small")
+                .text("Enable")
+                .on("click", function () {
+                    enableChannel(channel);
+                })
+        );
+    }
+
     actions.append(
         $("<button>")
             .attr("type", "button")
             .addClass("btn btn-danger btn-small")
             .text("Delete")
             .on("click", function () {
-                deleteChannel(channel.id);
+                deleteChannel(channel);
             })
     );
 
@@ -505,16 +526,82 @@ function clearChannelFields() {
     $("#cfg-voice-notification-rules").val("[]");
 }
 
-function deleteChannel(id) {
+function confirmChannelAction(options, onConfirm) {
     /*
-     * Disable a channel.
+     * Confirm a channel action using app modal when available.
      */
-
-    if (!confirm("Disable this channel?")) {
+    if (typeof showAppConfirm === "function") {
+        showAppConfirm(options).done(onConfirm);
         return;
     }
 
-    apiDelete("/api/channels/" + id, refreshChannels);
+    if (confirm(options.message || "Continue?")) {
+        onConfirm();
+    }
+}
+
+
+function disableChannel(channel) {
+    /*
+     * Disable a channel without deleting it.
+     */
+    const channelName = channel.name || ("Channel #" + channel.id);
+
+    confirmChannelAction({
+        title: "Disable this channel?",
+        message: (
+            "Disable channel \"" + channelName + "\"?\n\n" +
+            "The channel will stop receiving notifications, but it will stay " +
+            "visible and can be enabled again."
+        ),
+        confirmText: "Disable",
+        confirmClass: "btn-warning",
+    }, function () {
+        apiPost("/api/channels/" + channel.id + "/disable", {}, function () {
+            refreshChannels();
+            showAppSuccess("Channel disabled.");
+        });
+    });
+}
+
+
+function enableChannel(channel) {
+    /*
+     * Enable a disabled channel.
+     */
+    apiPost("/api/channels/" + channel.id + "/enable", {}, function () {
+        refreshChannels();
+        showAppSuccess("Channel enabled.");
+    });
+}
+
+
+function deleteChannel(channel) {
+    /*
+     * Soft-delete a channel.
+     */
+    const channelName = channel.name || ("Channel #" + channel.id);
+
+    confirmChannelAction({
+        title: "Delete this channel?",
+        message: (
+            "Delete channel \"" + channelName + "\"?\n\n" +
+            "This will remove the channel from active channel lists and detach " +
+            "it from routes. Historical alerts will be preserved."
+        ),
+        confirmText: "Delete",
+        confirmClass: "btn-danger",
+    }, function () {
+        apiDelete("/api/channels/" + channel.id, function () {
+            if (Number(selectedChannelDetailsId) === Number(channel.id)) {
+                selectedChannelDetailsId = null;
+                renderChannelDetailsEmpty();
+            }
+
+            refreshChannels();
+            showAppSuccess("Channel deleted.");
+        });
+    });
 }
 
 function testChannel(id) {
@@ -759,22 +846,51 @@ function renderChannelDetails(channel) {
         $("<div>")
             .addClass("details-actions")
             .append(
-                $("<button>")
-                    .attr("type", "button")
-                    .addClass("btn btn-small")
-                    .text("Edit channel")
-                    .on("click", function () {
+                makeIconButton({
+                    icon: "fas fa-edit",
+                    label: "Edit channel",
+                    onClick: function () {
                         editChannel(channel.id);
+                    }
+                })
+            )
+            .append(
+                makeIconButton({
+                    icon: "fas fa-paper-plane",
+                    label: "Test channel",
+                    onClick: function () {
+                        testChannel(channel.id);
+                    }
+                })
+            )
+            .append(
+                channel.enabled
+                    ? makeIconButton({
+                        icon: "fas fa-pause",
+                        label: "Disable channel",
+                        className: "btn-warning",
+                        onClick: function () {
+                            disableChannel(channel);
+                        }
+                    })
+                    : makeIconButton({
+                        icon: "fas fa-play",
+                        label: "Enable channel",
+                        className: "btn-success",
+                        onClick: function () {
+                            enableChannel(channel);
+                        }
                     })
             )
             .append(
-                $("<button>")
-                    .attr("type", "button")
-                    .addClass("btn btn-small")
-                    .text("Test")
-                    .on("click", function () {
-                        testChannel(channel.id);
-                    })
+                makeIconButton({
+                    icon: "fas fa-trash-alt",
+                    label: "Delete channel",
+                    className: "btn-danger",
+                    onClick: function () {
+                        deleteChannel(channel);
+                    }
+                })
             )
     );
 }

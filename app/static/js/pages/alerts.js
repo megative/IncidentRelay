@@ -1,16 +1,102 @@
 let currentDetailsAlertId = null;
 let alertsCache = [];
 let alertsAutoRefreshTimer = null;
+let alertsLastAppliedQueryString = null;
 
 let alertsCurrentPage = 1;
 let alertsPageSize = 25;
+let alertsSortState = createTableSortState("activity", "desc");
+let alertsPagination = {
+    page: 1,
+    page_size: 25,
+    total_items: 0,
+    total_pages: 1,
+    from: 0,
+    to: 0,
+    has_prev: false,
+    has_next: false
+};
+let alertsSummary = {
+    firing: 0,
+    acknowledged: 0,
+    resolved: 0,
+    silenced: 0,
+    reminders: 0,
+    total: 0
+};
 
-function alertsAsArray(value) {
+const alertsSortColumns = {
+    status: {
+        type: "rank",
+        defaultDirection: "asc"
+    },
+    id: {
+        path: "id",
+        type: "number",
+        defaultDirection: "desc"
+    },
+    title: {
+        path: "title",
+        type: "text",
+        defaultDirection: "asc"
+    },
+    severity: {
+        type: "rank",
+        defaultDirection: "desc"
+    },
+    team: {
+        value: function (alert) {
+            return alert.team_slug || "";
+        },
+        type: "text",
+        defaultDirection: "asc"
+    },
+    assignee: {
+        value: function (alert) {
+            return alert.assignee || "";
+        },
+        type: "text",
+        defaultDirection: "asc"
+    },
+    created: {
+        value: function (alert) {
+            return alertCreatedValue(alert);
+        },
+        type: "datetime",
+        defaultDirection: "desc"
+    },
+    last_seen: {
+        path: "last_seen_at",
+        type: "datetime",
+        defaultDirection: "desc"
+    },
+    reminders: {
+        path: "reminder_count",
+        type: "number",
+        defaultDirection: "desc"
+    },
+    activity: {
+        value: function (alert) {
+            return alertActivityValue(alert);
+        },
+        type: "datetime",
+        defaultDirection: "desc"
+    }
+};
+
+function initAlertsTableSorting() {
     /*
-     * Return value as array.
-     * API errors or empty responses should not break rendering.
+     * Enable reusable column sorting for the alerts table.
      */
-    return Array.isArray(value) ? value : [];
+    bindSortableTableHeaders(
+        "#alerts-table-view",
+        alertsSortState,
+        alertsSortColumns,
+        function () {
+            resetAlertsPagination();
+            loadAlerts();
+        }
+    );
 }
 
 function normalizeAlertValue(value) {
@@ -18,29 +104,6 @@ function normalizeAlertValue(value) {
      * Convert any value to normalized lowercase string.
      */
     return String(value || "").toLowerCase();
-}
-
-function formatAlertDateTime(value) {
-    /*
-     * Format alert datetime in European date format and 24h time.
-     */
-    if (!value) {
-        return "-";
-    }
-
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-        return value;
-    }
-
-    return date.toLocaleString("en-GB", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false
-    });
 }
 
 function alertCreatedValue(alert) {
@@ -107,56 +170,6 @@ function alertDuration(alert) {
     }
 
     return Math.max(minutes, 1) + "m";
-}
-
-function severityRank(severity) {
-    /*
-     * Return severity rank for sorting.
-     */
-    const value = normalizeAlertValue(severity);
-
-    if (value === "critical") {
-        return 4;
-    }
-
-    if (value === "high") {
-        return 3;
-    }
-
-    if (value === "medium") {
-        return 2;
-    }
-
-    if (value === "low") {
-        return 1;
-    }
-
-    return 0;
-}
-
-function statusRank(status) {
-    /*
-     * Return status rank for sorting.
-     */
-    const value = normalizeAlertValue(status);
-
-    if (value === "firing") {
-        return 1;
-    }
-
-    if (value === "acknowledged") {
-        return 2;
-    }
-
-    if (value === "silenced") {
-        return 3;
-    }
-
-    if (value === "resolved") {
-        return 4;
-    }
-
-    return 9;
 }
 
 function severityLabel(severity) {
@@ -259,7 +272,7 @@ function makeAlertBadge(text, cssClass) {
 
 function buildAlertsApiUrl() {
     /*
-     * Build alerts API URL using existing global team filter and status filter.
+     * Build alerts API URL using backend pagination, filters and table sorting.
      */
     const params = [];
 
@@ -271,31 +284,51 @@ function buildAlertsApiUrl() {
         params.push("status=" + encodeURIComponent($("#status-filter").val()));
     }
 
+    if ($("#severity-filter").val()) {
+        params.push("severity=" + encodeURIComponent($("#severity-filter").val()));
+    }
+
+    if ($("#alerts-search").val()) {
+        params.push("search=" + encodeURIComponent($("#alerts-search").val()));
+    }
+
+    params.push("page=" + encodeURIComponent(alertsCurrentPage));
+    params.push("page_size=" + encodeURIComponent(alertsPageSize));
+    params.push("sort=" + encodeURIComponent(alertsSortState.column || "activity"));
+    params.push("order=" + encodeURIComponent(alertsSortState.direction || "desc"));
+
     return "/api/alerts" + (params.length ? "?" + params.join("&") : "");
 }
 
 function loadAlerts() {
     /*
-     * Load alerts page data.
+     * Load one alert page from backend.
      */
+    applyAlertsQueryParams();
+    initAlertsTableSorting();
+
     apiGet(buildAlertsApiUrl(), function (response) {
-        alertsCache = alertsAsArray(response);
+        alertsCache = alertsResponseItems(response);
+        alertsPagination = alertsResponsePagination(response);
+        alertsSummary = alertsResponseSummary(response);
+
+        alertsCurrentPage = alertsPagination.page || alertsCurrentPage;
+        alertsPageSize = alertsPagination.page_size || alertsPageSize;
+
+        updateSortableTableHeaders("#alerts-table-view", alertsSortState);
         renderAlertsPage();
     });
 }
 
 function renderAlertsPage() {
     /*
-     * Render all alert page widgets from cached API response.
+     * Render alert page widgets from paginated backend response.
      */
-    const filteredAlerts = getFilteredAlerts();
-    const pagination = getAlertsPagination(filteredAlerts);
-
-    renderAlertsSummaryGrid("#alerts-alerts-summary", alertsCache);
-    renderAlertsInboxCounter(alertsCache, filteredAlerts, pagination);
-    renderActiveAlertFilters(filteredAlerts);
-    renderAlertsTable(pagination.items);
-    renderAlertsPagination(pagination);
+    renderAlertsSummaryFromBackend("#alerts-alerts-summary", alertsSummary);
+    renderAlertsInboxCounter(alertsPagination);
+    renderActiveAlertFilters(alertsPagination);
+    renderAlertsTable(alertsCache);
+    renderAlertsPagination(alertsPagination);
 }
 
 function getAlertsPagination(alerts) {
@@ -328,38 +361,20 @@ function getAlertsPagination(alerts) {
 }
 
 
-function renderAlertsInboxCounter(allAlerts, filteredAlerts, pagination) {
-    /*
-     * Render "Showing X-Y of Z alerts / N total" counter.
-     */
-    allAlerts = Array.isArray(allAlerts) ? allAlerts : [];
-    filteredAlerts = Array.isArray(filteredAlerts) ? filteredAlerts : [];
-
-    const from = pagination.totalItems ? pagination.startIndex + 1 : 0;
-    const to = pagination.totalItems ? pagination.endIndex : 0;
-
-    $("#alerts-page-from").text(from);
-    $("#alerts-page-to").text(to);
-    $("#alerts-filtered-count").text(filteredAlerts.length);
-    $("#alerts-total-count").text(allAlerts.length);
-
-    $("#alerts-total-wrapper").toggle(allAlerts.length !== filteredAlerts.length);
-}
-
-
 function renderAlertsPagination(pagination) {
     /*
-     * Render pagination controls state.
+     * Render backend pagination controls state.
      */
-    $("#alerts-current-page").text(alertsCurrentPage);
-    $("#alerts-total-pages").text(pagination.totalPages);
+    pagination = pagination || {};
 
-    $("#alerts-prev-page").prop("disabled", alertsCurrentPage <= 1);
-    $("#alerts-next-page").prop("disabled", alertsCurrentPage >= pagination.totalPages);
+    $("#alerts-current-page").text(pagination.page || 1);
+    $("#alerts-total-pages").text(pagination.total_pages || 1);
 
-    $("#alerts-page-size").val(String(alertsPageSize));
+    $("#alerts-prev-page").prop("disabled", !pagination.has_prev);
+    $("#alerts-next-page").prop("disabled", !pagination.has_next);
+    $("#alerts-page-size").val(String(pagination.page_size || alertsPageSize));
 
-    $(".alerts-pagination").toggle(pagination.totalItems > 0);
+    $(".alerts-pagination").toggle((pagination.total_items || 0) > 0);
 }
 
 
@@ -370,74 +385,7 @@ function resetAlertsPagination() {
     alertsCurrentPage = 1;
 }
 
-function getFilteredAlerts() {
-    /*
-     * Apply client-side search, severity filter and sorting.
-     * Status is already passed to backend, but also checked here for safety.
-     */
-    const search = normalizeAlertValue($("#alerts-search").val());
-    const statusFilter = normalizeAlertValue($("#status-filter").val());
-    const severityFilter = normalizeAlertValue($("#severity-filter").val());
-    const sortMode = $("#alerts-sort").val() || "activity_desc";
-
-    let result = alertsCache.filter(function (alert) {
-        const status = normalizeAlertValue(alert.status);
-        const severity = normalizeAlertValue(alert.severity);
-
-        if (statusFilter && status !== statusFilter) {
-            return false;
-        }
-
-        if (severityFilter && severity !== severityFilter) {
-            return false;
-        }
-
-        if (!search) {
-            return true;
-        }
-
-        const haystack = [
-            alert.id,
-            alert.title,
-            alert.team_slug,
-            alert.severity,
-            alert.status,
-            alert.assignee,
-            alert.source,
-            alert.external_id,
-            alert.route_name,
-            alert.rotation_name,
-            alert.group_key,
-            alert.dedup_key
-        ].map(normalizeAlertValue).join(" ");
-
-        return haystack.indexOf(search) !== -1;
-    });
-
-    result = result.slice().sort(function (left, right) {
-        if (sortMode === "created_asc") {
-            return alertTimestamp(alertCreatedValue(left)) - alertTimestamp(alertCreatedValue(right));
-        }
-
-        if (sortMode === "created_desc") {
-            return alertTimestamp(alertCreatedValue(right)) - alertTimestamp(alertCreatedValue(left));
-        }
-
-        if (sortMode === "severity_desc") {
-            return severityRank(right.severity) - severityRank(left.severity);
-        }
-
-        if (sortMode === "status_asc") {
-            return statusRank(left.status) - statusRank(right.status);
-        }
-
-        return alertTimestamp(alertActivityValue(right)) - alertTimestamp(alertActivityValue(left));
-    });
-
-    return result;
-}
-
-function renderActiveAlertFilters(filteredAlerts) {
+function renderActiveAlertFilters(pagination) {
     /*
      * Render active filter chips.
      */
@@ -458,7 +406,7 @@ function renderActiveAlertFilters(filteredAlerts) {
         chips.push("Search: " + $("#alerts-search").val());
     }
 
-    chips.push("Result: " + filteredAlerts.length);
+    chips.push("Result: " + ((pagination && pagination.total_items) || 0));
 
     chips.forEach(function (chip) {
         target.append($("<span>").addClass("alerts-filter-chip").text(chip));
@@ -546,8 +494,8 @@ function renderAlertPageRow(alert) {
     );
 
     row.append($("<td>").text(alert.assignee || "-"));
-    row.append($("<td>").text(formatAlertDateTime(alertCreatedValue(alert))));
-    row.append($("<td>").text(formatAlertDateTime(alert.last_seen_at)));
+    row.append($("<td>").text(formatDateTimeMinutes(alertCreatedValue(alert))));
+    row.append($("<td>").text(formatDateTimeMinutes(alert.last_seen_at)));
     row.append($("<td>").append(renderReminderCount(alert)));
 
     const actionsCell = $("<td>").addClass("actions-cell");
@@ -678,9 +626,9 @@ function renderAlertDetailsSummary(alert, modal) {
     summary.append(detailItem("Rotation", alert.rotation_name));
     summary.append(detailItem("Assignee", alert.assignee));
     summary.append(detailItem("Acknowledged by", alert.acknowledged_by));
-    summary.append(detailItem("Created", formatAlertDateTime(alert.first_seen_at || alert.created_at)));
-    summary.append(detailItem("Last seen", formatAlertDateTime(alert.last_seen_at)));
-    summary.append(detailItem("Last notification", formatAlertDateTime(alert.last_notification_at)));
+    summary.append(detailItem("Created", formatDateTimeMinutes(alert.first_seen_at || alert.created_at)));
+    summary.append(detailItem("Last seen", formatDateTimeMinutes(alert.last_seen_at)));
+    summary.append(detailItem("Last notification", formatDateTimeMinutes(alert.last_notification_at)));
     summary.append(detailItem("Group key", alert.group_key));
     summary.append(detailItem("Dedup key", alert.dedup_key));
     summary.append(detailItem("Reminder count", alert.reminder_count || 0));
@@ -710,7 +658,7 @@ function renderEvents(events, modal) {
                 .append($("<strong>").text("#" + event.id + " " + event.event_type))
                 .append(
                     $("<div>").text(
-                        formatAlertDateTime(event.created_at) + " " + (event.message || "")
+                        formatDateTimeMinutes(event.created_at) + " " + (event.message || "")
                     )
                 )
         );
@@ -774,7 +722,6 @@ function setAlertsAutoRefresh(enabled) {
 }
 
 $(document).on("click", "#reload-alerts", function () {
-    resetAlertsPagination();
     loadAlerts();
 });
 
@@ -785,28 +732,36 @@ $(document).on("change", "#status-filter", function () {
 
 $(document).on("change", "#severity-filter, #alerts-sort", function () {
     resetAlertsPagination();
-    renderAlertsPage();
+    loadAlerts();
 });
 
 $(document).on("input", "#alerts-search", function () {
     resetAlertsPagination();
-    renderAlertsPage();
+    loadAlerts();
 });
 
 $(document).on("change", "#alerts-page-size", function () {
     alertsPageSize = Number($(this).val() || 25);
     resetAlertsPagination();
-    renderAlertsPage();
+    loadAlerts();
 });
 
 $(document).on("click", "#alerts-prev-page", function () {
-    alertsCurrentPage -= 1;
-    renderAlertsPage();
+    if (!alertsPagination.has_prev) {
+        return;
+    }
+
+    alertsCurrentPage = Math.max(1, alertsCurrentPage - 1);
+    loadAlerts();
 });
 
 $(document).on("click", "#alerts-next-page", function () {
+    if (!alertsPagination.has_next) {
+        return;
+    }
+
     alertsCurrentPage += 1;
-    renderAlertsPage();
+    loadAlerts();
 });
 
 $(document).on("change", "#alerts-auto-refresh", function () {
@@ -884,4 +839,156 @@ function closeAlertDetailsModal() {
 
     $("body").removeClass("modal-open");
     currentDetailsAlertId = null;
+}
+function alertsResponseItems(response) {
+    /*
+     * Return alerts from the paginated API response.
+     */
+    if (Array.isArray(response)) {
+        return response;
+    }
+
+    return asArray(response.items);
+}
+
+
+function alertsResponsePagination(response) {
+    /*
+     * Return backend pagination metadata.
+     */
+    if (!response || !response.pagination) {
+        return {
+            page: alertsCurrentPage,
+            page_size: alertsPageSize,
+            total_items: 0,
+            total_pages: 1,
+            from: 0,
+            to: 0,
+            has_prev: false,
+            has_next: false
+        };
+    }
+
+    return response.pagination;
+}
+
+
+function alertsResponseSummary(response) {
+    /*
+     * Return backend summary metadata.
+     */
+    if (!response || !response.summary) {
+        return {
+            firing: 0,
+            acknowledged: 0,
+            resolved: 0,
+            silenced: 0,
+            reminders: 0,
+            total: 0
+        };
+    }
+
+    return response.summary;
+}
+
+
+function parseAlertsSortMode() {
+    /*
+     * Convert the existing sort select value to backend sort/order params.
+     */
+    const sortMode = $("#alerts-sort").val() || "activity_desc";
+
+    if (sortMode === "created_asc") {
+        return {sort: "created", order: "asc"};
+    }
+
+    if (sortMode === "created_desc") {
+        return {sort: "created", order: "desc"};
+    }
+
+    if (sortMode === "severity_desc") {
+        return {sort: "severity", order: "desc"};
+    }
+
+    if (sortMode === "status_asc") {
+        return {sort: "status", order: "asc"};
+    }
+
+    return {sort: "activity", order: "desc"};
+}
+
+
+function renderAlertsSummaryFromBackend(selector, summary) {
+    /*
+     * Render alert summary counters returned by backend.
+     */
+    const target = $(selector);
+    const data = summary || {};
+
+    target.find('[data-summary-value="firing"]').text(data.firing || 0);
+    target.find('[data-summary-value="acknowledged"]').text(data.acknowledged || 0);
+    target.find('[data-summary-value="resolved"]').text(data.resolved || 0);
+    target.find('[data-summary-value="reminders"]').text(data.reminders || 0);
+    target.find('[data-summary-value="total"]').text(data.total || 0);
+}
+function renderAlertsInboxCounter(pagination) {
+    /*
+     * Render "Showing X-Y of Z alerts" counter from backend pagination.
+     */
+    pagination = pagination || {};
+
+    $("#alerts-page-from").text(pagination.from || 0);
+    $("#alerts-page-to").text(pagination.to || 0);
+    $("#alerts-filtered-count").text(pagination.total_items || 0);
+    $("#alerts-total-count").text(alertsSummary.total || pagination.total_items || 0);
+
+    $("#alerts-total-wrapper").hide();
+}
+function applyAlertsQueryParams() {
+    /*
+     * Apply URL query params to alert filters and sorting state.
+     *
+     * This allows dashboard summary cards to open /alerts with preselected
+     * filters, for example /alerts?status=firing.
+     */
+    const queryString = window.location.search || "";
+
+    if (alertsLastAppliedQueryString === queryString) {
+        return;
+    }
+
+    alertsLastAppliedQueryString = queryString;
+
+    const params = new URLSearchParams(queryString);
+
+    $("#status-filter").val(params.get("status") || "");
+    $("#severity-filter").val(params.get("severity") || "");
+    $("#alerts-search").val(params.get("search") || "");
+
+    if (params.get("team_id")) {
+        $("#global-team-filter").val(params.get("team_id"));
+    }
+
+    if (params.get("page")) {
+        alertsCurrentPage = Math.max(1, Number(params.get("page")) || 1);
+    } else {
+        alertsCurrentPage = 1;
+    }
+
+    if (params.get("page_size")) {
+        alertsPageSize = Number(params.get("page_size")) || alertsPageSize;
+        $("#alerts-page-size").val(String(alertsPageSize));
+    }
+
+    if (params.get("sort")) {
+        alertsSortState.column = params.get("sort");
+    }
+
+    if (params.get("order")) {
+        alertsSortState.direction = params.get("order") === "asc" ? "asc" : "desc";
+    }
+
+    if (typeof updateSortableTableHeaders === "function") {
+        updateSortableTableHeaders("#alerts-table-view", alertsSortState);
+    }
 }

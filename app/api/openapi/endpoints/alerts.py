@@ -86,8 +86,9 @@ def paths():
                 "tags": ["alerts"],
                 "summary": "List alerts",
                 "description": (
-                    "Returns alerts sorted by last_seen_at. Supports filtering by team, status, source and severity. "
-                    "Use this endpoint to verify that incoming webhooks were routed correctly."
+                    "Returns alerts with optional filtering and sorting. "
+                    "Supports filtering by team, status, source and severity. "
+                    "Use sort/order to control table column ordering."
                 ),
                 "operationId": "listAlerts",
                 "parameters": [
@@ -95,6 +96,76 @@ def paths():
                     query_param("status", "Filter by status: firing, acknowledged, resolved or silenced."),
                     query_param("source", "Filter by source: alertmanager, zabbix or webhook."),
                     query_param("severity", "Filter by severity label or payload value."),
+                    query_param(
+                        "sort",
+                        "Sort field.",
+                        {
+                            "type": "string",
+                            "enum": [
+                                "id",
+                                "status",
+                                "title",
+                                "severity",
+                                "team",
+                                "assignee",
+                                "created",
+                                "last_seen",
+                                "activity",
+                                "reminders",
+                            ],
+                            "default": "activity",
+                        },
+                    ),
+                    query_param(
+                        "order",
+                        "Sort order.",
+                        {
+                            "type": "string",
+                            "enum": ["asc", "desc"],
+                            "default": "desc",
+                        },
+                    ),
+                    query_param("search",
+                                "Search by id, title, team, assignee, source, route, rotation or dedup fields."),
+                    query_param(
+                        "page",
+                        "Page number.",
+                        {"type": "integer", "minimum": 1, "default": 1},
+                    ),
+                    query_param(
+                        "page_size",
+                        "Rows per page. Maximum value is 100.",
+                        {"type": "integer", "minimum": 1, "maximum": 100, "default": 25},
+                    ),
+                    query_param(
+                        "sort",
+                        "Sort field.",
+                        {
+                            "type": "string",
+                            "enum": [
+                                "id",
+                                "status",
+                                "title",
+                                "severity",
+                                "team",
+                                "assignee",
+                                "created",
+                                "last_seen",
+                                "activity",
+                                "reminders",
+                            ],
+                            "default": "activity",
+                        },
+                    ),
+                    query_param(
+                        "order",
+                        "Sort order.",
+                        {
+                            "type": "string",
+                            "enum": ["asc", "desc"],
+                            "default": "desc",
+                        },
+                    ),
                 ],
                 "responses": {"200": response("List of alerts.")},
             }

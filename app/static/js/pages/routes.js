@@ -1,12 +1,52 @@
 let routesCache = [];
 let selectedRouteDetailsId = null;
+let routesSortState = createTableSortState("id", "desc");
 
+const routesSortColumns = {
+    name: {
+        path: "name",
+        type: "text",
+        defaultDirection: "asc"
+    },
+    team: {
+        path: "team_slug",
+        type: "text",
+        defaultDirection: "asc"
+    },
+    source: {
+        path: "source",
+        type: "text",
+        defaultDirection: "asc"
+    },
+    rotation: {
+        path: "rotation_name",
+        type: "text",
+        defaultDirection: "asc"
+    },
+    channels: {
+        value: function (route) {
+            return asArray(route.channels)
+                .map(function (channel) {
+                    return channel.name || "";
+                })
+                .join(", ");
+        },
+        type: "text",
+        defaultDirection: "asc"
+    },
+    enabled: {
+        path: "enabled",
+        type: "boolean",
+        defaultDirection: "desc"
+    }
+};
 
 function loadRoutes() {
     /*
      * Load routes page.
      */
     fillTeamSelect("#route-team", false, loadRouteDependencies);
+    initRoutesTableSorting();
     refreshRoutes();
 }
 
@@ -157,37 +197,6 @@ function getRouteSearchText(route) {
     ].join(" ").toLowerCase();
 }
 
-
-function getFilteredRoutes() {
-    /*
-     * Apply client-side filters.
-     */
-    const query = String($("#routes-search").val() || "").trim().toLowerCase();
-    const source = String($("#routes-source-filter").val() || "");
-    const status = String($("#routes-status-filter").val() || "");
-
-    return routesCache.filter(function (route) {
-        if (source && route.source !== source) {
-            return false;
-        }
-
-        if (status === "enabled" && !route.enabled) {
-            return false;
-        }
-
-        if (status === "disabled" && route.enabled) {
-            return false;
-        }
-
-        if (!query) {
-            return true;
-        }
-
-        return getRouteSearchText(route).indexOf(query) !== -1;
-    });
-}
-
-
 function renderRoutesCounter(filteredRoutes, allRoutes) {
     /*
      * Render "Showing X of Y routes".
@@ -337,13 +346,35 @@ function renderRouteActions(route) {
             })
     );
 
+    if (route.enabled) {
+        actions.append(
+            $("<button>")
+                .attr("type", "button")
+                .addClass("btn btn-warning btn-small")
+                .text("Disable")
+                .on("click", function () {
+                    disableRoute(route);
+                })
+        );
+    } else {
+        actions.append(
+            $("<button>")
+                .attr("type", "button")
+                .addClass("btn btn-success btn-small")
+                .text("Enable")
+                .on("click", function () {
+                    enableRoute(route);
+                })
+        );
+    }
+
     actions.append(
         $("<button>")
             .attr("type", "button")
             .addClass("btn btn-danger btn-small")
-            .text("Disable")
+            .text("Delete")
             .on("click", function () {
-                deleteRoute(route.id);
+                deleteRoute(route);
             })
     );
 
@@ -410,22 +441,32 @@ function renderRouteDetails(route) {
         $("<div>")
             .addClass("details-actions")
             .append(
-                $("<button>")
-                    .attr("type", "button")
-                    .addClass("btn btn-small")
-                    .text("Edit route")
-                    .on("click", function () {
+                makeIconButton({
+                    icon: "fas fa-edit",
+                    label: "Edit route",
+                    onClick: function () {
                         editRoute(route.id);
-                    })
+                    }
+                })
             )
             .append(
-                $("<button>")
-                    .attr("type", "button")
-                    .addClass("btn btn-small")
-                    .text("Regenerate token")
-                    .on("click", function () {
+                makeIconButton({
+                    icon: "fas fa-sync-alt",
+                    label: "Regenerate route token",
+                    onClick: function () {
                         regenerateRouteToken(route.id);
-                    })
+                    }
+                })
+            )
+            .append(
+                makeIconButton({
+                    icon: "fas fa-pause",
+                    label: "Disable route",
+                    className: "btn-warning",
+                    onClick: function () {
+                        deleteRoute(route.id);
+                    }
+                })
             )
     );
 }
@@ -543,17 +584,66 @@ function editRoute(id) {
 }
 
 
-function deleteRoute(id) {
+function disableRoute(route) {
     /*
-     * Disable a route.
+     * Disable a route without deleting it.
      */
+    const routeName = route.name || ("Route #" + route.id);
+
     showAppConfirm({
         title: "Disable this route?",
-        message: "Disable this route?",
+        message: (
+            "Disable route \"" + routeName + "\"?\n\n" +
+            "The route will stop accepting incoming alerts, but it will stay " +
+            "visible and can be enabled again."
+        ),
         confirmText: "Disable",
         confirmClass: "btn-warning",
     }).done(function () {
-        apiDelete("/api/routes/" + id, refreshRoutes);
+        apiPost("/api/routes/" + route.id + "/disable", {}, function () {
+            refreshRoutes();
+            showAppSuccess("Route disabled.");
+        });
+    });
+}
+
+
+function enableRoute(route) {
+    /*
+     * Enable a disabled route.
+     */
+    apiPost("/api/routes/" + route.id + "/enable", {}, function () {
+        refreshRoutes();
+        showAppSuccess("Route enabled.");
+    });
+}
+
+
+function deleteRoute(route) {
+    /*
+     * Soft-delete a route.
+     */
+    const routeName = route.name || ("Route #" + route.id);
+
+    showAppConfirm({
+        title: "Delete this route?",
+        message: (
+            "Delete route \"" + routeName + "\"?\n\n" +
+            "This will remove the route from active route lists and stop " +
+            "alert intake for this route. Historical alerts will be preserved."
+        ),
+        confirmText: "Delete",
+        confirmClass: "btn-danger",
+    }).done(function () {
+        apiDelete("/api/routes/" + route.id, function () {
+            if (Number(selectedRouteDetailsId) === Number(route.id)) {
+                selectedRouteDetailsId = null;
+                renderRouteDetailsEmpty();
+            }
+
+            refreshRoutes();
+            showAppSuccess("Route deleted.");
+        });
     });
 }
 
@@ -716,3 +806,23 @@ $(document).on("keydown", function (event) {
         closeRouteFormModal();
     }
 });
+
+function initRoutesTableSorting() {
+    bindSortableTableHeaders(
+        "#routes-table-view",
+        routesSortState,
+        routesSortColumns,
+        renderRoutesTable
+    );
+}
+
+function getFilteredRoutes() {
+    const filtered = routesCache.filter(function (route) {
+        /*
+         * Existing filters.
+         */
+        return true;
+    });
+
+    return sortTableData(filtered, routesSortState, routesSortColumns);
+}

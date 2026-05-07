@@ -1,6 +1,18 @@
 from datetime import datetime
 
-from app.modules.db.models import AlertRoute, Group, NotificationChannel, Silence, Rotation, RotationMember, RotationOverride, Team, TeamUser, UserGroup
+from app.db import database_proxy as db
+from app.modules.db.models import (
+    AlertRoute,
+    ApiToken,
+    Group,
+    NotificationChannel,
+    Rotation,
+    Silence,
+    Team,
+    TeamUser,
+    User,
+    UserGroup,
+)
 
 
 def list_groups(active_only=False, include_deleted=False):
@@ -178,61 +190,127 @@ def disable_group_membership(membership_id):
 def soft_delete_group(group_id):
     """
     Soft-delete a group and disable all resources under it.
-    """
 
+    The operation is intentionally soft-delete based:
+    - historical alerts and audit logs stay readable;
+    - teams/routes/rotations/channels/silences are disabled;
+    - users are not deleted;
+    - group memberships are disabled.
+    """
     now = datetime.utcnow()
 
-    group = get_group(group_id)
-    group.deleted = True
-    group.deleted_at = now
-    group.active = False
-    group.save()
+    with db.atomic():
+        group = get_group(group_id)
 
-    teams = Team.select().where(
-        (Team.group == group_id)
-        & (Team.deleted == False)
-    )
+        group.deleted = True
+        group.deleted_at = now
+        group.active = False
+        group.save()
 
-    for team in teams:
-        team.deleted = True
-        team.deleted_at = now
-        team.active = False
-        team.save()
+        team_ids = [
+            team.id
+            for team in (
+                Team
+                .select(Team.id)
+                .where(
+                    (Team.group == group_id)
+                    & (Team.deleted == False)
+                )
+            )
+        ]
 
-        Rotation.update(
+        Team.update(
             deleted=True,
             deleted_at=now,
-            enabled=False,
+            active=False,
         ).where(
-            (Rotation.team == team.id)
-            & (Rotation.deleted == False)
+            (Team.group == group_id)
+            & (Team.deleted == False)
         ).execute()
 
-        AlertRoute.update(
-            deleted=True,
-            deleted_at=now,
-            enabled=False,
+        UserGroup.update(
+            active=False,
         ).where(
-            (AlertRoute.team == team.id)
-            & (AlertRoute.deleted == False)
+            UserGroup.group == group_id
         ).execute()
+
+        User.update(
+            active_group=None,
+        ).where(
+            User.active_group == group_id
+        ).execute()
+
+        if team_ids:
+            Rotation.update(
+                deleted=True,
+                deleted_at=now,
+                enabled=False,
+            ).where(
+                (Rotation.team.in_(team_ids))
+                & (Rotation.deleted == False)
+            ).execute()
+
+            AlertRoute.update(
+                deleted=True,
+                deleted_at=now,
+                enabled=False,
+            ).where(
+                (AlertRoute.team.in_(team_ids))
+                & (AlertRoute.deleted == False)
+            ).execute()
+
+            NotificationChannel.update(
+                deleted=True,
+                deleted_at=now,
+                enabled=False,
+            ).where(
+                (NotificationChannel.team.in_(team_ids))
+                & (NotificationChannel.deleted == False)
+            ).execute()
+
+            Silence.update(
+                deleted=True,
+                deleted_at=now,
+                enabled=False,
+            ).where(
+                (Silence.team.in_(team_ids))
+                & (Silence.deleted == False)
+            ).execute()
+
+            TeamUser.update(
+                active=False,
+            ).where(
+                TeamUser.team.in_(team_ids)
+            ).execute()
+
+            ApiToken.update(
+                deleted=True,
+                deleted_at=now,
+                active=False,
+            ).where(
+                (
+                    (ApiToken.team.in_(team_ids))
+                    | (ApiToken.group == group_id)
+                )
+                & (ApiToken.deleted == False)
+            ).execute()
+        else:
+            ApiToken.update(
+                deleted=True,
+                deleted_at=now,
+                active=False,
+            ).where(
+                (ApiToken.group == group_id)
+                & (ApiToken.deleted == False)
+            ).execute()
 
         NotificationChannel.update(
             deleted=True,
             deleted_at=now,
             enabled=False,
         ).where(
-            (NotificationChannel.team == team.id)
+            (NotificationChannel.group == group_id)
             & (NotificationChannel.deleted == False)
-        ).execute()
-
-        Silence.update(
-            deleted=True,
-            deleted_at=now,
-            enabled=False,
-        ).where(
-            (Silence.team == team.id)
-            & (Silence.deleted == False)
         ).execute()
 
     return group

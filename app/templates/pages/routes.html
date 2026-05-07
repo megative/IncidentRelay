@@ -85,20 +85,20 @@
             </div>
 
             <div class="table-wrapper">
-                <table class="data-table routes-table">
-                    <thead>
+                <table id="routes-table-view" class="data-table sortable-table">
+                  <thead>
                     <tr>
-                        <th>Route</th>
-                        <th>Team</th>
-                        <th>Source</th>
-                        <th>Rotation</th>
-                        <th>Channels</th>
-                        <th>Token</th>
-                        <th>Status</th>
-                        <th class="routes-actions-th">Actions</th>
+                      <th data-sort="name" scope="col">Route</th>
+                      <th data-sort="team" scope="col">Team</th>
+                      <th data-sort="source" scope="col">Source</th>
+                      <th data-sort="rotation" scope="col">Rotation</th>
+                      <th data-sort="channels" scope="col">Channels</th>
+                      <th scope="col">Token</th>
+                      <th data-sort="enabled" scope="col">Status</th>
+                      <th scope="col">Actions</th>
                     </tr>
-                    </thead>
-                    <tbody id="routes-table"></tbody>
+                  </thead>
+                  <tbody id="routes-table"></tbody>
                 </table>
             </div>
         </section>

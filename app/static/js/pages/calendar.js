@@ -3,6 +3,8 @@ let calendarEventsCache = [];
 let calendarSelectedTeamId = null;
 let calendarMode = "week";
 
+const calendarWeekdaysShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 const calendarUserColors = [
     "#1f77b4",
     "#6f42c1",
@@ -18,50 +20,35 @@ const calendarUserColors = [
     "#005f73"
 ];
 
-function padCalendarNumber(value) {
-    /*
-     * Return a two-digit number.
-     */
-
-    return String(value).padStart(2, "0");
-}
 
 function dateToInputValue(date) {
     /*
      * Format Date as YYYY-MM-DD for date inputs.
+     *
+     * Keep this ISO-like format because HTML date inputs require it.
      */
-
     return [
         date.getFullYear(),
-        padCalendarNumber(date.getMonth() + 1),
-        padCalendarNumber(date.getDate())
+        padDateTimePart(date.getMonth() + 1),
+        padDateTimePart(date.getDate())
     ].join("-");
 }
 
-function formatEuropeanDate(date) {
-    /*
-     * Format Date as DD.MM.YYYY.
-     */
 
-    return [
-        padCalendarNumber(date.getDate()),
-        padCalendarNumber(date.getMonth() + 1),
-        date.getFullYear()
-    ].join(".");
+function parseCalendarDate(value) {
+    /*
+     * Parse YYYY-MM-DD as a local date.
+     */
+    const parts = String(value || "").split("-");
+
+    if (parts.length !== 3) {
+        return new Date();
+    }
+
+    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
 }
 
-function formatEuropeanShortDate(date) {
-    /*
-     * Format Date as DD.MM.
-     */
-
-    return [
-        padCalendarNumber(date.getDate()),
-        padCalendarNumber(date.getMonth() + 1)
-    ].join(".");
-}
-
-function formatEuropeanDateTime(value) {
+function formatDateTimeMinutes(value) {
     /*
      * Format ISO datetime as DD.MM.YYYY HH:mm.
      */
@@ -76,21 +63,7 @@ function formatEuropeanDateTime(value) {
         return value;
     }
 
-    return formatEuropeanDate(date) + " " + padCalendarNumber(date.getHours()) + ":" + padCalendarNumber(date.getMinutes());
-}
-
-function parseCalendarDate(value) {
-    /*
-     * Parse YYYY-MM-DD as a local date.
-     */
-
-    const parts = String(value || "").split("-");
-
-    if (parts.length !== 3) {
-        return new Date();
-    }
-
-    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    return formatShortDate(date) + " " + padDateTimePart(date.getHours()) + ":" + padDateTimePart(date.getMinutes());
 }
 
 function startOfCalendarWeek(date) {
@@ -157,27 +130,25 @@ function calendarDaysBetween(start, end) {
 
 function calendarWeekdayLabel(date) {
     /*
-     * Return weekday label with European date.
+     * Return weekday label with European short date.
      */
-
-    return date.toLocaleDateString(undefined, { weekday: "short" }) + " " + formatEuropeanShortDate(date);
+    return calendarWeekdaysShort[date.getDay()] + " " + formatShortDate(date);
 }
 
 function calendarRangeLabel(start, end) {
     /*
      * Format a European date range.
      */
-
     const endInclusive = addCalendarDays(end, -1);
-    return formatEuropeanDate(start) + " - " + formatEuropeanDate(endInclusive);
+
+    return formatDate(start) + " - " + formatDate(endInclusive);
 }
 
 function calendarMonthLabel(start) {
     /*
-     * Format month title.
+     * Format month title using numeric European style.
      */
-
-    return start.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    return padDateTimePart(start.getMonth() + 1) + "." + start.getFullYear();
 }
 
 function getCalendarUserLabel(event) {
@@ -560,7 +531,7 @@ function renderCalendarMonth() {
         cell.append(
             $("<div>")
                 .addClass("calendar-month-day-number")
-                .text(formatEuropeanDate(day))
+                .text(formatShortDate(day))
         );
 
         renderCalendarDayEvents(selectedTeam, day, cell, true);
@@ -609,8 +580,8 @@ function renderCalendarAssignment(event, dayStart, dayEnd, monthMode) {
             "title",
             label + " / " +
             (event.rotation_name || "-") + " / " +
-            formatEuropeanDateTime(clippedStart) + " - " +
-            formatEuropeanDateTime(clippedEnd)
+            formatDateTimeMinutes(clippedStart) + " - " +
+            formatDateTimeMinutes(clippedEnd)
         )
         .on("click", function () {
             renderCalendarDetails(event, clippedStart, clippedEnd);
@@ -908,8 +879,8 @@ function renderCalendarDetails(event, clippedStart, clippedEnd) {
             .append(calendarDetailsItem("Team", event.team_name || event.team_slug))
             .append(calendarDetailsItem("Rotation", event.rotation_name))
             .append(calendarDetailsItem("Type", event.type || "regular"))
-            .append(calendarDetailsItem("Start", formatEuropeanDateTime(clippedStart || event.start)))
-            .append(calendarDetailsItem("End", formatEuropeanDateTime(clippedEnd || event.end)))
+            .append(calendarDetailsItem("Start", formatDateTimeMinutes(clippedStart || event.start)))
+            .append(calendarDetailsItem("End", formatDateTimeMinutes(clippedEnd || event.end)))
     );
 }
 

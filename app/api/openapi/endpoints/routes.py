@@ -159,11 +159,29 @@ def paths():
             },
             "delete": {
                 "tags": ["routes"],
-                "summary": "Disable route",
-                "description": "Soft-deletes a route by setting enabled=false. Existing alerts keep their route reference.",
-                "operationId": "disableRoute",
+                "summary": "Delete route",
+                "description": (
+                    "Soft-deletes a route by setting deleted=true and enabled=false. "
+                    "Deleted routes are hidden from active route lists. Existing alerts "
+                    "keep their route reference."
+                ),
+                "operationId": "deleteRoute",
                 "parameters": [path_param("route_id", "Route id.")],
-                "responses": {"200": response("Route disabled.")},
+                "responses": {
+                    "200": response(
+                        "Route deleted.",
+                        {
+                            "type": "object",
+                            "properties": {
+                                "deleted": {"type": "boolean", "example": True},
+                                "id": {"type": "integer", "example": 1},
+                                "name": {"type": "string", "example": "infra-alertmanager"},
+                            },
+                        },
+                    ),
+                    "403": response("Access denied."),
+                    "404": response("Route not found."),
+                },
             },
         },
         "/api/routes/{route_id}/channels": {
@@ -235,5 +253,36 @@ def paths():
                     )
                 },
             }
+        },
+        "/api/routes/{route_id}/disable": {
+            "post": {
+                "tags": ["routes"],
+                "summary": "Disable route",
+                "description": (
+                    "Disables a route by setting enabled=false. "
+                    "The route stays visible and can be enabled again."
+                ),
+                "operationId": "disableRoute",
+                "parameters": [path_param("route_id", "Route id.")],
+                "responses": {
+                    "200": response("Route disabled.", ROUTE_SCHEMA),
+                    "403": response("Access denied."),
+                    "404": response("Route not found."),
+                },
+            },
+        },
+        "/api/routes/{route_id}/enable": {
+            "post": {
+                "tags": ["routes"],
+                "summary": "Enable route",
+                "description": "Enables a previously disabled route by setting enabled=true.",
+                "operationId": "enableRoute",
+                "parameters": [path_param("route_id", "Route id.")],
+                "responses": {
+                    "200": response("Route enabled.", ROUTE_SCHEMA),
+                    "403": response("Access denied."),
+                    "404": response("Route not found."),
+                },
+            },
         },
     }

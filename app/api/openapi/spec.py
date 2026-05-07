@@ -11,6 +11,7 @@ from app.api.openapi.endpoints import (
     teams,
     users,
     version,
+    groups
 )
 from app.version import get_service_version
 
@@ -27,7 +28,8 @@ ENDPOINT_MODULES = [
     alerts,
     silences,
     integrations,
-    profile
+    profile,
+    groups
 ]
 
 

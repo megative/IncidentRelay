@@ -1,32 +1,19 @@
 function dashboardAsArray(value) {
-    return Array.isArray(value) ? value : [];
-}
-
-function dashboardNormalize(value) {
-    return String(value || "").toLowerCase();
-}
-
-function dashboardFormatDateTime(value) {
     /*
-     * Format datetime in European style with 24h clock.
+     * Return alerts from both old array responses and new paginated responses.
      */
-    if (!value) {
-        return "-";
-    }
-
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
+    if (Array.isArray(value)) {
         return value;
     }
 
-    return date.toLocaleString("en-GB", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false
-    });
+    if (value && Array.isArray(value.items)) {
+        return value.items;
+    }
+
+    return [];
+}
+function dashboardNormalize(value) {
+    return String(value || "").toLowerCase();
 }
 
 function dashboardDateValue(alert) {
@@ -180,15 +167,27 @@ function dashboardActiveAlerts(alerts) {
 function loadDashboard() {
     /*
      * Load dashboard page data.
-     * Uses the existing /api/alerts endpoint and renders a richer overview.
+     *
+     * The alerts API is paginated, so dashboard reads the first page sorted by
+     * latest activity and renders widgets from response.items.
      */
-    apiGet("/api/alerts" + selectedTeamQuery(), function (response) {
+    const params = [];
+
+    if (typeof selectedTeamId === "function" && selectedTeamId()) {
+        params.push("team_id=" + encodeURIComponent(selectedTeamId()));
+    }
+
+    params.push("page=1");
+    params.push("page_size=100");
+    params.push("sort=activity");
+    params.push("order=desc");
+
+    apiGet("/api/alerts?" + params.join("&"), function (response) {
         const alerts = dashboardAsArray(response);
         const activeAlerts = dashboardActiveAlerts(alerts);
         const sortedAlerts = dashboardSortByActivity(alerts);
         const sortedActiveAlerts = dashboardSortByActivity(activeAlerts);
 
-        // renderDashboardMetrics(alerts, activeAlerts);
         renderAlertsSummaryGrid("#overview-alerts-summary", alerts);
         renderDashboardAlertsTable(sortedActiveAlerts.slice(0, 10));
         renderDashboardRecentAlerts(sortedAlerts.slice(0, 5));
@@ -198,36 +197,6 @@ function loadDashboard() {
         renderDashboardSystemStatus(alerts, activeAlerts);
     });
 }
-
-// function renderDashboardMetrics(alerts, activeAlerts) {
-//     let firing = 0;
-//     let ack = 0;
-//     let resolved = 0;
-//     let reminders = 0;
-//
-//     alerts.forEach(function (alert) {
-//         if (alert.status === "firing") {
-//             firing += 1;
-//         }
-//
-//         if (alert.status === "acknowledged") {
-//             ack += 1;
-//         }
-//
-//         if (alert.status === "resolved") {
-//             resolved += 1;
-//         }
-//
-//         reminders += alert.reminder_count || 0;
-//     });
-//
-//     $("#metric-firing").text(firing);
-//     $("#metric-acknowledged").text(ack);
-//     $("#metric-resolved").text(resolved);
-//     $("#metric-reminders").text(reminders);
-//     $("#metric-total-alerts").text(alerts.length);
-//     $("#dashboard-active-count").text(activeAlerts.length);
-// }
 
 function renderDashboardAlertsTable(alerts) {
     const tbody = $("#dashboard-alerts");
@@ -292,7 +261,7 @@ function renderDashboardAlertRow(alert) {
 
     row.append($("<td>").text(alert.team_slug || "-"));
     row.append($("<td>").addClass("overview-duration-cell").text(dashboardDuration(alert)));
-    row.append($("<td>").text(dashboardFormatDateTime(dashboardDateValue(alert))));
+    row.append($("<td>").text(formatDateTimeMinutes(dashboardDateValue(alert))));
 
     const actionsCell = $("<td>").addClass("actions-cell");
     const actions = $("<div>").addClass("table-actions");
@@ -366,7 +335,7 @@ function renderDashboardRecentAlerts(alerts) {
         item.append(
             $("<span>")
                 .addClass("overview-list-time")
-                .text(dashboardFormatDateTime(dashboardDateValue(alert)))
+                .text(formatDateTimeMinutes(dashboardDateValue(alert)))
         );
 
         target.append(item);

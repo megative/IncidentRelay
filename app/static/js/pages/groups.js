@@ -162,6 +162,18 @@ function renderGroupActions(group) {
         );
     }
 
+    if (currentUser && currentUser.is_admin) {
+        actions.append(
+            $("<button>")
+                .attr("type", "button")
+                .addClass("btn btn-danger btn-small")
+                .text("Delete")
+                .on("click", function () {
+                    deleteGroup(group);
+                })
+        );
+    }
+
     return actions;
 }
 
@@ -308,27 +320,31 @@ function setGroupActive(group, active) {
      * Enable or disable a group using the existing update endpoint.
      */
     const action = active ? "enable" : "disable";
+    const btn_class = active ? "btn-success" : "btn-warning";
 
-    if (!confirm("Are you sure you want to " + action + " this group?")) {
-        return;
-    }
+    showAppConfirm({
+        title: "Are you sure?",
+        message: "Are you sure you want to " + action + " this group?",
+        confirmText: upperCaseFirst(action),
+        confirmClass: btn_class,
+    }).done(function () {
+        apiPut(
+            "/api/groups/" + group.id,
+            {
+                slug: group.slug,
+                name: group.name,
+                description: group.description || "",
+                active: active
+            },
+            function () {
+                if (Number($("#group-id").val()) === Number(group.id)) {
+                    $("#group-active").prop("checked", active);
+                }
 
-    apiPut(
-        "/api/groups/" + group.id,
-        {
-            slug: group.slug,
-            name: group.name,
-            description: group.description || "",
-            active: active
-        },
-        function () {
-            if (Number($("#group-id").val()) === Number(group.id)) {
-                $("#group-active").prop("checked", active);
+                loadGroups();
             }
-
-            loadGroups();
-        }
-    );
+        );
+    });
 }
 
 
@@ -572,22 +588,26 @@ function setGroupMemberActive(member, active) {
      * Enable or disable group membership using the existing update endpoint.
      */
     const action = active ? "enable" : "disable";
+    const btn_class = active ? "btn-success" : "btn-warning";
 
-    if (!confirm("Are you sure you want to " + action + " this group membership?")) {
-        return;
-    }
-
-    apiPut(
-        "/api/groups/users/" + member.id,
-        {
-            role: member.role || "read_only",
-            active: active
-        },
-        function () {
-            resetGroupMemberForm();
-            loadGroupMembers(selectedGroupForMembers, selectedGroupNameForMembers);
-        }
-    );
+    showAppConfirm({
+        title: "Are you sure?",
+        message: "Are you sure you want to " + action + " this group membership?",
+        confirmText: upperCaseFirst(action),
+        confirmClass: btn_class,
+    }).done(function () {
+        apiPut(
+            "/api/groups/users/" + member.id,
+            {
+                role: member.role || "read_only",
+                active: active
+            },
+            function () {
+                resetGroupMemberForm();
+                loadGroupMembers(selectedGroupForMembers, selectedGroupNameForMembers);
+            }
+        );
+    });
 }
 
 
@@ -619,3 +639,40 @@ $(document).on("keydown", function (event) {
         closeGroupModal();
     }
 });
+function deleteGroup(group) {
+    /*
+     * Soft-delete a group after explicit confirmation.
+     *
+     * This disables the group and all resources under it, but keeps historical
+     * alerts and audit data.
+     */
+    const groupName = group.name || group.slug || ("Group #" + group.id);
+    const message = (
+        "Delete group \"" + groupName + "\"?\n\n" +
+        "This will disable the group, its teams, rotations, routes, " +
+        "channels, silences, memberships and related API tokens. " +
+        "Historical alerts will be preserved."
+    );
+
+    showAppConfirm({
+        title: "Are you sure?",
+        message: message,
+        confirmText: "Delete",
+        confirmClass: "btn-danger",
+    }).done(function () {
+        apiDelete("/api/groups/" + group.id, function () {
+            if (Number($("#group-id").val()) === Number(group.id)) {
+                closeGroupModal();
+                selectedGroupForMembers = null;
+                selectedGroupNameForMembers = "";
+                groupMembersCache = [];
+                clearGroupForm();
+                resetGroupMemberForm();
+                renderEmptyGroupMembers("No group selected");
+            }
+
+            loadGroups();
+            showAppSuccess("Group deleted.");
+        });
+    });
+}

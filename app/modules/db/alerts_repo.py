@@ -1,34 +1,354 @@
+from functools import reduce
+from operator import or_
+from math import ceil
 from datetime import datetime, timedelta
 
-from app.modules.db.models import Alert, AlertEvent
+from peewee import Case, JOIN, fn
+
+from app.modules.db.models import Alert, AlertEvent, AlertRoute, Rotation, Team, User
 
 
-def list_alerts(team_id=None, team_ids=None, status=None, source=None, severity=None, limit=300):
+MAX_ALERTS_PAGE_SIZE = 100
+
+ALERT_SEVERITY_SORT = Case(
+    Alert.severity,
+    (
+        ("critical", 4),
+        ("high", 3),
+        ("medium", 2),
+        ("low", 1),
+    ),
+    0,
+)
+
+ALERT_STATUS_SORT = Case(
+    Alert.status,
+    (
+        ("firing", 1),
+        ("acknowledged", 2),
+        ("silenced", 3),
+        ("resolved", 4),
+    ),
+    9,
+)
+
+ALERT_SORT_FIELDS = {
+    "id": Alert.id,
+    "status": ALERT_STATUS_SORT,
+    "title": Alert.title,
+    "severity": ALERT_SEVERITY_SORT,
+    "team": Team.slug,
+    "assignee": User.username,
+    "created": Alert.first_seen_at,
+    "last_seen": Alert.last_seen_at,
+    "activity": Alert.last_seen_at,
+    "reminders": Alert.reminder_count,
+}
+
+
+def normalize_alert_page(page):
     """
-    Return alerts using optional filters.
+    Return a safe page number.
     """
+    try:
+        page = int(page)
+    except (TypeError, ValueError):
+        return 1
 
-    query = Alert.select().order_by(Alert.id.desc())
+    return max(page, 1)
+
+
+def normalize_alert_page_size(page_size):
+    """
+    Return a safe page size.
+
+    The upper limit protects the API from loading too many rows at once.
+    """
+    try:
+        page_size = int(page_size)
+    except (TypeError, ValueError):
+        return 25
+
+    page_size = max(page_size, 1)
+
+    return min(page_size, MAX_ALERTS_PAGE_SIZE)
+
+
+def normalize_alert_sort(sort):
+    """
+    Return a whitelisted alert sort field.
+    """
+    if sort in ALERT_SORT_FIELDS:
+        return sort
+
+    return "activity"
+
+
+def normalize_alert_order(order):
+    """
+    Return a safe sort order.
+    """
+    if order == "asc":
+        return "asc"
+
+    return "desc"
+
+
+def build_alerts_query(
+    team_id=None,
+    team_ids=None,
+    status=None,
+    source=None,
+    severity=None,
+    search=None,
+):
+    """
+    Build the base alerts query with filters.
+
+    Search intentionally runs on backend-visible fields only, so pagination
+    works on the full filtered dataset and not only on the current page.
+    """
+    query = (
+        Alert
+        .select(Alert, Team, AlertRoute, Rotation, User)
+        .join(Team, JOIN.LEFT_OUTER)
+        .switch(Alert)
+        .join(AlertRoute, JOIN.LEFT_OUTER)
+        .switch(Alert)
+        .join(Rotation, JOIN.LEFT_OUTER)
+        .switch(Alert)
+        .join(User, JOIN.LEFT_OUTER, on=(Alert.assignee == User.id))
+    )
+
     if team_id:
         query = query.where(Alert.team == team_id)
     elif team_ids is not None:
         if not team_ids:
-            return []
+            return None
+
         query = query.where(Alert.team.in_(team_ids))
+
     if status:
         query = query.where(Alert.status == status)
+
     if source:
         query = query.where(Alert.source == source)
+
     if severity:
         query = query.where(Alert.severity == severity)
-    return list(query.limit(limit))
+
+    if search:
+        search = str(search).strip()
+
+        if search:
+            conditions = [
+                Alert.title.contains(search),
+                Alert.message.contains(search),
+                Alert.source.contains(search),
+                Alert.external_id.contains(search),
+                Alert.group_key.contains(search),
+                Alert.dedup_key.contains(search),
+                Alert.severity.contains(search),
+                Alert.status.contains(search),
+                Team.slug.contains(search),
+                Team.name.contains(search),
+                AlertRoute.name.contains(search),
+                Rotation.name.contains(search),
+                User.username.contains(search),
+                User.display_name.contains(search),
+            ]
+
+            if search.isdigit():
+                conditions.append(Alert.id == int(search))
+
+            query = query.where(reduce(or_, conditions))
+
+    return query
+
+
+def apply_alert_sort(query, sort, order):
+    """
+    Apply whitelisted sorting to alerts query.
+    """
+    sort = normalize_alert_sort(sort)
+    order = normalize_alert_order(order)
+
+    expression = ALERT_SORT_FIELDS[sort]
+    ordered_expression = expression.asc() if order == "asc" else expression.desc()
+
+    if sort == "id":
+        return query.order_by(ordered_expression)
+
+    return query.order_by(ordered_expression, Alert.id.desc())
+
+
+def summarize_alerts(query, total_items):
+    """
+    Build summary counters for the current filtered selection.
+    """
+    summary = {
+        "firing": 0,
+        "acknowledged": 0,
+        "resolved": 0,
+        "silenced": 0,
+        "reminders": 0,
+        "total": total_items,
+    }
+
+    if query is None:
+        return summary
+
+    summary_query = (
+        query
+        .select(
+            Alert.status.alias("status"),
+            fn.COUNT(Alert.id).alias("count"),
+            fn.COALESCE(fn.SUM(Alert.reminder_count), 0).alias("reminders"),
+        )
+        .group_by(Alert.status)
+    )
+
+    for row in summary_query.dicts():
+        status = row.get("status") or "unknown"
+        count = row.get("count") or 0
+
+        if status in summary:
+            summary[status] = count
+
+        summary["reminders"] += row.get("reminders") or 0
+
+    return summary
+
+
+def empty_paginated_alerts(page=1, page_size=25, sort="activity", order="desc"):
+    """
+    Return an empty paginated response.
+    """
+    page = normalize_alert_page(page)
+    page_size = normalize_alert_page_size(page_size)
+
+    return {
+        "items": [],
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total_items": 0,
+            "total_pages": 1,
+            "from": 0,
+            "to": 0,
+            "has_prev": False,
+            "has_next": False,
+        },
+        "summary": summarize_alerts(None, 0),
+        "sort": {
+            "field": normalize_alert_sort(sort),
+            "order": normalize_alert_order(order),
+        },
+    }
+
+
+def paginate_alerts(
+    team_id=None,
+    team_ids=None,
+    status=None,
+    source=None,
+    severity=None,
+    search=None,
+    page=1,
+    page_size=25,
+    sort="activity",
+    order="desc",
+):
+    """
+    Return alerts with backend pagination, filtering and sorting.
+    """
+    page = normalize_alert_page(page)
+    page_size = normalize_alert_page_size(page_size)
+    sort = normalize_alert_sort(sort)
+    order = normalize_alert_order(order)
+
+    query = build_alerts_query(
+        team_id=team_id,
+        team_ids=team_ids,
+        status=status,
+        source=source,
+        severity=severity,
+        search=search,
+    )
+
+    if query is None:
+        return empty_paginated_alerts(
+            page=page,
+            page_size=page_size,
+            sort=sort,
+            order=order,
+        )
+
+    total_items = query.count()
+    total_pages = max(1, int(ceil(total_items / float(page_size))))
+
+    if page > total_pages:
+        page = total_pages
+
+    sorted_query = apply_alert_sort(query, sort, order)
+    items = list(sorted_query.paginate(page, page_size))
+
+    start_index = (page - 1) * page_size
+    end_index = start_index + len(items)
+
+    return {
+        "items": items,
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total_items": total_items,
+            "total_pages": total_pages,
+            "from": start_index + 1 if total_items else 0,
+            "to": end_index if total_items else 0,
+            "has_prev": page > 1,
+            "has_next": page < total_pages,
+        },
+        "summary": summarize_alerts(query, total_items),
+        "sort": {
+            "field": sort,
+            "order": order,
+        },
+    }
+
+
+def list_alerts(
+    team_id=None,
+    team_ids=None,
+    status=None,
+    source=None,
+    severity=None,
+    limit=300,
+):
+    """
+    Return alerts using optional filters.
+
+    Kept for internal compatibility. UI/API list endpoint should use
+    paginate_alerts() instead.
+    """
+    page = paginate_alerts(
+        team_id=team_id,
+        team_ids=team_ids,
+        status=status,
+        source=source,
+        severity=severity,
+        page=1,
+        page_size=limit,
+        sort="id",
+        order="desc",
+    )
+
+    return page["items"]
 
 
 def get_alert(alert_id):
     """
     Return an alert by id.
     """
-
     return Alert.get_by_id(alert_id)
 
 

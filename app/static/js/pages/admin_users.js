@@ -388,29 +388,34 @@ function setAdminUserActive(user, active) {
      * Enable or disable user through the update endpoint.
      */
     const action = active ? "enable" : "disable";
+    const btn_class = active ? "btn-success" : "btn-warning";
 
-    if (!confirm("Are you sure you want to " + action + " this user?")) {
-        return;
-    }
 
-    apiPut(
-        "/api/admin/users/" + user.id,
-        {
-            username: user.username,
-            display_name: user.display_name || null,
-            email: user.email || null,
-            phone: user.phone || null,
-            telegram_chat_id: user.telegram_chat_id || null,
-            slack_user_id: user.slack_user_id || null,
-            mattermost_user_id: user.mattermost_user_id || null,
-            password: null,
-            is_admin: !!user.is_admin,
-            active: active
-        },
-        function () {
-            refreshAdminUsers();
-        }
-    );
+    showAppConfirm({
+        title: "Are you sure?",
+        message: "Are you sure you want to " + action + " this user?",
+        confirmText: upperCaseFirst(action),
+        confirmClass: btn_class,
+    }).done(function () {
+        apiPut(
+            "/api/admin/users/" + user.id,
+            {
+                username: user.username,
+                display_name: user.display_name || null,
+                email: user.email || null,
+                phone: user.phone || null,
+                telegram_chat_id: user.telegram_chat_id || null,
+                slack_user_id: user.slack_user_id || null,
+                mattermost_user_id: user.mattermost_user_id || null,
+                password: null,
+                is_admin: !!user.is_admin,
+                active: active
+            },
+            function () {
+                refreshAdminUsers();
+            }
+        );
+    });
 }
 
 
@@ -470,14 +475,17 @@ function removeAdminUser(user) {
         "Continue?"
     ].join("\n");
 
-    if (!confirm(message)) {
-        return;
-    }
-
-    apiDelete("/api/admin/users/" + user.id, function () {
-        resetAdminUserForm();
-        closeAdminUserModal();
-        refreshAdminUsers();
+    showAppConfirm({
+        title: "Remove user?",
+        message: message,
+        confirmText: "Remove user",
+        confirmClass: "btn-danger",
+    }).done(function () {
+        apiDelete("/api/admin/users/" + user.id, function () {
+            resetAdminUserForm();
+            closeAdminUserModal();
+            refreshAdminUsers();
+        });
     });
 }
 function fillAdminUserGroupSelect() {
