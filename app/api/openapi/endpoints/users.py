@@ -99,10 +99,10 @@ USER_RESPONSE_SCHEMA = {
             "description": "Phone number for voice or SMS integrations.",
             "example": "+77001234567",
         },
-        "telegram_chat_id": {
+        "telegram_user_id": {
             "type": "string",
             "nullable": True,
-            "description": "Telegram chat id used for direct notifications.",
+            "description": "Telegram user ID used for direct notifications.",
             "example": "123456789",
         },
         "slack_user_id": {
@@ -179,11 +179,11 @@ USER_WRITE_SCHEMA = {
             "description": "Phone number for voice or SMS integrations.",
             "example": "+77001234567",
         },
-        "telegram_chat_id": {
+        "telegram_user_id": {
             "type": "string",
             "nullable": True,
             "maxLength": 128,
-            "description": "Telegram chat id used for direct notifications.",
+            "description": "Telegram user ID used for direct notifications.",
             "example": "123456789",
         },
         "slack_user_id": {

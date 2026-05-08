@@ -116,18 +116,18 @@ incidentrelay-scheduler.service  # reminders, escalations, periodic jobs
 Quick start:
 
 ```bash
-sudo git clone https://github.com/roxy-wi/IncidentRelay.git /var/www/incedentrelay
-cd /var/www/incedentrelay
+sudo git clone https://github.com/roxy-wi/IncidentRelay.git /var/www/incidentrelay
+cd /var/www/incidentrelay
 
-sudo python3 -m venv /var/www/incedentrelay/venv
-sudo /var/www/incedentrelay/venv/bin/pip install --upgrade pip
-sudo /var/www/incedentrelay/venv/bin/pip install -r requirements.txt
-sudo /var/www/incedentrelay/venv/bin/pip install gunicorn
+sudo python3 -m venv /var/www/incidentrelay/venv
+sudo /var/www/incidentrelay/venv/bin/pip install --upgrade pip
+sudo /var/www/incidentrelay/venv/bin/pip install -r requirements.txt
+sudo /var/www/incidentrelay/venv/bin/pip install gunicorn
 
-sudo mkdir -p /etc/incedentrelay /var/lib/incidentrelay /var/log/incidentrelay
-sudo cp etc/incedentrelay/incedentrelay.conf /etc/incedentrelay/incedentrelay.conf
+sudo mkdir -p /etc/incidentrelay /var/lib/incidentrelay /var/log/incidentrelay
+sudo cp etc/incidentrelay/incidentrelay.conf /etc/incidentrelay/incidentrelay.conf
 
-sudo chown -R www-data:www-data /var/www/incedentrelay
+sudo chown -R www-data:www-data /var/www/incidentrelay
 sudo chown -R www-data:www-data /var/lib/incidentrelay
 sudo chown -R www-data:www-data /var/log/incidentrelay
 
@@ -136,8 +136,8 @@ sudo cp systemd/incidentrelay-scheduler.service /etc/systemd/system/
 sudo systemctl daemon-reload
 
 sudo -u www-data \
-  INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf \
-  /var/www/incedentrelay/venv/bin/python app/migrate.py migrate
+  INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
+  /var/www/incidentrelay/venv/bin/python app/migrate.py migrate
 
 sudo systemctl enable --now incidentrelay-web
 sudo systemctl enable --now incidentrelay-scheduler
@@ -147,8 +147,8 @@ Create the first admin user:
 
 ```bash
 sudo -u www-data \
-  INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf \
-  /var/www/incedentrelay/venv/bin/python manage.py create-admin \
+  INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
+  /var/www/incidentrelay/venv/bin/python manage.py create-admin \
     --username admin \
     --password 'change-me-123' \
     --email admin@example.com

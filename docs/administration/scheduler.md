@@ -37,7 +37,7 @@ incidentrelay-scheduler  # one scheduler process
 The scheduler process should use:
 
 ```text
-INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf
+INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 INCIDENTRELAY_SERVICE=scheduler
 PYTHONUNBUFFERED=1
 ```
@@ -45,7 +45,7 @@ PYTHONUNBUFFERED=1
 The web process should use:
 
 ```text
-INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf
+INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 INCIDENTRELAY_SERVICE=web
 PYTHONUNBUFFERED=1
 ```
@@ -163,9 +163,9 @@ Type=simple
 User=www-data
 Group=www-data
 
-WorkingDirectory=/var/www/incedentrelay
+WorkingDirectory=/var/www/incidentrelay
 
-Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf
+Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 Environment=INCIDENTRELAY_SERVICE=scheduler
 Environment=PYTHONUNBUFFERED=1
 
@@ -195,13 +195,13 @@ Type=simple
 User=www-data
 Group=www-data
 
-WorkingDirectory=/var/www/incedentrelay
+WorkingDirectory=/var/www/incidentrelay
 
-Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf
+Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 Environment=INCIDENTRELAY_SERVICE=scheduler
 Environment=PYTHONUNBUFFERED=1
 
-ExecStart=/var/www/incedentrelay/venv/bin/python -m app.scheduler_worker
+ExecStart=/var/www/incidentrelay/venv/bin/python -m app.scheduler_worker
 
 Restart=always
 RestartSec=5
@@ -269,7 +269,7 @@ systemctl show incidentrelay-scheduler --property=Environment
 Check file permissions:
 
 ```bash
-sudo -u www-data test -r /etc/incedentrelay/incedentrelay.conf
+sudo -u www-data test -r /etc/incidentrelay/incidentrelay.conf
 ```
 
 ### SQLite database is locked

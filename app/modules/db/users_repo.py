@@ -114,7 +114,7 @@ def update_user(user_id, data):
         "display_name",
         "email",
         "phone",
-        "telegram_chat_id",
+        "telegram_user_id",
         "slack_user_id",
         "mattermost_user_id",
         "active",
@@ -283,3 +283,17 @@ def count_active_admins(exclude_user_id=None):
         query = query.where(User.id != exclude_user_id)
 
     return query.count()
+
+
+def get_user_by_telegram_id(telegram_user_id):
+    """
+    Return a user by Telegram user id.
+    """
+    if not telegram_user_id:
+        return None
+
+    return User.get_or_none(
+        (User.telegram_user_id == str(telegram_user_id))
+        & (User.deleted == False)
+        & (User.active == True)
+    )

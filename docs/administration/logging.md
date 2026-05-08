@@ -9,7 +9,7 @@ Logs are configured here:
 
 ```ini
 [logging]
-log_file = ./logs/incedentrelay.log
+log_file = ./logs/incidentrelay.log
 json = true
 requests = false
 ```
@@ -17,7 +17,7 @@ requests = false
 View logs:
 
 ```bash
-tail -f ./logs/incedentrelay.log
+tail -f ./logs/incidentrelay.log
 ```
 
 ## JSON error logs
@@ -35,7 +35,7 @@ Unhandled server errors return JSON with `error_id`:
 Use the `error_id` to find the real traceback in the log file:
 
 ```bash
-grep 'ERROR_ID_HERE' ./logs/incedentrelay.log
+grep 'ERROR_ID_HERE' ./logs/incidentrelay.log
 ```
 
 ## Logging policy
@@ -68,9 +68,9 @@ Request logging is hard-disabled in application code.
 The service JSON log file accepts only these logger names:
 
 ```text
-incedentrelay.audit
-incedentrelay.alerts
-incedentrelay.error
+incidentrelay.audit
+incidentrelay.alerts
+incidentrelay.error
 ```
 
 Check active logging settings:
@@ -86,9 +86,9 @@ Expected response:
 {
   "request_logging_registered": false,
   "allowed_loggers": [
-    "incedentrelay.audit",
-    "incedentrelay.alerts",
-    "incedentrelay.error"
+    "incidentrelay.audit",
+    "incidentrelay.alerts",
+    "incidentrelay.error"
   ]
 }
 ```

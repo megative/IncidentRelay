@@ -59,7 +59,7 @@ function getFilteredAdminUsers() {
             user.display_name,
             user.email,
             user.phone,
-            user.telegram_chat_id,
+            user.telegram_user_id,
             user.slack_user_id,
             user.mattermost_user_id
         ].join(" ").toLowerCase().indexOf(query) !== -1;
@@ -174,7 +174,7 @@ function renderAdminUserMessengers(user) {
     const box = $("<div>").addClass("details-compact-list");
 
     box.append(
-        $("<div>").text("Telegram: " + (user.telegram_chat_id || "-"))
+        $("<div>").text("Telegram: " + (user.telegram_user_id || "-"))
     );
 
     box.append(
@@ -298,7 +298,7 @@ function collectAdminUserPayload() {
         display_name: $("#admin-user-display").val().trim() || null,
         email: $("#admin-user-email").val().trim() || null,
         phone: $("#admin-user-phone").val().trim() || null,
-        telegram_chat_id: $("#admin-user-telegram").val().trim() || null,
+        telegram_user_id: $("#admin-user-telegram").val().trim() || null,
         slack_user_id: $("#admin-user-slack").val().trim() || null,
         mattermost_user_id: $("#admin-user-mattermost").val().trim() || null,
         password: $("#admin-user-password").val() || null,
@@ -374,7 +374,7 @@ function fillAdminUserForm(user) {
     $("#admin-user-display").val(user.display_name || "");
     $("#admin-user-email").val(user.email || "");
     $("#admin-user-phone").val(user.phone || "");
-    $("#admin-user-telegram").val(user.telegram_chat_id || "");
+    $("#admin-user-telegram").val(user.telegram_user_id || "");
     $("#admin-user-slack").val(user.slack_user_id || "");
     $("#admin-user-mattermost").val(user.mattermost_user_id || "");
     $("#admin-user-password").val("");
@@ -404,7 +404,7 @@ function setAdminUserActive(user, active) {
                 display_name: user.display_name || null,
                 email: user.email || null,
                 phone: user.phone || null,
-                telegram_chat_id: user.telegram_chat_id || null,
+                telegram_user_id: user.telegram_user_id || null,
                 slack_user_id: user.slack_user_id || null,
                 mattermost_user_id: user.mattermost_user_id || null,
                 password: null,

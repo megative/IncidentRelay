@@ -126,10 +126,10 @@ PROFILE_SCHEMA = {
             "description": "Phone number for voice or SMS integrations.",
             "example": "+77001234567",
         },
-        "telegram_chat_id": {
+        "telegram_user_id": {
             "type": "string",
             "nullable": True,
-            "description": "Telegram chat id used for direct notifications.",
+            "description": "Telegram user ID used for direct notifications.",
             "example": "123456789",
         },
         "slack_user_id": {
@@ -199,7 +199,7 @@ PROFILE_UPDATE_SCHEMA = {
             "nullable": True,
             "example": "+77001234567",
         },
-        "telegram_chat_id": {
+        "telegram_user_id": {
             "type": "string",
             "nullable": True,
             "example": "123456789",

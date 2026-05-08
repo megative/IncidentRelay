@@ -11,7 +11,7 @@ class ProfileUpdateSchema(BaseModel):
     display_name: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
-    telegram_chat_id: Optional[str] = None
+    telegram_user_id: Optional[str] = None
     slack_user_id: Optional[str] = None
     mattermost_user_id: Optional[str] = None
 

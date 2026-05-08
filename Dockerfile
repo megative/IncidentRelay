@@ -21,17 +21,17 @@ RUN pip install --no-cache-dir -r requirements.txt \
 COPY . /opt/incidentrelay
 
 RUN mkdir -p \
-      /etc/incedentrelay \
+      /etc/incidentrelay \
       /var/lib/incidentrelay \
       /var/log/incidentrelay \
       /usr/local/lib/incidentrelay/voice_providers
 
-COPY docker/incedentrelay.docker.conf /etc/incedentrelay/incedentrelay.conf
+COPY docker/incidentrelay.docker.conf /etc/incidentrelay/incidentrelay.conf
 COPY docker/entrypoint.sh /entrypoint.sh
 
 RUN chmod +x /entrypoint.sh
 
-ENV INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf
+ENV INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 ENV INCIDENTRELAY_SERVICE=web
 
 EXPOSE 8080

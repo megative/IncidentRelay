@@ -123,15 +123,23 @@ def add_rotation_member(rotation_id, user_id, position):
     return member
 
 
-def list_rotation_overrides(rotation_id, start_at=None, end_at=None):
+def list_rotation_overrides(rotation_id, start_at=None, end_at=None, include_expired=False):
     """
     Return overrides for a rotation.
     """
+    query = RotationOverride.select().where(
+        RotationOverride.rotation == rotation_id
+    )
 
-    query = RotationOverride.select().where(RotationOverride.rotation == rotation_id)
     if start_at and end_at:
-        query = query.where((RotationOverride.starts_at < end_at) & (RotationOverride.ends_at > start_at))
-    return list(query.order_by(RotationOverride.id.asc()))
+        query = query.where(
+            (RotationOverride.starts_at < end_at)
+            & (RotationOverride.ends_at > start_at)
+        )
+    elif not include_expired:
+        query = query.where(RotationOverride.ends_at > datetime.utcnow())
+
+    return list(query.order_by(RotationOverride.starts_at.asc(), RotationOverride.id.asc()))
 
 
 def get_active_override(rotation_id, now=None):

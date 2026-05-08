@@ -3,7 +3,7 @@ services:
     environment:
       INCIDENTRELAY_WEB_WORKERS: "4"
     volumes:
-      - ./docker/incedentrelay.postgres.conf:/etc/incedentrelay/incedentrelay.conf:ro
+      - ./docker/incidentrelay.postgres.conf:/etc/incidentrelay/incidentrelay.conf:ro
       - incidentrelay-logs:/var/log/incidentrelay
       - ./custom_voice_providers:/usr/local/lib/incidentrelay/voice_providers:ro
     depends_on:
@@ -12,7 +12,7 @@ services:
 
   incidentrelay-scheduler:
     volumes:
-      - ./docker/incedentrelay.postgres.conf:/etc/incedentrelay/incedentrelay.conf:ro
+      - ./docker/incidentrelay.postgres.conf:/etc/incidentrelay/incidentrelay.conf:ro
       - incidentrelay-logs:/var/log/incidentrelay
       - ./custom_voice_providers:/usr/local/lib/incidentrelay/voice_providers:ro
     depends_on:

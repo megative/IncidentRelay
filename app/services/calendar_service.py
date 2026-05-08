@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
 from app.modules.db import rotations_repo
-from app.services.oncall import get_current_oncall_user
+from app.services.oncall import get_scheduled_oncall_user
 
 
 def parse_date_or_datetime(value):
@@ -37,7 +37,7 @@ def build_rotation_calendar(rotation, start_at, end_at):
     cursor = max(start_at, rotation.start_at)
 
     while cursor < end_at:
-        slot_user = get_current_oncall_user(rotation, cursor)
+        slot_user = get_scheduled_oncall_user(rotation, cursor)
         slot_end = min(cursor + timedelta(seconds=rotation.duration_seconds), end_at)
 
         if slot_user:

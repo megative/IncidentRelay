@@ -10,7 +10,7 @@ class UserBaseSchema(ApiModel):
     display_name: str | None = Field(default=None, max_length=120)
     email: EmailStr | None = None
     phone: str | None = Field(default=None, max_length=64)
-    telegram_chat_id: str | None = Field(default=None, max_length=128)
+    telegram_user_id: str | None = Field(default=None, max_length=128)
     slack_user_id: str | None = Field(default=None, max_length=128)
     mattermost_user_id: str | None = Field(default=None, max_length=128)
     active: bool = True

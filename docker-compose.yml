@@ -7,7 +7,7 @@ services:
     container_name: incidentrelay-web
     restart: unless-stopped
     environment:
-      INCEDENTRELAY_CONFIG_FILE: /etc/incedentrelay/incedentrelay.conf
+      INCEDENTRELAY_CONFIG_FILE: /etc/incidentrelay/incidentrelay.conf
       INCIDENTRELAY_SERVICE: web
       INCIDENTRELAY_RUN_MIGRATIONS: "1"
       INCIDENTRELAY_PORT: "8080"
@@ -35,7 +35,7 @@ services:
     container_name: incidentrelay-scheduler
     restart: unless-stopped
     environment:
-      INCEDENTRELAY_CONFIG_FILE: /etc/incedentrelay/incedentrelay.conf
+      INCEDENTRELAY_CONFIG_FILE: /etc/incidentrelay/incidentrelay.conf
       INCIDENTRELAY_SERVICE: scheduler
       INCIDENTRELAY_RUN_MIGRATIONS: "0"
     volumes:
@@ -46,6 +46,25 @@ services:
       incidentrelay-web:
         condition: service_healthy
 
+  incidentrelay-telegram:
+    image: roxywi/incidentrelay:latest
+    build:
+      context: docker
+      dockerfile: Dockerfile
+    container_name: incidentrelay-telegram
+    restart: unless-stopped
+    environment:
+      INCEDENTRELAY_CONFIG_FILE: /etc/incidentrelay/incidentrelay.conf
+      INCIDENTRELAY_SERVICE: telegram
+      INCIDENTRELAY_RUN_MIGRATIONS: "0"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - incidentrelay-data:/var/lib/incidentrelay
+      - incidentrelay-logs:/var/log/incidentrelay
+      - ./custom_voice_providers:/usr/local/lib/incidentrelay/voice_providers:ro
+    depends_on:
+      incidentrelay-web:
+        condition: service_healthy
 volumes:
   incidentrelay-data:
   incidentrelay-logs:

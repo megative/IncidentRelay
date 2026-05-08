@@ -9,6 +9,7 @@ from werkzeug.exceptions import HTTPException
 from peewee import DoesNotExist
 
 from app.settings import Config
+from app.modules.redaction import redact_secrets
 
 
 class JsonFormatter(logging.Formatter):
@@ -37,7 +38,7 @@ class JsonFormatter(logging.Formatter):
             payload.update(extra)
 
         if record.exc_info:
-            payload["exception"] = self.formatException(record.exc_info)
+            payload["exception"] = redact_secrets(self.formatException(record.exc_info))
 
         return json.dumps(payload, ensure_ascii=False)
 
@@ -57,6 +58,7 @@ class EventOnlyFilter(logging.Filter):
         "oncall.scheduler",
         "oncall.notifications",
         "oncall.voice",
+        "oncall.telegram",
     }
 
     def filter(self, record):

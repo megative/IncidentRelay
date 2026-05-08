@@ -12,7 +12,7 @@ Users can:
 - update display name;
 - update email;
 - update phone;
-- set Telegram chat ID;
+- set Telegram user ID;
 - set Slack user ID;
 - set Mattermost user ID;
 - change password;

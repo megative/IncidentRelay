@@ -16,20 +16,20 @@ INCEDENTRELAY_CONFIG_FILE
 Example:
 
 ```bash
-export INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf
+export INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 ```
 
 For systemd:
 
 ```ini
-Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf
+Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 ```
 
 For Docker Compose:
 
 ```yaml
 environment:
-  INCEDENTRELAY_CONFIG_FILE: /etc/incedentrelay/incedentrelay.conf
+  INCEDENTRELAY_CONFIG_FILE: /etc/incidentrelay/incidentrelay.conf
 ```
 
 The old `ONCALL_CONFIG_FILE` name should not be used for IncidentRelay.

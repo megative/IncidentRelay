@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import Blueprint, jsonify, request
 
 from app.api.schemas.rotations import RotationCreateSchema, RotationMemberAddSchema, RotationMemberUpdateSchema, RotationOverrideCreateSchema, RotationUpdateSchema
@@ -289,13 +291,18 @@ def delete_rotation_member(member_id):
 @rotations_bp.route("/<int:rotation_id>/overrides", methods=["GET"])
 def list_rotation_overrides(rotation_id):
     """
-    Return rotation overrides.
-    """
+    Return active and upcoming rotation overrides.
 
+    Expired overrides are hidden by default. Pass include_expired=1 to show
+    historical overrides.
+    """
     rotation = rotations_repo.get_rotation(rotation_id)
+
     error = require_team_read(rotation.team_id)
     if error:
         return error
+
+    include_expired = request.args.get("include_expired") in ("1", "true", "yes")
 
     return jsonify([
         {
@@ -307,8 +314,12 @@ def list_rotation_overrides(rotation_id):
             "starts_at": override.starts_at.isoformat(),
             "ends_at": override.ends_at.isoformat(),
             "reason": override.reason,
+            "expired": override.ends_at <= datetime.utcnow(),
         }
-        for override in rotations_repo.list_rotation_overrides(rotation_id)
+        for override in rotations_repo.list_rotation_overrides(
+            rotation_id,
+            include_expired=include_expired,
+        )
     ])
 
 

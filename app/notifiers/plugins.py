@@ -9,41 +9,22 @@ from app.settings import Config
 from app.notifiers.base import BaseNotifier
 from app.notifiers.voice.base import VoiceCallRequest
 from app.notifiers.voice.loader import create_voice_provider, resolve_env_values
+from app.services.telegram.bot import send_telegram_alert, update_telegram_alert
 
 logger = logging.getLogger("oncall.alerts")
 
 
 class TelegramNotifier(BaseNotifier):
-    """
-    Send notifications through Telegram Bot API.
-    """
+    """Send and update Telegram notifications."""
 
     name = "telegram"
+    supports_update = True
 
     def send(self, channel, alert, text, event_type="notification"):
-        """
-        Send a Telegram message.
-        """
+        return send_telegram_alert(channel, alert, text, event_type)
 
-        config = channel.config or {}
-        bot_token = config.get("bot_token")
-        chat_id = None
-
-        if alert.assignee and alert.assignee.telegram_chat_id:
-            chat_id = alert.assignee.telegram_chat_id
-
-        chat_id = chat_id or config.get("chat_id")
-
-        if not bot_token or not chat_id:
-            raise RuntimeError("telegram bot_token or chat_id is missing")
-
-        response = requests.post(
-            f"https://api.telegram.org/bot{bot_token}/sendMessage",
-            json={"chat_id": chat_id, "text": text},
-            timeout=10,
-        )
-        response.raise_for_status()
-        return {"provider": self.name}
+    def update(self, channel, alert, text, delivery, event_type="resolved"):
+        return update_telegram_alert(channel, alert, text, delivery, event_type)
 
 
 class IncomingWebhookNotifier(BaseNotifier):
@@ -307,6 +288,7 @@ class MattermostNotifier(IncomingWebhookNotifier):
 
         action_url = f"{Config.PUBLIC_BASE_URL.rstrip('/')}/api/integrations/mattermost/actions"
         secret = self._callback_secret(channel)
+        logger.info(f'action_url {action_url}')
 
         if alert.status == "acknowledged":
             return [

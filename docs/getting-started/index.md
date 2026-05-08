@@ -95,20 +95,20 @@ INCEDENTRELAY_CONFIG_FILE
 Example:
 
 ```bash
-export INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf
+export INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 ```
 
 For systemd:
 
 ```ini
-Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf
+Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 ```
 
 For Docker Compose:
 
 ```yaml
 environment:
-  INCEDENTRELAY_CONFIG_FILE: /etc/incedentrelay/incedentrelay.conf
+  INCEDENTRELAY_CONFIG_FILE: /etc/incidentrelay/incidentrelay.conf
 ```
 
 !!! note
@@ -244,19 +244,19 @@ docker compose logs -f incidentrelay-scheduler
 Run migrations:
 
 ```bash
-cd /var/www/incedentrelay
+cd /var/www/incidentrelay
 sudo -u www-data \
-  INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf \
-  /var/www/incedentrelay/venv/bin/python app/migrate.py migrate
+  INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
+  /var/www/incidentrelay/venv/bin/python app/migrate.py migrate
 ```
 
 Create the first administrator:
 
 ```bash
-cd /var/www/incedentrelay
+cd /var/www/incidentrelay
 sudo -u www-data \
-  INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf \
-  /var/www/incedentrelay/venv/bin/python manage.py create-admin \
+  INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
+  /var/www/incidentrelay/venv/bin/python manage.py create-admin \
     --username admin \
     --password 'change-me-123' \
     --email admin@example.com

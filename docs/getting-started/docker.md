@@ -37,7 +37,7 @@ SQLite database path inside the container:
 Default config path inside the container:
 
 ```text
-/etc/incedentrelay/incedentrelay.conf
+/etc/incidentrelay/incidentrelay.conf
 ```
 
 The config file is selected by:
@@ -80,7 +80,7 @@ docker compose exec incidentrelay-web \
 File:
 
 ```text
-docker/incedentrelay.docker.conf
+docker/incidentrelay.docker.conf
 ```
 
 ```ini

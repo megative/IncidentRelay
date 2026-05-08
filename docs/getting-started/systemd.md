@@ -19,9 +19,9 @@ The scheduler must run as a separate service. Do not start it inside every web w
 ## Recommended paths
 
 ```text
-/var/www/incedentrelay                     # application directory
-/var/www/incedentrelay/venv                # Python virtual environment
-/etc/incedentrelay/incedentrelay.conf      # configuration file
+/var/www/incidentrelay                     # application directory
+/var/www/incidentrelay/venv                # Python virtual environment
+/etc/incidentrelay/incidentrelay.conf      # configuration file
 /var/lib/incidentrelay                     # SQLite database or runtime state
 /var/log/incidentrelay                     # logs
 /usr/local/lib/incidentrelay/voice_providers # custom voice providers
@@ -60,29 +60,29 @@ sudo apt-get install -y libpq-dev
 
 ```bash
 sudo mkdir -p /var/www
-sudo git clone https://github.com/roxy-wi/IncidentRelay.git /var/www/incedentrelay
-cd /var/www/incedentrelay
+sudo git clone https://github.com/roxy-wi/IncidentRelay.git /var/www/incidentrelay
+cd /var/www/incidentrelay
 ```
 
 ## 3. Create a virtual environment
 
 ```bash
-sudo python3 -m venv /var/www/incedentrelay/venv
-sudo /var/www/incedentrelay/venv/bin/pip install --upgrade pip
-sudo /var/www/incedentrelay/venv/bin/pip install -r /var/www/incedentrelay/requirements.txt
-sudo /var/www/incedentrelay/venv/bin/pip install gunicorn
+sudo python3 -m venv /var/www/incidentrelay/venv
+sudo /var/www/incidentrelay/venv/bin/pip install --upgrade pip
+sudo /var/www/incidentrelay/venv/bin/pip install -r /var/www/incidentrelay/requirements.txt
+sudo /var/www/incidentrelay/venv/bin/pip install gunicorn
 ```
 
 For PostgreSQL installations:
 
 ```bash
-sudo /var/www/incedentrelay/venv/bin/pip install psycopg2-binary
+sudo /var/www/incidentrelay/venv/bin/pip install psycopg2-binary
 ```
 
 ## 4. Create directories
 
 ```bash
-sudo mkdir -p /etc/incedentrelay
+sudo mkdir -p /etc/incidentrelay
 sudo mkdir -p /var/lib/incidentrelay
 sudo mkdir -p /var/log/incidentrelay
 sudo mkdir -p /usr/local/lib/incidentrelay/voice_providers
@@ -91,7 +91,7 @@ sudo mkdir -p /usr/local/lib/incidentrelay/voice_providers
 Set ownership:
 
 ```bash
-sudo chown -R www-data:www-data /var/www/incedentrelay
+sudo chown -R www-data:www-data /var/www/incidentrelay
 sudo chown -R www-data:www-data /var/lib/incidentrelay
 sudo chown -R www-data:www-data /var/log/incidentrelay
 ```
@@ -108,7 +108,7 @@ sudo chmod 755 /usr/local/lib/incidentrelay/voice_providers
 Create:
 
 ```text
-/etc/incedentrelay/incedentrelay.conf
+/etc/incidentrelay/incidentrelay.conf
 ```
 
 SQLite example:
@@ -151,8 +151,8 @@ public_base_url = https://incidentrelay.example.com
 Copy service files:
 
 ```bash
-sudo cp /var/www/incedentrelay/systemd/incidentrelay-web.service /etc/systemd/system/
-sudo cp /var/www/incedentrelay/systemd/incidentrelay-scheduler.service /etc/systemd/system/
+sudo cp /var/www/incidentrelay/systemd/incidentrelay-web.service /etc/systemd/system/
+sudo cp /var/www/incidentrelay/systemd/incidentrelay-scheduler.service /etc/systemd/system/
 ```
 
 Reload systemd:
@@ -164,19 +164,19 @@ sudo systemctl daemon-reload
 ## 7. Run migrations
 
 ```bash
-cd /var/www/incedentrelay
+cd /var/www/incidentrelay
 sudo -u www-data \
-  INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf \
-  /var/www/incedentrelay/venv/bin/python app/migrate.py migrate
+  INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
+  /var/www/incidentrelay/venv/bin/python app/migrate.py migrate
 ```
 
 ## 8. Create the first admin user
 
 ```bash
-cd /var/www/incedentrelay
+cd /var/www/incidentrelay
 sudo -u www-data \
-  INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf \
-  /var/www/incedentrelay/venv/bin/python manage.py create-admin \
+  INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
+  /var/www/incidentrelay/venv/bin/python manage.py create-admin \
     --username admin \
     --password 'change-me-123' \
     --email admin@example.com
@@ -241,13 +241,13 @@ Type=simple
 User=www-data
 Group=www-data
 
-WorkingDirectory=/var/www/incedentrelay
+WorkingDirectory=/var/www/incidentrelay
 
-Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf
+Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 Environment=INCIDENTRELAY_SERVICE=web
 Environment=PYTHONUNBUFFERED=1
 
-ExecStart=/var/www/incedentrelay/venv/bin/gunicorn \
+ExecStart=/var/www/incidentrelay/venv/bin/gunicorn \
   --bind 0.0.0.0:8080 \
   --workers 1 \
   --threads 4 \
@@ -280,13 +280,13 @@ Type=simple
 User=www-data
 Group=www-data
 
-WorkingDirectory=/var/www/incedentrelay
+WorkingDirectory=/var/www/incidentrelay
 
-Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf
+Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 Environment=INCIDENTRELAY_SERVICE=scheduler
 Environment=PYTHONUNBUFFERED=1
 
-ExecStart=/var/www/incedentrelay/venv/bin/python -m app.scheduler_worker
+ExecStart=/var/www/incidentrelay/venv/bin/python -m app.scheduler_worker
 
 Restart=always
 RestartSec=5
@@ -332,7 +332,7 @@ For production, it is usually better to bind Gunicorn to localhost and expose In
 Change web service `ExecStart`:
 
 ```ini
-ExecStart=/var/www/incedentrelay/venv/bin/gunicorn \
+ExecStart=/var/www/incidentrelay/venv/bin/gunicorn \
   --bind 127.0.0.1:8080 \
   --workers 1 \
   --threads 4 \
@@ -368,7 +368,7 @@ password = change-me
 For PostgreSQL, increase web workers if needed:
 
 ```ini
-ExecStart=/var/www/incedentrelay/venv/bin/gunicorn \
+ExecStart=/var/www/incidentrelay/venv/bin/gunicorn \
   --bind 127.0.0.1:8080 \
   --workers 4 \
   --threads 4 \
@@ -383,16 +383,16 @@ For SQLite, keep `--workers 1`.
 ## Update IncidentRelay
 
 ```bash
-cd /var/www/incedentrelay
+cd /var/www/incidentrelay
 sudo systemctl stop incidentrelay-scheduler
 sudo systemctl stop incidentrelay-web
 
 sudo git pull
-sudo /var/www/incedentrelay/venv/bin/pip install -r requirements.txt
+sudo /var/www/incidentrelay/venv/bin/pip install -r requirements.txt
 
 sudo -u www-data \
-  INCEDENTRELAY_CONFIG_FILE=/etc/incedentrelay/incedentrelay.conf \
-  /var/www/incedentrelay/venv/bin/python app/migrate.py migrate
+  INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
+  /var/www/incidentrelay/venv/bin/python app/migrate.py migrate
 
 sudo systemctl start incidentrelay-web
 sudo systemctl start incidentrelay-scheduler
@@ -412,7 +412,7 @@ systemctl show incidentrelay-scheduler --property=Environment
 Check file exists:
 
 ```bash
-ls -l /etc/incedentrelay/incedentrelay.conf
+ls -l /etc/incidentrelay/incidentrelay.conf
 ```
 
 ### Permission denied for SQLite database
@@ -421,7 +421,7 @@ Check permissions:
 
 ```bash
 sudo -u www-data test -w /var/lib/incidentrelay
-sudo -u www-data test -r /etc/incedentrelay/incedentrelay.conf
+sudo -u www-data test -r /etc/incidentrelay/incidentrelay.conf
 ```
 
 ### Reminders are duplicated

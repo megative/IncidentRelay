@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONFIG_FILE="${INCEDENTRELAY_CONFIG_FILE:-/etc/incedentrelay/incedentrelay.conf}"
+CONFIG_FILE="${INCEDENTRELAY_CONFIG_FILE:-/etc/incidentrelay/incidentrelay.conf}"
 SERVICE="${INCIDENTRELAY_SERVICE:-web}"
 
 if [ ! -f "$CONFIG_FILE" ]; then
@@ -32,7 +32,9 @@ case "$SERVICE" in
   scheduler)
     exec python -m app.scheduler_worker
     ;;
-
+  telegram)
+    exec python -m app.telegram_worker
+    ;;
   shell)
     exec /bin/bash
     ;;

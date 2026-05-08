@@ -155,7 +155,7 @@ function loadProfile() {
         $("#profile-display-name").val(profile.display_name || "");
         $("#profile-email").val(profile.email || "");
         $("#profile-phone").val(profile.phone || "");
-        $("#profile-telegram").val(profile.telegram_chat_id || "");
+        $("#profile-telegram").val(profile.telegram_user_id || "");
         $("#profile-slack").val(profile.slack_user_id || "");
         $("#profile-mattermost").val(profile.mattermost_user_id || "");
 
@@ -182,7 +182,7 @@ function saveProfile() {
             display_name: $("#profile-display-name").val() || null,
             email: $("#profile-email").val() || null,
             phone: $("#profile-phone").val() || null,
-            telegram_chat_id: $("#profile-telegram").val() || null,
+            telegram_user_id: $("#profile-telegram").val() || null,
             slack_user_id: $("#profile-slack").val() || null,
             mattermost_user_id: $("#profile-mattermost").val() || null
         },

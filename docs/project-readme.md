@@ -137,7 +137,7 @@ pip install -r requirements.txt
 Use the sample configuration for local development:
 
 ````bash
-export ONCALL_CONFIG_FILE=$PWD/etc/incedentrelay/incedentrelay.conf
+export ONCALL_CONFIG_FILE=$PWD/etc/incidentrelay/incidentrelay.conf
 ````
 
 Run migrations:

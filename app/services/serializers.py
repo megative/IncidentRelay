@@ -60,7 +60,7 @@ def serialize_user(user, groups=None):
         "display_name": user.display_name,
         "email": user.email,
         "phone": user.phone,
-        "telegram_chat_id": user.telegram_chat_id,
+        "telegram_user_id": user.telegram_user_id,
         "slack_user_id": user.slack_user_id,
         "mattermost_user_id": user.mattermost_user_id,
         "active": user.active,
@@ -88,7 +88,7 @@ def serialize_user_short(user):
         "username": user.username,
         "display_name": user.display_name,
         "email": user.email,
-        "telegram_chat_id": user.telegram_chat_id,
+        "telegram_user_id": user.telegram_user_id,
         "slack_user_id": user.slack_user_id,
         "mattermost_user_id": user.mattermost_user_id,
     }
