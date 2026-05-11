@@ -94,6 +94,7 @@ function initAlertsTableSorting() {
         alertsSortColumns,
         function () {
             resetAlertsPagination();
+            writeAlertsQueryParams();
             loadAlerts();
         }
     );
@@ -118,22 +119,6 @@ function alertActivityValue(alert) {
      * Return the best available activity timestamp.
      */
     return alert.last_seen_at || alert.updated_at || alert.created_at || alert.first_seen_at || null;
-}
-
-function alertTimestamp(value) {
-    /*
-     * Convert date value to timestamp for sorting.
-     */
-    if (!value) {
-        return 0;
-    }
-
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-        return 0;
-    }
-
-    return date.getTime();
 }
 
 function alertDuration(alert) {
@@ -227,12 +212,20 @@ function severityBadgeClass(severity) {
         return "alerts-badge-high";
     }
 
+    if (value === "warning") {
+        return "alerts-badge-medium";
+    }
+
     if (value === "medium") {
         return "alerts-badge-medium";
     }
 
     if (value === "low") {
         return "alerts-badge-low";
+    }
+
+    if (value === "info") {
+        return "alerts-badge-info";
     }
 
     return "alerts-badge-muted";
@@ -299,7 +292,54 @@ function buildAlertsApiUrl() {
 
     return "/api/alerts" + (params.length ? "?" + params.join("&") : "");
 }
+function writeAlertsQueryParams() {
+    /*
+     * Save current alerts filters, sorting and pagination to the browser URL.
+     */
 
+    const params = new URLSearchParams();
+
+    if (typeof selectedTeamId === "function" && selectedTeamId()) {
+        params.set("team_id", selectedTeamId());
+    }
+
+    if ($("#status-filter").val()) {
+        params.set("status", $("#status-filter").val());
+    }
+
+    if ($("#severity-filter").val()) {
+        params.set("severity", $("#severity-filter").val());
+    }
+
+    if ($("#alerts-search").val()) {
+        params.set("search", $("#alerts-search").val());
+    }
+
+    if (alertsCurrentPage > 1) {
+        params.set("page", String(alertsCurrentPage));
+    }
+
+    if (alertsPageSize !== 25) {
+        params.set("page_size", String(alertsPageSize));
+    }
+
+    if (
+        alertsSortState.column &&
+        (
+            alertsSortState.column !== "activity" ||
+            alertsSortState.direction !== "desc"
+        )
+    ) {
+        params.set("sort", alertsSortState.column);
+        params.set("order", alertsSortState.direction || "desc");
+    }
+
+    const query = params.toString();
+    const nextUrl = window.location.pathname + (query ? "?" + query : "");
+
+    history.replaceState({ path: nextUrl }, "", nextUrl);
+    alertsLastAppliedQueryString = window.location.search || "";
+}
 function loadAlerts() {
     /*
      * Load one alert page from backend.
@@ -311,9 +351,9 @@ function loadAlerts() {
         alertsCache = alertsResponseItems(response);
         alertsPagination = alertsResponsePagination(response);
         alertsSummary = alertsResponseSummary(response);
-
         alertsCurrentPage = alertsPagination.page || alertsCurrentPage;
         alertsPageSize = alertsPagination.page_size || alertsPageSize;
+        writeAlertsQueryParams();
 
         updateSortableTableHeaders("#alerts-table-view", alertsSortState);
         renderAlertsPage();
@@ -324,42 +364,12 @@ function renderAlertsPage() {
     /*
      * Render alert page widgets from paginated backend response.
      */
-    renderAlertsSummaryFromBackend("#alerts-alerts-summary", alertsSummary);
+    renderAlertsSummaryGrid("#alerts-alerts-summary", alertsSummary);
     renderAlertsInboxCounter(alertsPagination);
     renderActiveAlertFilters(alertsPagination);
     renderAlertsTable(alertsCache);
     renderAlertsPagination(alertsPagination);
 }
-
-function getAlertsPagination(alerts) {
-    /*
-     * Return pagination state and alerts for the current page.
-     */
-    alerts = Array.isArray(alerts) ? alerts : [];
-
-    const totalItems = alerts.length;
-    const totalPages = Math.max(1, Math.ceil(totalItems / alertsPageSize));
-
-    if (alertsCurrentPage > totalPages) {
-        alertsCurrentPage = totalPages;
-    }
-
-    if (alertsCurrentPage < 1) {
-        alertsCurrentPage = 1;
-    }
-
-    const startIndex = (alertsCurrentPage - 1) * alertsPageSize;
-    const endIndex = startIndex + alertsPageSize;
-
-    return {
-        totalItems: totalItems,
-        totalPages: totalPages,
-        startIndex: startIndex,
-        endIndex: Math.min(endIndex, totalItems),
-        items: alerts.slice(startIndex, endIndex)
-    };
-}
-
 
 function renderAlertsPagination(pagination) {
     /*
@@ -727,22 +737,26 @@ $(document).on("click", "#reload-alerts", function () {
 
 $(document).on("change", "#status-filter", function () {
     resetAlertsPagination();
+    writeAlertsQueryParams();
     loadAlerts();
 });
 
 $(document).on("change", "#severity-filter, #alerts-sort", function () {
     resetAlertsPagination();
+    writeAlertsQueryParams();
     loadAlerts();
 });
 
 $(document).on("input", "#alerts-search", function () {
     resetAlertsPagination();
+    writeAlertsQueryParams();
     loadAlerts();
 });
 
 $(document).on("change", "#alerts-page-size", function () {
     alertsPageSize = Number($(this).val() || 25);
     resetAlertsPagination();
+    writeAlertsQueryParams();
     loadAlerts();
 });
 
@@ -752,6 +766,7 @@ $(document).on("click", "#alerts-prev-page", function () {
     }
 
     alertsCurrentPage = Math.max(1, alertsCurrentPage - 1);
+    writeAlertsQueryParams();
     loadAlerts();
 });
 
@@ -761,6 +776,7 @@ $(document).on("click", "#alerts-next-page", function () {
     }
 
     alertsCurrentPage += 1;
+    writeAlertsQueryParams();
     loadAlerts();
 });
 
@@ -891,46 +907,6 @@ function alertsResponseSummary(response) {
     return response.summary;
 }
 
-
-function parseAlertsSortMode() {
-    /*
-     * Convert the existing sort select value to backend sort/order params.
-     */
-    const sortMode = $("#alerts-sort").val() || "activity_desc";
-
-    if (sortMode === "created_asc") {
-        return {sort: "created", order: "asc"};
-    }
-
-    if (sortMode === "created_desc") {
-        return {sort: "created", order: "desc"};
-    }
-
-    if (sortMode === "severity_desc") {
-        return {sort: "severity", order: "desc"};
-    }
-
-    if (sortMode === "status_asc") {
-        return {sort: "status", order: "asc"};
-    }
-
-    return {sort: "activity", order: "desc"};
-}
-
-
-function renderAlertsSummaryFromBackend(selector, summary) {
-    /*
-     * Render alert summary counters returned by backend.
-     */
-    const target = $(selector);
-    const data = summary || {};
-
-    target.find('[data-summary-value="firing"]').text(data.firing || 0);
-    target.find('[data-summary-value="acknowledged"]').text(data.acknowledged || 0);
-    target.find('[data-summary-value="resolved"]').text(data.resolved || 0);
-    target.find('[data-summary-value="reminders"]').text(data.reminders || 0);
-    target.find('[data-summary-value="total"]').text(data.total || 0);
-}
 function renderAlertsInboxCounter(pagination) {
     /*
      * Render "Showing X-Y of Z alerts" counter from backend pagination.

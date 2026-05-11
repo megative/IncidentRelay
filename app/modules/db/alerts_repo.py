@@ -316,35 +316,6 @@ def paginate_alerts(
     }
 
 
-def list_alerts(
-    team_id=None,
-    team_ids=None,
-    status=None,
-    source=None,
-    severity=None,
-    limit=300,
-):
-    """
-    Return alerts using optional filters.
-
-    Kept for internal compatibility. UI/API list endpoint should use
-    paginate_alerts() instead.
-    """
-    page = paginate_alerts(
-        team_id=team_id,
-        team_ids=team_ids,
-        status=status,
-        source=source,
-        severity=severity,
-        page=1,
-        page_size=limit,
-        sort="id",
-        order="desc",
-    )
-
-    return page["items"]
-
-
 def get_alert(alert_id):
     """
     Return an alert by id.

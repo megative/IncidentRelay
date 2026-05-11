@@ -40,7 +40,7 @@ class JsonFormatter(logging.Formatter):
         if record.exc_info:
             payload["exception"] = redact_secrets(self.formatException(record.exc_info))
 
-        return json.dumps(payload, ensure_ascii=False)
+        return json.dumps(redact_secrets(payload), ensure_ascii=False)
 
 
 class EventOnlyFilter(logging.Filter):

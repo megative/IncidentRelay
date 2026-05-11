@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timedelta
 
 from app.settings import Config
-from app.modules.db import alerts_repo
+from app.modules.db import alerts_repo, users_repo
 from app.services.notifier import notify_alert, update_alert_messages
 from app.services.oncall import get_current_oncall_user, get_next_rotation_user
 from app.services.routing import build_group_key, find_route_for_alert
@@ -97,26 +97,48 @@ def upsert_alert(alert_data):
 
 
 def acknowledge_alert(alert_id, user_id=None):
-    """
-    Acknowledge an alert.
-    """
+    """Acknowledge an alert."""
 
     alert = alerts_repo.acknowledge_alert(alert_id, user_id=user_id)
-    alerts_repo.create_alert_event(alert.id, "acknowledged", "Alert acknowledged", user_id=user_id)
-    logger.info("alert acknowledged", extra={"extra": {"alert_id": alert.id, "user_id": user_id}})
+    attach_action_user(alert, user_id)
+
+    alerts_repo.create_alert_event(
+        alert.id,
+        "acknowledged",
+        "Alert acknowledged",
+        user_id=user_id,
+    )
+
+    logger.info(
+        "alert acknowledged",
+        extra={"extra": {"alert_id": alert.id, "user_id": user_id}},
+    )
+
     update_alert_messages(alert, event_type="acknowledged")
+
     return alert
 
 
 def resolve_alert(alert_id, user_id=None):
-    """
-    Resolve an alert.
-    """
+    """Resolve an alert."""
 
     alert = alerts_repo.resolve_alert(alert_id)
-    alerts_repo.create_alert_event(alert.id, "resolved", "Alert resolved", user_id=user_id)
-    logger.info("alert resolved", extra={"extra": {"alert_id": alert.id, "user_id": user_id}})
+    attach_action_user(alert, user_id)
+
+    alerts_repo.create_alert_event(
+        alert.id,
+        "resolved",
+        "Alert resolved",
+        user_id=user_id,
+    )
+
+    logger.info(
+        "alert resolved",
+        extra={"extra": {"alert_id": alert.id, "user_id": user_id}},
+    )
+
     update_alert_messages(alert, event_type="resolved")
+
     return alert
 
 
@@ -188,3 +210,15 @@ def send_unacked_reminders():
         count += 1
 
     return count
+
+
+def attach_action_user(alert, user_id):
+    """Attach the action user to the alert object for notification formatting."""
+
+    if not user_id:
+        alert._action_user = None
+        return alert
+
+    alert._action_user = users_repo.get_user_or_none(user_id)
+
+    return alert

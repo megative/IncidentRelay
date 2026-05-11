@@ -4,7 +4,7 @@ from flask import Blueprint, jsonify, request
 
 from app.api.schemas.integrations import AlertmanagerWebhookSchema, GenericWebhookSchema, ZabbixWebhookSchema
 from app.settings import Config
-from app.modules.db import channels_repo, users_repo, notifications_repo
+from app.modules.db import channels_repo, users_repo, notifications_repo, alerts_repo
 from app.services.alerts import acknowledge_alert, resolve_alert, upsert_alert
 from app.services.auth import require_alert_token
 from app.services.normalizers import normalize_alertmanager, normalize_webhook, normalize_zabbix
@@ -146,6 +146,7 @@ def mattermost_action():
         "ephemeral_text": f"Alert #{alert.id} resolved",
         "skip_slack_parsing": True,
     })
+
 
 @integrations_bp.route("/voice/callback/<int:channel_id>/<secret>", methods=["POST"])
 def voice_callback(channel_id, secret):

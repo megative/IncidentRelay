@@ -65,10 +65,10 @@ class Config:
 
     SECRET_KEY = settings.get("main", "secret_key", "dev-secret-key")
     DEFAULT_TIMEZONE = settings.get("main", "timezone", "UTC")
-    PUBLIC_BASE_URL = settings.get("main", "public_base_url", "http://127.0.0.1:8080")
 
     SERVER_HOST = settings.get("server", "host", "0.0.0.0")
     SERVER_PORT = settings.get_int("server", "port", 8080)
+    PUBLIC_BASE_URL = settings.get("server", "public_base_url", "http://127.0.0.1:8080")
 
     DB_TYPE = settings.get("database", "type", "sqlite")
     DB_NAME = settings.get("database", "name", "incidentrelay.db")

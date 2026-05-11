@@ -6,47 +6,46 @@ function normalizeSummaryStatus(status) {
 }
 
 
-function renderAlertsSummaryGrid(containerSelector, alerts) {
-    /*
-     * Render reusable alert summary cards.
-     *
-     * The same function is used by Overview and Alerts pages.
-     * It updates only values inside the passed container, so multiple grids
-     * can safely exist in DOM at the same time.
-     */
+function renderAlertsSummaryGrid(containerSelector, alertsOrSummary) {
     const container = $(containerSelector);
 
-    if (!container.length) {
-        return;
-    }
-
-    alerts = Array.isArray(alerts) ? alerts : [];
-
-    const counters = {
+    let counters = {
         firing: 0,
         acknowledged: 0,
         resolved: 0,
         reminders: 0,
-        total: alerts.length
+        total: 0
     };
 
-    alerts.forEach(function (alert) {
-        const status = normalizeSummaryStatus(alert.status);
+    if (Array.isArray(alertsOrSummary)) {
+        counters.total = alertsOrSummary.length;
 
-        if (status === "firing") {
-            counters.firing += 1;
-        }
+        alertsOrSummary.forEach(function (alert) {
+            const status = normalizeSummaryStatus(alert.status);
 
-        if (status === "acknowledged") {
-            counters.acknowledged += 1;
-        }
+            if (status === "firing") {
+                counters.firing += 1;
+            }
 
-        if (status === "resolved") {
-            counters.resolved += 1;
-        }
+            if (status === "acknowledged") {
+                counters.acknowledged += 1;
+            }
 
-        counters.reminders += Number(alert.reminder_count || 0);
-    });
+            if (status === "resolved") {
+                counters.resolved += 1;
+            }
+
+            counters.reminders += Number(alert.reminder_count || 0);
+        });
+    } else if (alertsOrSummary && typeof alertsOrSummary === "object") {
+        counters = {
+            firing: Number(alertsOrSummary.firing || 0),
+            acknowledged: Number(alertsOrSummary.acknowledged || 0),
+            resolved: Number(alertsOrSummary.resolved || 0),
+            reminders: Number(alertsOrSummary.reminders || 0),
+            total: Number(alertsOrSummary.total || 0)
+        };
+    }
 
     container.find('[data-summary-value="firing"]').text(counters.firing);
     container.find('[data-summary-value="acknowledged"]').text(counters.acknowledged);

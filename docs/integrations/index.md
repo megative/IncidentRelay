@@ -28,3 +28,4 @@ It can send notifications to:
 - [Generic webhook](generic-webhook.md)
 - [Zabbix](zabbix.md)
 - [Mattermost](mattermost.md)
+- [Telegram](telegram.md)

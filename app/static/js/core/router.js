@@ -73,7 +73,7 @@ function startAuthenticatedApp() {
     apiGet("/api/auth/me", function (user) {
         currentUser = user;
         updateAuthUi();
-        fillTeamSelect("#global-team-filter", true, function () { navigate(window.location.pathname, false); });
+        fillTeamSelect("#global-team-filter", true, function () { navigate(currentAppUrl(), false); });
     });
 }
 
@@ -89,7 +89,7 @@ $(document).ready(function () {
 
     $(".menu-link[data-page]").on("click", function (event) { event.preventDefault(); navigate($(this).attr("href"), true); });
 
-    $("#global-team-filter").on("change", function () { navigate(window.location.pathname, false); });
+    $("#global-team-filter").on("change", function () { navigate(currentAppUrl(), false); });
 
     $("#active-group-select").on("change", function () {
         const groupId = $(this).val();
@@ -97,7 +97,7 @@ $(document).ready(function () {
         apiPost("/api/profile/active-group", { group_id: groupId ? Number(groupId) : null }, function (user) {
             currentUser = user;
             updateAuthUi();
-            fillTeamSelect("#global-team-filter", true, function () { navigate(window.location.pathname, false); });
+            fillTeamSelect("#global-team-filter", true, function () { navigate(currentAppUrl(), false); });
         });
     });
 
@@ -107,5 +107,11 @@ $(document).ready(function () {
         logout();
     });
 
-    window.onpopstate = function () { navigate(window.location.pathname, false); };
+    window.onpopstate = function () { navigate(currentAppUrl(), false); };
 });
+function currentAppUrl() {
+    /*
+     * Return current SPA URL with query string and hash.
+     */
+    return window.location.pathname + window.location.search + window.location.hash;
+}

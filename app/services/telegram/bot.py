@@ -95,7 +95,7 @@ def build_alert_keyboard(channel, alert):
 
     keyboard.add(
         types.InlineKeyboardButton(
-            "Acknowledge",
+            "✅ Acknowledge",
             callback_data=build_telegram_action_data(
                 "ack",
                 alert.id,
@@ -103,7 +103,7 @@ def build_alert_keyboard(channel, alert):
             ),
         ),
         types.InlineKeyboardButton(
-            "Resolve",
+            "🟢 Resolve",
             callback_data=build_telegram_action_data(
                 "resolve",
                 alert.id,
@@ -134,6 +134,7 @@ def send_telegram_alert(channel, alert, text, event_type="notification"):
         text=text,
         reply_markup=build_alert_keyboard(channel, alert),
         disable_web_page_preview=True,
+        parse_mode="HTML",
     )
 
     return {
@@ -175,6 +176,7 @@ def update_telegram_alert(channel, alert, text, delivery, event_type="resolved")
             text=text,
             reply_markup=reply_markup,
             parse_mode="HTML",
+            disable_web_page_preview=True,
         )
     except ApiTelegramException as exc:
         if "message is not modified" in str(exc).lower():

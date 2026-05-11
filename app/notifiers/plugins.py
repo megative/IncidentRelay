@@ -10,6 +10,7 @@ from app.notifiers.base import BaseNotifier
 from app.notifiers.voice.base import VoiceCallRequest
 from app.notifiers.voice.loader import create_voice_provider, resolve_env_values
 from app.services.telegram.bot import send_telegram_alert, update_telegram_alert
+from app.services.telegram.templates import format_telegram_alert_message
 
 logger = logging.getLogger("oncall.alerts")
 
@@ -21,10 +22,24 @@ class TelegramNotifier(BaseNotifier):
     supports_update = True
 
     def send(self, channel, alert, text, event_type="notification"):
-        return send_telegram_alert(channel, alert, text, event_type)
+        """Send a formatted Telegram alert message."""
+
+        telegram_text = format_telegram_alert_message(alert, event_type)
+
+        return send_telegram_alert(channel, alert, telegram_text, event_type)
 
     def update(self, channel, alert, text, delivery, event_type="resolved"):
-        return update_telegram_alert(channel, alert, text, delivery, event_type)
+        """Update a formatted Telegram alert message."""
+
+        telegram_text = format_telegram_alert_message(alert, event_type)
+
+        return update_telegram_alert(
+            channel,
+            alert,
+            telegram_text,
+            delivery,
+            event_type,
+        )
 
 
 class IncomingWebhookNotifier(BaseNotifier):
@@ -288,7 +303,6 @@ class MattermostNotifier(IncomingWebhookNotifier):
 
         action_url = f"{Config.PUBLIC_BASE_URL.rstrip('/')}/api/integrations/mattermost/actions"
         secret = self._callback_secret(channel)
-        logger.info(f'action_url {action_url}')
 
         if alert.status == "acknowledged":
             return [

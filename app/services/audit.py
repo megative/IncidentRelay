@@ -26,7 +26,7 @@ def write_audit(action, object_type=None, object_id=None, group_id=None, team_id
         user_id=user_id or (current_user.id if current_user else None),
         api_token_id=api_token.id if api_token else None,
         message=safe_message,
-        data=data or {},
+        data=safe_data,
     )
 
     logging.getLogger("oncall.audit").info(
@@ -43,7 +43,7 @@ def write_audit(action, object_type=None, object_id=None, group_id=None, team_id
                 "user_id": user_id or (current_user.id if current_user else None),
                 "api_token_id": api_token.id if api_token else None,
                 "message": safe_message,
-                "data": safe_data or {},
+                "data": safe_data,
             }
         },
     )

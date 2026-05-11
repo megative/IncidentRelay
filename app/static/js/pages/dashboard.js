@@ -12,130 +12,9 @@ function dashboardAsArray(value) {
 
     return [];
 }
-function dashboardNormalize(value) {
-    return String(value || "").toLowerCase();
-}
 
 function dashboardDateValue(alert) {
     return alert.updated_at || alert.last_seen_at || alert.first_seen_at || alert.created_at || null;
-}
-
-function dashboardDuration(alert) {
-    /*
-     * Calculate a readable duration from first_seen_at/created_at until now
-     * or until resolved_at when the alert is already resolved.
-     */
-    const startRaw = alert.first_seen_at || alert.created_at;
-    if (!startRaw) {
-        return "-";
-    }
-
-    const start = new Date(startRaw);
-    if (Number.isNaN(start.getTime())) {
-        return "-";
-    }
-
-    let end = new Date();
-
-    if (alert.status === "resolved" && alert.resolved_at) {
-        const resolved = new Date(alert.resolved_at);
-        if (!Number.isNaN(resolved.getTime())) {
-            end = resolved;
-        }
-    }
-
-    let seconds = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
-
-    const days = Math.floor(seconds / 86400);
-    seconds -= days * 86400;
-
-    const hours = Math.floor(seconds / 3600);
-    seconds -= hours * 3600;
-
-    const minutes = Math.floor(seconds / 60);
-
-    if (days > 0) {
-        return days + "d " + hours + "h";
-    }
-
-    if (hours > 0) {
-        return hours + "h " + minutes + "m";
-    }
-
-    return Math.max(minutes, 1) + "m";
-}
-
-function dashboardSeverityLabel(severity) {
-    const value = dashboardNormalize(severity);
-
-    if (value === "critical") {
-        return "Critical";
-    }
-
-    if (value === "high") {
-        return "High";
-    }
-
-    if (value === "medium") {
-        return "Medium";
-    }
-
-    if (value === "low") {
-        return "Low";
-    }
-
-    return severity || "-";
-}
-
-function dashboardSeverityClass(severity) {
-    const value = dashboardNormalize(severity);
-
-    if (value === "critical") {
-        return "overview-badge-critical";
-    }
-
-    if (value === "high") {
-        return "overview-badge-high";
-    }
-
-    if (value === "medium") {
-        return "overview-badge-medium";
-    }
-
-    if (value === "low") {
-        return "overview-badge-low";
-    }
-
-    return "overview-badge-muted";
-}
-
-function dashboardStatusClass(status) {
-    const value = dashboardNormalize(status);
-
-    if (value === "firing") {
-        return "overview-badge-firing";
-    }
-
-    if (value === "acknowledged") {
-        return "overview-badge-acknowledged";
-    }
-
-    if (value === "resolved") {
-        return "overview-badge-resolved";
-    }
-
-    if (value === "silenced") {
-        return "overview-badge-silenced";
-    }
-
-    return "overview-badge-muted";
-}
-
-function dashboardMakeBadge(text, cssClass) {
-    return $("<span>")
-        .addClass("overview-pill")
-        .addClass(cssClass)
-        .text(text || "-");
 }
 
 function dashboardSortByActivity(alerts) {
@@ -246,21 +125,21 @@ function renderDashboardAlertRow(alert) {
 
     row.append(
         $("<td>").append(
-            dashboardMakeBadge(
-                dashboardSeverityLabel(alert.severity),
-                dashboardSeverityClass(alert.severity)
+            makeAlertBadge(
+                severityLabel(alert.severity),
+                severityBadgeClass(alert.severity)
             )
         )
     );
 
     row.append(
         $("<td>").append(
-            dashboardMakeBadge(alert.status || "-", dashboardStatusClass(alert.status))
+            makeAlertBadge(alert.status || "-", statusBadgeClass(alert.status))
         )
     );
 
     row.append($("<td>").text(alert.team_slug || "-"));
-    row.append($("<td>").addClass("overview-duration-cell").text(dashboardDuration(alert)));
+    row.append($("<td>").addClass("overview-duration-cell").text(alertDuration(alert)));
     row.append($("<td>").text(formatDateTimeMinutes(dashboardDateValue(alert))));
 
     const actionsCell = $("<td>").addClass("actions-cell");
@@ -318,7 +197,7 @@ function renderDashboardRecentAlerts(alerts) {
         item.append(
             $("<span>")
                 .addClass("overview-list-dot")
-                .addClass("overview-dot-" + dashboardNormalize(alert.status))
+                .addClass("overview-dot-" + normalizeAlertValue(alert.status))
         );
 
         item.append(
@@ -328,7 +207,7 @@ function renderDashboardRecentAlerts(alerts) {
                 .append(
                     $("<span>")
                         .addClass("overview-list-subtitle")
-                        .text((alert.team_slug || "-") + " · " + dashboardSeverityLabel(alert.severity))
+                        .text((alert.team_slug || "-") + " · " + severityLabel(alert.severity))
                 )
         );
 
@@ -390,7 +269,7 @@ function renderDashboardSeveritySplit(alerts) {
 
     const counts = dashboardGroupCount(alerts, "severity", "unknown");
     const order = ["critical", "high", "medium", "low", "unknown"];
-    renderDashboardBars(target, counts, order, alerts.length, dashboardSeverityLabel);
+    renderDashboardBars(target, counts, order, alerts.length, severityLabel);
 }
 
 function renderDashboardTeamSummary(alerts) {

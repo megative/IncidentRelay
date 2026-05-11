@@ -224,6 +224,12 @@
     background: #d1fadf;
 }
 
+.alerts-badge-info,
+.alerts-badge-informational {
+  color: #175cd3;
+  background: #dbeafe;
+}
+
 .alerts-badge-firing {
     color: #b42318;
     background: #fee4e2;

@@ -1,6 +1,6 @@
 # IncidentRelay
 
-**Self-hosted on-call routing, alert delivery, and escalation for teams that want control over their incident workflow.**
+**Self-hosted on-call shifter, scheduler and routing, alert delivery, and escalation for teams that want control over their incident workflow.**
 
 IncidentRelay helps SRE, DevOps, platform, infrastructure, and operations teams route alerts to the right people through the right channels — without depending on a hosted incident-management platform.
 
