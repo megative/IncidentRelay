@@ -1,9 +1,9 @@
-import re
 from typing import Any, Dict
 
 from pydantic import Field, model_validator
 
 from app.api.schemas.base import ApiModel
+from app.services.severity import normalize_severity_list
 
 
 class ChannelBaseSchema(ApiModel):
@@ -20,7 +20,25 @@ class ChannelBaseSchema(ApiModel):
     @model_validator(mode="after")
     def validate_config(self):
         """Validate channel-specific config fields."""
-        config = self.config or {}
+        config = dict(self.config or {})
+
+        # Backward-compatible alias. Keep notify_on_severities as the canonical key.
+        if "notify_on_severities" not in config and "severities" in config:
+            config["notify_on_severities"] = config.pop("severities")
+
+        try:
+            notify_on_severities = normalize_severity_list(
+                config.get("notify_on_severities")
+            )
+        except ValueError as exc:
+            raise ValueError(f"channel notify_on_severities {exc}") from exc
+
+        if notify_on_severities:
+            config["notify_on_severities"] = notify_on_severities
+        else:
+            config.pop("notify_on_severities", None)
+
+        self.config = config
 
         if self.channel_type == "telegram" and (not config.get("bot_token") or not config.get("chat_id")):
             raise ValueError("telegram channel requires bot_token and chat_id")
@@ -43,38 +61,6 @@ class ChannelBaseSchema(ApiModel):
                 raise ValueError("email channel requires recipients list")
 
         if self.channel_type == "voice_call":
-            provider = str(config.get("provider") or "").strip()
-
-            if not provider:
-                raise ValueError("voice_call channel requires provider")
-
-            provider_config = config.get("provider_config") or {}
-
-            if not isinstance(provider_config, dict):
-                raise ValueError("voice_call provider_config must be an object")
-
-            severities = config.get("call_on_severities") or []
-
-            if not isinstance(severities, list):
-                raise ValueError("voice_call call_on_severities must be a list")
-
-            allowed = {"critical", "high", "medium", "warning", "low", "info"}
-            invalid = [item for item in severities if item not in allowed]
-
-            if invalid:
-                raise ValueError(f"voice_call has invalid severities: {', '.join(invalid)}")
-
-            dtmf_actions = config.get("dtmf_actions") or {}
-
-            if not isinstance(dtmf_actions, dict):
-                raise ValueError("voice_call dtmf_actions must be an object")
-
-            allowed_actions = {"acknowledge", "resolve"}
-
-            for digit, action in dtmf_actions.items():
-                if str(action) not in allowed_actions:
-                    raise ValueError(f"voice_call has invalid DTMF action for digit {digit}")
-
             rules = config.get("notification_rules", [])
 
             if not isinstance(rules, list):

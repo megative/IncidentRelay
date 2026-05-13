@@ -77,8 +77,8 @@ Check:
 
 ```text
 - Alert status is firing.
-- Alert severity is listed in call_on_severities.
-- Alert has an assignee with phone number, or channel config has fallback phone.
+- Alert severity is listed in notify_on_severities.
+- Alert has an assignee with phone number.
 - Channel is enabled.
 - Route points to the voice channel.
 ```

@@ -167,13 +167,33 @@
                     <label>Ends at</label>
                     <input id="silence-ends-at" class="input" type="datetime-local">
                 </div>
-
-                <div class="silences-form-wide">
-                    <label>Matchers JSON</label>
-                    <textarea id="silence-matchers" class="input" rows="7">{"labels":{"host":"host1"}}</textarea>
-                    <div class="help-text">
-                        Example: {"labels":{"host":"host1"}}. Matching alerts will be suppressed during the silence window.
-                    </div>
+                <div class="app-field app-form-wide">
+                  <div class="app-json-header">
+                    <label for="silence-matchers">Matchers JSON</label>
+        
+                    <button
+                      id="format-silence-matchers"
+                      type="button"
+                      class="btn btn-small"
+                    >
+                      <i class="fas fa-code"></i>
+                      Format
+                    </button>
+                  </div>
+        
+                  <div class="app-json-editor">
+                    <div class="app-json-gutter">1</div>
+                    <textarea
+                      id="silence-matchers"
+                      class="input"
+                      rows="5"
+                      spellcheck="false"
+                    >{"labels":{"host":"host1"}}</textarea>
+                  </div>
+        
+                  <div class="app-help">
+                    Example: {"labels":{"host":"host1"}}. Matching alerts will be suppressed during the silence window.
+                  </div>
                 </div>
             </div>
         </div>

@@ -1,3 +1,4 @@
+import json
 import configparser
 from pathlib import Path
 
@@ -54,6 +55,27 @@ class Settings:
 
         return str(value).strip().lower() in ("1", "true", "yes", "y", "on")
 
+    def get_section(self, section, default=None):
+        """Return all options from a config section as a dictionary."""
+        if not self.parser.has_section(section):
+            return default or {}
+
+        return dict(self.parser.items(section))
+
+    def get_json(self, section, option, default=None):
+        """Return a JSON setting value."""
+        value = self.get(section, option, None)
+
+        if value in (None, ""):
+            return default
+
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"invalid JSON setting [{section}] {option}: {exc}"
+            ) from exc
+
 
 settings = Settings()
 
@@ -104,11 +126,12 @@ class Config:
     SMTP_USE_TLS = settings.get_bool("smtp", "use_tls", True)
 
     VOICE_PROVIDER = settings.get("voice", "provider", "stub")
-    VOICE_PROVIDERS_DIR = settings.get(
+    VOICE_TEXT_TEMPLATE = settings.get("voice", "text_template", "")
+    VOICE_DTMF_ACTIONS = settings.get_json(
         "voice",
-        "providers_dir",
-        "/usr/local/lib/incidentrelay/voice_providers",
+        "dtmf_actions",
+        {"1": "acknowledge", "2": "resolve"},
     )
-    VOICE_CALLBACK_SECRET = settings.get("voice", "callback_secret", "")
+    VOICE_PROVIDER_CONFIG = settings.get_section("voice_provider", {})
 
     TELEGRAM_PROXY_URL = settings.get("telegram", "proxy_url", "")

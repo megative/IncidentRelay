@@ -4,6 +4,7 @@ from datetime import datetime
 from app.settings import Config
 from app.modules.db import alerts_repo, notifications_repo, routes_repo
 from app.notifiers.registry import get_notifier
+from app.services.severity import normalize_severity, normalize_severity_list
 
 
 EDITABLE_EVENTS = {"acknowledged", "resolved"}
@@ -27,6 +28,68 @@ def format_alert_message(alert, event_type="notification"):
         f"Message: {alert.message or '-'}\n"
         f"ACK URL: {Config.PUBLIC_BASE_URL}/api/alerts/{alert.id}/ack"
     )
+
+
+def get_channel_notify_on_severities(channel):
+    """Return normalized channel-level severity filter.
+
+    Empty list means that the channel accepts all severities.
+    The legacy config key 'severities' is accepted for backward compatibility,
+    but 'notify_on_severities' is the canonical key.
+    """
+    config = channel.config or {}
+    raw_severities = config.get("notify_on_severities")
+
+    if raw_severities is None:
+        raw_severities = config.get("severities")
+
+    try:
+        return set(normalize_severity_list(raw_severities))
+    except ValueError as exc:
+        logger.warning(
+            "invalid channel severity filter, ignoring it",
+            extra={
+                "extra": {
+                    "channel_id": channel.id,
+                    "channel_type": channel.channel_type,
+                    "error": str(exc),
+                }
+            },
+        )
+        return set()
+
+
+def channel_matches_alert_severity(channel, alert):
+    """Return True when the channel should receive this alert severity."""
+    allowed_severities = get_channel_notify_on_severities(channel)
+
+    if not allowed_severities:
+        return True
+
+    alert_severity = normalize_severity(getattr(alert, "severity", None))
+    return alert_severity in allowed_severities
+
+
+def has_matching_notification_channel(alert):
+    """Return True if the alert has at least one enabled channel
+    that accepts the alert severity.
+
+    Used by scheduler before reminder/escalation processing to avoid
+    counting reminders for alerts that cannot be delivered to any channel.
+    """
+    if not alert.route:
+        return False
+
+    for link in routes_repo.list_route_channels(alert.route.id):
+        channel = link.channel
+
+        if not channel.enabled:
+            continue
+
+        if channel_matches_alert_severity(channel, alert):
+            return True
+
+    return False
 
 
 def notify_alert(alert, event_type="notification"):
@@ -61,6 +124,31 @@ def notify_alert(alert, event_type="notification"):
             )
             continue
         delivery = notifications_repo.get_notification(alert.id, channel.id)
+
+        if not channel_matches_alert_severity(channel, alert):
+            can_update_existing_message = (
+                    event_type in EDITABLE_EVENTS
+                    and delivery
+                    and notifier.supports_update
+            )
+
+            if not can_update_existing_message:
+                logger.info(
+                    "notification skipped by channel severity filter",
+                    extra={
+                        "extra": {
+                            "alert_id": alert.id,
+                            "channel_id": channel.id,
+                            "channel_type": channel.channel_type,
+                            "event_type": event_type,
+                            "alert_severity": alert.severity,
+                            "allowed_severities": sorted(
+                                get_channel_notify_on_severities(channel)
+                            ),
+                        }
+                    },
+                )
+                continue
 
         try:
             if event_type in EDITABLE_EVENTS and delivery and notifier.supports_update:
@@ -113,7 +201,9 @@ def notify_alert(alert, event_type="notification"):
             alerts_repo.create_alert_event(alert.id, f"{event_type}_failed", f"{channel.channel_type}:{channel.name}: {exc}")
             logger.warning("notification failed", extra={"extra": {"alert_id": alert.id, "channel_id": channel.id, "event_type": event_type, "error": str(exc)}})
 
-    alerts_repo.record_notification_time(alert, datetime.utcnow())
+    if sent_count:
+        alerts_repo.record_notification_time(alert, datetime.utcnow())
+
     return sent_count
 
 

@@ -3,10 +3,14 @@ from datetime import datetime, timedelta
 
 from app.settings import Config
 from app.modules.db import alerts_repo, users_repo
-from app.services.notifier import notify_alert, update_alert_messages
 from app.services.oncall import get_current_oncall_user, get_next_rotation_user
 from app.services.routing import build_group_key, find_route_for_alert
 from app.services.silences import find_active_silence
+from app.services.notifier import (
+    has_matching_notification_channel,
+    notify_alert,
+    update_alert_messages,
+)
 
 
 logger = logging.getLogger("oncall.alerts")
@@ -143,22 +147,35 @@ def resolve_alert(alert_id, user_id=None):
 
 
 def maybe_escalate_alert(alert):
-    """
-    Escalate an alert according to the team policy.
-    """
-
+    """Escalate an alert according to the team policy."""
     if not alert.team or not alert.team.escalation_enabled:
         return False
+
+    if not has_matching_notification_channel(alert):
+        logger.debug(
+            "escalation skipped because no channel matches alert severity",
+            extra={
+                "extra": {
+                    "alert_id": alert.id,
+                    "severity": alert.severity,
+                    "route_id": alert.route.id if alert.route else None,
+                }
+            },
+        )
+        return False
+
     if alert.reminder_count < alert.team.escalation_after_reminders:
         return False
 
     next_user = get_next_rotation_user(alert.rotation, alert.assignee)
+
     if not next_user or (alert.assignee and next_user.id == alert.assignee.id):
         return False
 
     alerts_repo.escalate_alert(alert, next_user.id)
     alerts_repo.create_alert_event(alert.id, "escalated", f"Escalated to {next_user.username}")
     notify_alert(alert, event_type="escalation")
+
     return True
 
 
@@ -189,14 +206,28 @@ def should_send_reminder(alert, now):
 
 
 def send_unacked_reminders():
-    """
-    Send reminder notifications for unacknowledged alerts.
-    """
+    """Send reminder notifications for unacknowledged alerts.
 
+    A reminder is counted only when at least one notification was actually sent.
+    Alerts that do not match any enabled channel severity filter are skipped.
+    """
     now = datetime.utcnow()
     count = 0
 
     for alert in alerts_repo.list_firing_alerts():
+        if not has_matching_notification_channel(alert):
+            logger.debug(
+                "reminder skipped because no channel matches alert severity",
+                extra={
+                    "extra": {
+                        "alert_id": alert.id,
+                        "severity": alert.severity,
+                        "route_id": alert.route.id if alert.route else None,
+                    }
+                },
+            )
+            continue
+
         if not should_send_reminder(alert, now):
             continue
 
@@ -204,9 +235,27 @@ def send_unacked_reminders():
             count += 1
             continue
 
-        notify_alert(alert, event_type="reminder")
+        sent_count = notify_alert(alert, event_type="reminder")
+
+        if not sent_count:
+            logger.info(
+                "reminder skipped because no notification was sent",
+                extra={
+                    "extra": {
+                        "alert_id": alert.id,
+                        "severity": alert.severity,
+                        "route_id": alert.route.id if alert.route else None,
+                    }
+                },
+            )
+            continue
+
         alerts_repo.increment_reminder(alert, now)
-        alerts_repo.create_alert_event(alert.id, "reminder_sent", f"Reminder count: {alert.reminder_count}")
+        alerts_repo.create_alert_event(
+            alert.id,
+            "reminder_sent",
+            f"Reminder count: {alert.reminder_count}",
+        )
         count += 1
 
     return count

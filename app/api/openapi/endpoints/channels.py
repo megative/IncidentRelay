@@ -58,6 +58,21 @@ def response(description, schema=None):
 
     return item
 
+SEVERITY_FILTER_SCHEMA = {
+    "type": "array",
+    "description": (
+        "Optional channel-level alert severity filter. "
+        "If empty or omitted, the channel receives all severities. "
+        "Values are normalized, for example crit -> critical, "
+        "warn -> warning, information -> info."
+    ),
+    "items": {
+        "type": "string",
+        "enum": ["critical", "high", "medium", "warning", "low", "info"],
+    },
+    "example": ["critical", "high"],
+}
+
 
 CHANNEL_SCHEMA = {
     "type": "object",
@@ -73,14 +88,28 @@ CHANNEL_SCHEMA = {
         "config": {
             "type": "object",
             "description": (
-                "Channel-specific configuration. Telegram requires bot_token and chat_id. "
-                "Slack/Webhook/Discord/Teams require webhook_url. Mattermost can use webhook_url, or "
-                "mode=bot_api with api_url, bot_token and channel_id for buttons and post updates. Email requires recipients."
+                "Channel-specific configuration. "
+                "All channel types support notify_on_severities as an optional "
+                "channel-level severity filter. "
+                "Telegram requires bot_token and chat_id. "
+                "Slack/Webhook/Discord/Teams require webhook_url. "
+                "Mattermost can use webhook_url, or mode=bot_api with api_url, "
+                "bot_token and channel_id for buttons and post updates. "
+                "Email requires recipients. "
                 "Voice call channels require provider. "
-                "provider_config is passed to the selected provider. "
-                "call_on_severities controls when calls are placed. "
+                "provider_config is passed to the selected provider."
             ),
-            "example": {"mode": "bot_api", "api_url": "https://mattermost.example.com", "bot_token": "...", "channel_id": "..."},
+            "properties": {
+                "notify_on_severities": SEVERITY_FILTER_SCHEMA,
+            },
+            "additionalProperties": True,
+            "example": {
+                "mode": "bot_api",
+                "api_url": "https://mattermost.example.com",
+                "bot_token": "...",
+                "channel_id": "...",
+                "notify_on_severities": ["critical", "high"],
+            },
         },
         "enabled": {"type": "boolean", "default": True},
     },
@@ -104,30 +133,7 @@ VOICE_CALL_CONFIG_SCHEMA = {
             ),
             "example": "example_http",
         },
-        "call_on_severities": {
-            "type": "array",
-            "description": "Alert severities that should trigger a real phone call.",
-            "items": {
-                "type": "string",
-                "enum": ["critical", "high", "medium", "warning", "low", "info"],
-            },
-            "example": ["critical", "high"],
-        },
-        "phone": {
-            "type": "string",
-            "nullable": True,
-            "description": (
-                "Optional fallback phone number. "
-                "For real alerts, the assigned user's phone is preferred."
-            ),
-            "example": "+77001234567",
-        },
-        "test_phone": {
-            "type": "string",
-            "nullable": True,
-            "description": "Phone number used by the channel test endpoint.",
-            "example": "+77001234567",
-        },
+        "notify_on_severities": SEVERITY_FILTER_SCHEMA,
         "callback_secret": {
             "type": "string",
             "nullable": True,

@@ -141,6 +141,13 @@ function buildChannelConfig() {
 
     const type = $("#channel-type").val();
     const config = parseJsonInput("#channel-config-json", {});
+    const notifyOnSeverities = getChannelNotifySeverities();
+
+    if (notifyOnSeverities.length) {
+        config.notify_on_severities = notifyOnSeverities;
+    } else {
+        delete config.notify_on_severities;
+    }
 
     if (type === "telegram") {
         config.bot_token = $("#cfg-telegram-bot-token").val();
@@ -165,12 +172,8 @@ function buildChannelConfig() {
     }
 
     if (type === "voice_call") {
-        config.call_on_severities = getVoiceCallSeverities();
-        config.notification_rules = parseJsonInput("#cfg-voice-notification-rules", []);
         return config;
     }
-
-    return config;
 }
 
 function buildMattermostConfig(config) {
@@ -462,6 +465,9 @@ function fillChannelFields(type, config) {
      */
 
     clearChannelFields();
+    setChannelNotifySeverities(
+    config.notify_on_severities || config?.notify_on_severities || []
+    );
 
     if (type === "telegram") {
         $("#cfg-telegram-bot-token").val(config.bot_token || "");
@@ -489,12 +495,13 @@ function fillChannelFields(type, config) {
     }
 
     if (type === "voice_call") {
-        const severities = config.call_on_severities || ["critical", "high"];
-
-        $(".cfg-voice-severity").each(function () {
-            $(this).prop("checked", severities.includes($(this).val()));
-        });
-
+        $("#cfg-voice-provider").val(config.provider || "");
+        $("#cfg-voice-provider-config").val(
+            JSON.stringify(config.provider_config || {}, null, 2)
+        );
+        $("#cfg-voice-dtmf-actions").val(
+            JSON.stringify(config.dtmf_actions || {}, null, 2)
+        );
         $("#cfg-voice-notification-rules").val(
             JSON.stringify(config.notification_rules || [], null, 2)
         );
@@ -520,9 +527,11 @@ function clearChannelFields() {
     $("#cfg-mm-callback-secret").val("");
     $("#cfg-mm-webhook-url").val("");
 
-    $(".cfg-voice-severity").prop("checked", false);
-    $('.cfg-voice-severity[value="critical"]').prop("checked", true);
-    $('.cfg-voice-severity[value="high"]').prop("checked", true);
+    $(".cfg-channel-severity").prop("checked", false);
+    $("#cfg-voice-provider").val("");
+    $("#cfg-voice-provider-config").val("{}");
+    $("#cfg-voice-dtmf-actions").val("{}");
+    $("#cfg-voice-notification-rules").val("[]");
     $("#cfg-voice-notification-rules").val("[]");
 }
 
@@ -640,18 +649,6 @@ $(document).on("click", "#reset-channel-form", resetChannelForm);
 $(document).on("click", "#reload-channels", function () {
     loadChannelGroups(refreshChannels);
 });
-function getVoiceCallSeverities() {
-    /*
-     * Return selected severities for voice calls.
-     */
-    const severities = [];
-
-    $(".cfg-voice-severity:checked").each(function () {
-        severities.push($(this).val());
-    });
-
-    return severities;
-}
 function getChannelModeLabel(channel) {
     /*
      * Return safe display mode for channel.
@@ -663,8 +660,7 @@ function getChannelModeLabel(channel) {
     }
 
     if (channel.channel_type === "voice_call") {
-        const severities = config.call_on_severities || [];
-        return severities.length ? severities.join(", ") : "no severities";
+        return config.provider || "voice_call";
     }
 
     if (["slack", "webhook", "discord", "teams"].includes(channel.channel_type)) {
@@ -690,6 +686,7 @@ function getChannelSearchText(channel) {
         channel.name,
         channel.channel_type,
         getChannelModeLabel(channel),
+        getChannelSeverityLabel(channel),
         channel.enabled ? "enabled" : "disabled"
     ].join(" ").toLowerCase();
 }
@@ -798,7 +795,7 @@ function getSafeChannelConfigSummary(channel) {
     }
 
     if (channel.channel_type === "voice_call") {
-        return "Calls on: " + ((config.call_on_severities || []).join(", ") || "-");
+        return "Provider: " + (config.provider || "-") + "; severities: " + getChannelSeverityLabel(channel);
     }
 
     if (channel.channel_type === "email") {
@@ -838,6 +835,7 @@ function renderChannelDetails(channel) {
             .append(channelDetailsItem("Team", channel.team_slug))
             .append(channelDetailsItem("Type", channel.channel_type))
             .append(channelDetailsItem("Mode", getChannelModeLabel(channel)))
+            .append(channelDetailsItem("Severity filter", getChannelSeverityLabel(channel)))
             .append(channelDetailsItem("Status", channel.enabled ? "Enabled" : "Disabled"))
             .append(channelDetailsItem("Config", getSafeChannelConfigSummary(channel)))
     );
@@ -974,4 +972,46 @@ $(document).on("keydown", function (event) {
     if (event.key === "Escape" && $("#channel-form-modal").hasClass("is-open")) {
         closeChannelFormModal();
     }
+});
+function getChannelNotifySeverities() {
+    return $('input[name="notify_on_severities"]:checked').map(function () {
+        return this.value;
+    }).get();
+}
+
+
+function setChannelNotifySeverities(severities) {
+    /*
+     * Fill channel-level severity checkboxes.
+     */
+    severities = Array.isArray(severities) ? severities : [];
+
+    $(".cfg-channel-severity").each(function () {
+        $(this).prop("checked", severities.includes($(this).val()));
+    });
+}
+
+
+function getChannelSeverityLabel(channel) {
+    /*
+     * Return human-readable channel severity filter.
+     */
+    const config = channel.config || {};
+    const severities = config.notify_on_severities || [];
+
+    if (!severities.length) {
+        return "All severities";
+    }
+
+    return severities.join(", ");
+}
+function setChannelNotifySeverities(severities) {
+    const selected = new Set(severities || []);
+
+    $('input[name="notify_on_severities"]').each(function () {
+        $(this).prop('checked', selected.has(this.value));
+    });
+}
+$(document).on("click", "#format-channel-config-json", function () {
+    formatJsonTextarea("#channel-config-json", {}, "Advanced JSON config");
 });

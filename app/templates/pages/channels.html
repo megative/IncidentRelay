@@ -120,146 +120,407 @@
 </div>
 
 <div id="channel-form-modal" class="app-modal" style="display: none;">
-    <div class="app-modal-dialog">
+    <div class="app-modal-dialog app-modal-dialog-wide">
         <div class="app-modal-header">
             <div>
-                <h2 id="channel-form-title">Create a channel</h2>
-                <div class="card-subtitle">Configure where IncidentRelay sends notifications</div>
-            </div>
-
-            <button id="close-channel-form-modal" type="button" class="app-modal-close">×</button>
+        <h2 id="channel-form-title" class="app-modal-title">Create channel</h2>
+        <div class="app-modal-subtitle">
+          Configure where IncidentRelay sends notifications
         </div>
-
+      </div>
+            <button
+        id="close-channel-form-modal"
+        type="button"
+        class="app-modal-close"
+        aria-label="Close"
+      >
+        ×
+      </button>
+        </div>
         <div class="app-modal-body">
-            <div class="form-body channels-form-grid">
-                <input id="channel-id" type="hidden">
-
-                <div>
-                    <label>Group</label>
+            <input id="channel-id" type="hidden">
+            <div class="app-form-grid">
+                <div class="app-field">
+                    <label for="channel-group">Group</label>
                     <select id="channel-group" class="input"></select>
                 </div>
-
-                <div>
-                    <label>Team</label>
+                <div class="app-field">
+                    <label for="channel-team">Team</label>
                     <select id="channel-team" class="input"></select>
                 </div>
-
-                <div>
-                    <label>Name</label>
-                    <input id="channel-name" class="input" placeholder="cloud-mattermost">
+                <div class="app-field">
+                    <label for="channel-name">Name</label>
+                    <input
+                        id="channel-name"
+                        class="input"
+                        type="text"
+                        placeholder="cloud-alerts"
+                      >
                 </div>
 
-                <div>
-                    <label>Type</label>
+                <div class="app-field">
+                    <label for="channel-type">Type</label>
                     <select id="channel-type" class="input"></select>
                 </div>
-
-                <div class="channel-config channels-form-wide" data-channel-config="telegram" style="display: none;">
-                    <label>Telegram bot token</label>
-                    <input id="cfg-telegram-bot-token" class="input" placeholder="123456:token">
-
-                    <label>Telegram chat ID</label>
-                    <input id="cfg-telegram-chat-id" class="input" placeholder="-1001234567890">
-                </div>
-
-                <div class="channel-config channels-form-wide" data-channel-config="mattermost" style="display: none;">
-                    <label>Mattermost mode</label>
-                    <select id="cfg-mm-mode" class="input">
-                        <option value="bot_api">Bot API with buttons and message updates</option>
-                        <option value="webhook">Incoming webhook only</option>
-                    </select>
-
-                    <div id="cfg-mm-bot-fields" class="channels-nested-grid">
-                        <div>
-                            <label>Mattermost URL</label>
-                            <input id="cfg-mm-api-url" class="input" placeholder="https://mattermost.example.com">
-                        </div>
-
-                        <div>
-                            <label>Bot token</label>
-                            <input id="cfg-mm-bot-token" class="input" placeholder="token">
-                        </div>
-
-                        <div>
-                            <label>Channel ID</label>
-                            <input id="cfg-mm-channel-id" class="input" placeholder="channel id">
-                        </div>
-
-                        <div>
-                            <label>Callback secret</label>
-                            <input id="cfg-mm-callback-secret" class="input" placeholder="optional secret">
-                        </div>
+                <div class="form-field">
+                    <div class="app-field">
+                        <label class="form-label">Notify on severities</label>
                     </div>
 
-                    <div id="cfg-mm-webhook-fields">
-                        <label>Mattermost incoming webhook URL</label>
-                        <input id="cfg-mm-webhook-url" class="input" placeholder="https://mattermost/hooks/...">
-                    </div>
+                    <div class="modal-choice-grid">
+                        <label class="modal-choice-item">
+                            <input
+                                class="modal-choice-input"
+                                type="checkbox"
+                                name="notify_on_severities"
+                                value="critical"
+                                checked
+                            >
+                            <span class="modal-choice-card">
+                                <i class="fas fa-exclamation-circle modal-choice-icon critical"></i>
+                                <span>Critical</span>
+                            </span>
+                        </label>
 
-                    <div class="help-text">
-                        Bot API mode supports Acknowledge and Resolve buttons. Incoming webhook mode sends plain messages only.
+                        <label class="modal-choice-item">
+                            <input
+                                class="modal-choice-input"
+                                type="checkbox"
+                                name="notify_on_severities"
+                                value="high"
+                                checked
+                            >
+                            <span class="modal-choice-card">
+                                <i class="fas fa-level-up-alt modal-choice-icon high"></i>
+                                <span>High</span>
+                            </span>
+                        </label>
+
+                        <label class="modal-choice-item">
+                            <input
+                                class="modal-choice-input"
+                                type="checkbox"
+                                name="notify_on_severities"
+                                value="medium"
+                            >
+                            <span class="modal-choice-card">
+                                <i class="fas fa-minus modal-choice-icon medium"></i>
+                                <span>Medium</span>
+                            </span>
+                        </label>
+
+                        <label class="modal-choice-item">
+                            <input
+                                class="modal-choice-input"
+                                type="checkbox"
+                                name="notify_on_severities"
+                                value="warning"
+                            >
+                            <span class="modal-choice-card">
+                                <i class="far fa-bell modal-choice-icon warning"></i>
+                                <span>Warning</span>
+                            </span>
+                        </label>
+
+                        <label class="modal-choice-item">
+                            <input
+                                class="modal-choice-input"
+                                type="checkbox"
+                                name="notify_on_severities"
+                                value="low"
+                            >
+                            <span class="modal-choice-card">
+                                <i class="fas fa-arrow-down modal-choice-icon low"></i>
+                                <span>Low</span>
+                            </span>
+                        </label>
+
+                        <label class="modal-choice-item">
+                            <input
+                                class="modal-choice-input"
+                                type="checkbox"
+                                name="notify_on_severities"
+                                value="info"
+                            >
+                            <span class="modal-choice-card">
+                                <i class="fas fa-info-circle modal-choice-icon info"></i>
+                                <span>Info</span>
+                            </span>
+                        </label>
                     </div>
                 </div>
+                <div
+          class="app-field app-form-wide channel-config"
+          data-channel-config="telegram"
+          style="display: none;"
+        >
+          <div class="app-nested-grid">
+            <div class="app-field">
+              <label for="cfg-telegram-bot-token">Telegram bot token</label>
+              <div class="app-input-with-icon">
+                <input
+                  id="cfg-telegram-bot-token"
+                  class="input"
+                  type="text"
+                  placeholder="123456:telegram-token"
+                >
+                <i class="fas fa-key"></i>
+              </div>
+            </div>
 
-                <div class="channel-config channels-form-wide" data-channel-config="webhook" style="display: none;">
-                    <label>Webhook URL</label>
-                    <input id="cfg-webhook-url" class="input" placeholder="https://example.com/webhook">
+            <div class="app-field">
+              <label for="cfg-telegram-chat-id">Telegram chat ID</label>
+              <div class="app-input-with-icon">
+                <input
+                  id="cfg-telegram-chat-id"
+                  class="input"
+                  type="text"
+                  placeholder="-1001234567890"
+                >
+                <i class="fas fa-hashtag"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+
+                <div
+          class="app-field app-form-wide channel-config"
+          data-channel-config="mattermost"
+          style="display: none;"
+        >
+          <div class="app-field">
+            <label for="cfg-mm-mode">Mattermost mode</label>
+            <select id="cfg-mm-mode" class="input">
+              <option value="bot_api">Bot API with buttons and message updates</option>
+              <option value="webhook">Incoming webhook only</option>
+            </select>
+          </div>
+
+          <div id="cfg-mm-bot-fields" class="app-nested-grid">
+            <div class="app-field">
+              <label for="cfg-mm-api-url">Mattermost URL</label>
+              <input
+                id="cfg-mm-api-url"
+                class="input"
+                type="text"
+                placeholder="https://mattermost.example.com"
+              >
+            </div>
+
+            <div class="app-field">
+              <label for="cfg-mm-bot-token">Bot token</label>
+              <input
+                id="cfg-mm-bot-token"
+                class="input"
+                type="text"
+                placeholder="mattermost-bot-token"
+              >
+            </div>
+
+            <div class="app-field">
+              <label for="cfg-mm-channel-id">Channel ID</label>
+              <input
+                id="cfg-mm-channel-id"
+                class="input"
+                type="text"
+                placeholder="channel-id"
+              >
+            </div>
+
+            <div class="app-field">
+              <label for="cfg-mm-callback-secret">Callback secret</label>
+              <input
+                id="cfg-mm-callback-secret"
+                class="input"
+                type="text"
+                placeholder="optional-secret"
+              >
+            </div>
+          </div>
+
+          <div id="cfg-mm-webhook-fields" class="app-field">
+            <label for="cfg-mm-webhook-url">Mattermost incoming webhook URL</label>
+            <input
+              id="cfg-mm-webhook-url"
+              class="input"
+              type="text"
+              placeholder="https://mattermost.example.com/hooks/xxx"
+            >
+          </div>
+
+          <div class="app-help">
+            Bot API mode supports Acknowledge and Resolve buttons. Incoming webhook mode sends plain messages only.
+          </div>
+        </div>
+
+                <div
+                  class="app-field app-form-wide channel-config"
+                  data-channel-config="slack"
+                  style="display: none;"
+                >
+                  <label for="cfg-webhook-url">Slack webhook URL</label>
+                  <input
+                    id="cfg-webhook-url"
+                    class="input"
+                    type="text"
+                    placeholder="https://hooks.slack.com/services/xxx/yyy/zzz"
+                  >
                 </div>
 
-                <div class="channel-config channels-form-wide" data-channel-config="email" style="display: none;">
-                    <div class="channels-nested-grid">
-                        <div>
-                            <label>Recipients</label>
-                            <input id="cfg-email-recipients" class="input" placeholder="a@example.com,b@example.com">
-                        </div>
+                <div
+                  class="app-field app-form-wide channel-config"
+                  data-channel-config="webhook"
+                  style="display: none;"
+                >
+                  <label for="cfg-webhook-url">Webhook URL</label>
+                  <input
+                    id="cfg-webhook-url"
+                    class="input"
+                    type="text"
+                    placeholder="https://example.com/webhook"
+                  >
+                </div>
 
-                        <div>
-                            <label>SMTP host</label>
-                            <input id="cfg-email-smtp-host" class="input" placeholder="smtp.example.com">
-                        </div>
+                <div
+                  class="app-field app-form-wide channel-config"
+                  data-channel-config="discord"
+                  style="display: none;"
+                >
+                  <label for="cfg-webhook-url">Discord webhook URL</label>
+                  <input
+                    id="cfg-webhook-url"
+                    class="input"
+                    type="text"
+                    placeholder="https://discord.com/api/webhooks/xxx/yyy"
+                  >
+                </div>
 
-                        <div>
-                            <label>SMTP port</label>
-                            <input id="cfg-email-smtp-port" class="input" type="number" value="587">
-                        </div>
+                <div
+                  class="app-field app-form-wide channel-config"
+                  data-channel-config="teams"
+                  style="display: none;"
+                >
+                  <label for="cfg-webhook-url">Microsoft Teams webhook URL</label>
+                  <input
+                    id="cfg-webhook-url"
+                    class="input"
+                    type="text"
+                    placeholder="https://outlook.office.com/webhook/xxx"
+                  >
+                </div>
+
+                <div
+                  class="app-field app-form-wide channel-config"
+                  data-channel-config="email"
+                  style="display: none;"
+                >
+                  <div class="app-nested-grid">
+                    <div class="app-field">
+                      <label for="cfg-email-recipients">Recipients</label>
+                      <input
+                        id="cfg-email-recipients"
+                        class="input"
+                        type="text"
+                        placeholder="sre@example.com,noc@example.com"
+                      >
                     </div>
-                </div>
 
-                <div class="channel-config channels-form-wide" data-channel-config="voice_call" style="display: none;">
-                    <label>Call on severities</label>
-
-                    <div class="channels-severity-grid">
-                        <label><input class="cfg-voice-severity" type="checkbox" value="critical" checked> Critical</label>
-                        <label><input class="cfg-voice-severity" type="checkbox" value="high" checked> High</label>
-                        <label><input class="cfg-voice-severity" type="checkbox" value="medium"> Medium</label>
-                        <label><input class="cfg-voice-severity" type="checkbox" value="warning"> Warning</label>
-                        <label><input class="cfg-voice-severity" type="checkbox" value="low"> Low</label>
-                        <label><input class="cfg-voice-severity" type="checkbox" value="info"> Info</label>
+                    <div class="app-field">
+                      <label for="cfg-email-smtp-host">SMTP host</label>
+                      <input
+                        id="cfg-email-smtp-host"
+                        class="input"
+                        type="text"
+                        placeholder="smtp.example.com"
+                      >
                     </div>
 
-                    <label>Future notification rules JSON</label>
-                    <textarea id="cfg-voice-notification-rules" class="input" rows="4" placeholder="[]">[]</textarea>
-
-                    <div class="help-text">
-                        Voice provider is configured by the system administrator. This channel only controls when voice calls should be triggered.
+                    <div class="app-field">
+                      <label for="cfg-email-smtp-port">SMTP port</label>
+                      <input
+                        id="cfg-email-smtp-port"
+                        class="input"
+                        type="number"
+                        value="587"
+                      >
                     </div>
+                  </div>
                 </div>
 
-                <div class="channels-form-wide">
-                    <label>Advanced JSON config</label>
-                    <textarea id="channel-config-json" class="input" rows="5">{}</textarea>
+                <div
+                  class="app-field app-form-wide channel-config"
+                  data-channel-config="voice_call"
+                  style="display: none;"
+                >
+                  <div class="app-note">
+                    <i class="fas fa-phone-alt"></i>
+                    <div>
+                      <strong>Voice provider is configured by the system administrator.</strong>
+                      <span>
+                        This channel only controls which severities should trigger voice notifications.
+                        Phone numbers are taken from the assigned user profile.
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                <label class="channels-checkbox">
-                    <input id="channel-enabled" type="checkbox" checked>
-                    <span>Enabled</span>
-                </label>
+                <div class="app-field app-form-wide">
+                  <div class="app-json-header">
+                    <label for="channel-config-json">Advanced JSON config</label>
+
+                    <button
+                      id="format-channel-config-json"
+                      type="button"
+                      class="btn btn-small"
+                    >
+                      <i class="fas fa-code"></i>
+                      Format
+                    </button>
+                  </div>
+
+                  <div class="app-json-editor">
+                    <div class="app-json-gutter">1</div>
+                    <textarea
+                      id="channel-config-json"
+                      class="input"
+                      rows="5"
+                      spellcheck="false"
+                    >{}</textarea>
+                  </div>
+
+                  <div class="app-help">
+                    Optional raw JSON config. Values from the visible fields are merged into this config on save.
+                  </div>
+                </div>
             </div>
         </div>
-
         <div class="app-modal-footer">
-            <button id="reset-channel-form" type="button" class="btn">Reset</button>
-            <button id="save-channel" type="button" class="btn btn-primary">Save channel</button>
-        </div>
+      <label class="app-switch">
+        <input id="channel-enabled" type="checkbox" checked>
+        <span class="app-switch-ui"></span>
+        <span>
+          <strong>Enabled</strong>
+          <small>Enable this channel.</small>
+        </span>
+      </label>
+
+      <div class="app-actions">
+        <button
+          id="reset-channel-form"
+          type="button"
+          class="btn"
+        >
+          Reset
+        </button>
+
+        <button
+          id="save-channel"
+          type="button"
+          class="btn btn-primary"
+        >
+          Save channel
+        </button>
+      </div>
     </div>
+  </div>
 </div>

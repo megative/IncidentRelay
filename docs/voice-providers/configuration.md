@@ -15,10 +15,14 @@ Example:
 [voice]
 provider = stub
 providers_dir = /usr/local/lib/incidentrelay/voice_providers
-
-# Global fallback secret for voice provider callbacks.
-# A channel-level callback_secret has higher priority.
 callback_secret = change-me
+text_template = IncidentRelay alert {alert_id}. {title}. Severity {severity}. {message}. Press 1 to acknowledge. Press 2 to resolve.
+dtmf_actions = {"1": "acknowledge", "2": "resolve"}
+
+[voice_provider]
+api_url = https://voice.example.com/api
+api_token = ${VOICE_API_TOKEN}
+timeout = 10
 ```
 
 ## Settings

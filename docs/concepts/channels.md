@@ -46,3 +46,5 @@ Custom providers can implement:
 - optional call status polling.
 
 See [Custom Voice Providers](../voice-providers/index.md).
+
+Read more about channels in the [Integrations](../integrations/index.md) section.

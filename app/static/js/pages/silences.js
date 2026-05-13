@@ -563,3 +563,7 @@ $(document).on("keydown", function (event) {
         closeSilenceFormModal();
     }
 });
+
+$(document).on("click", "#format-silence-matchers", function () {
+    formatJsonTextarea("#silence-matchers", {}, "Matchers JSON");
+});

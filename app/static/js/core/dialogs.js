@@ -166,3 +166,22 @@ $(document).on("keydown", function (event) {
         $("#app-dialog-cancel").trigger("click");
     }
 });
+function formatJsonTextarea(selector, fallbackValue, label) {
+    const $field = $(selector);
+    const raw = String($field.val() || "").trim();
+
+    let parsed;
+
+    try {
+        parsed = raw ? JSON.parse(raw) : fallbackValue;
+    } catch (error) {
+        showAppError(
+            label + " contains invalid JSON:\n\n" + error.message,
+            "Invalid JSON"
+        );
+        return false;
+    }
+
+    $field.val(JSON.stringify(parsed, null, 2));
+    return true;
+}

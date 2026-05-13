@@ -35,7 +35,7 @@ IncidentRelay will:
 
 ```text
 1. Validate callback secret.
-2. Load the voice provider configured for the channel.
+2. Load the globally configured voice provider.
 3. Pass raw callback payload to provider.parse_callback().
 4. Find notification by provider call_id.
 5. Store callback status and payload.
