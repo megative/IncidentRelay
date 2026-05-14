@@ -1,4 +1,17 @@
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def serialize_utc_datetime(value):
+    """Serialize a datetime as an explicit UTC ISO-8601 string."""
+    if not value:
+        return None
+
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    else:
+        value = value.astimezone(timezone.utc)
+
+    return value.isoformat().replace("+00:00", "Z")
 
 
 def serialize_group(group):
@@ -245,12 +258,13 @@ def serialize_alert(alert, include_payload=False, include_details=False, events=
         "assignee_details": serialize_user_short(alert.assignee),
         "acknowledged_by": alert.acknowledged_by.username if alert.acknowledged_by else None,
         "acknowledged_by_details": serialize_user_short(alert.acknowledged_by),
-        "acknowledged_at": alert.acknowledged_at.isoformat() if alert.acknowledged_at else None,
-        "first_seen_at": alert.first_seen_at.isoformat(),
-        "last_seen_at": alert.last_seen_at.isoformat(),
-        "last_notification_at": alert.last_notification_at.isoformat() if alert.last_notification_at else None,
+        "acknowledged_at": serialize_utc_datetime(alert.acknowledged_at),
+        "first_seen_at": serialize_utc_datetime(alert.first_seen_at),
+        "last_seen_at": serialize_utc_datetime(alert.last_seen_at),
+        "last_notification_at": serialize_utc_datetime(alert.last_notification_at),
         "reminder_count": alert.reminder_count,
         "escalation_level": alert.escalation_level,
+        "resolved_at": serialize_utc_datetime(alert.resolved_at),
     }
 
     if route:

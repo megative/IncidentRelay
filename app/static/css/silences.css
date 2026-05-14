@@ -29,12 +29,6 @@
     text-decoration: underline;
 }
 
-.silence-row-subtitle {
-    margin-top: 4px;
-    color: var(--muted);
-    font-size: 12px;
-}
-
 .silence-window {
     display: flex;
     flex-direction: column;
@@ -74,26 +68,4 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     white-space: pre-wrap;
     word-break: break-word;
-}
-
-.silences-form-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-}
-
-.silences-form-wide {
-    grid-column: 1 / -1;
-}
-
-.silences-empty-cell {
-    padding: 18px;
-    color: var(--muted);
-    text-align: center;
-}
-
-@media (max-width: 900px) {
-    .silences-form-grid {
-        grid-template-columns: 1fr;
-    }
 }

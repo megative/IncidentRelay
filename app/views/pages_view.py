@@ -8,6 +8,7 @@ pages_bp = Blueprint("pages", __name__)
 
 @pages_bp.route("/")
 @pages_bp.route("/alerts")
+@pages_bp.route("/alerts/<int:alert_id>")
 @pages_bp.route("/rotations")
 @pages_bp.route("/calendar")
 @pages_bp.route("/routes")
@@ -18,7 +19,7 @@ pages_bp = Blueprint("pages", __name__)
 @pages_bp.route("/profile")
 @pages_bp.route("/admin/users")
 @pages_bp.route("/login")
-def app_page():
+def app_page(alert_id=None):
     """
     Render the frontend application for direct page URLs.
     """

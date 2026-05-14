@@ -1,14 +1,27 @@
+function normalizeAppRoutePath(pathname) {
+    /*
+     * Convert detail URLs to their SPA route.
+     * Example: /alerts/123 -> /alerts
+     */
+    if (/^\/alerts\/\d+\/?$/.test(pathname || "")) {
+        return "/alerts";
+    }
+
+    return pathname || "/";
+}
+
 function splitAppPath(path) {
     /*
      * Split an internal app URL into route path and full path.
      *
      * Example:
-     *   /alerts?status=firing -> routePath=/alerts, fullPath=/alerts?status=firing
+     * /alerts?status=firing -> routePath=/alerts, fullPath=/alerts?status=firing
+     * /alerts/123           -> routePath=/alerts, fullPath=/alerts/123
      */
     const url = new URL(path || "/", window.location.origin);
 
     return {
-        routePath: url.pathname,
+        routePath: normalizeAppRoutePath(url.pathname),
         fullPath: url.pathname + url.search + url.hash
     };
 }

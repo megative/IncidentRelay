@@ -356,6 +356,7 @@ class Alert(BaseModel):
     reminder_count = IntegerField(default=0)
     escalation_level = IntegerField(default=0)
     silenced = BooleanField(default=False)
+    resolved_at = DateTimeField(null=True)
 
     class Meta:
         indexes = (

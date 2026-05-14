@@ -45,11 +45,10 @@ def find_route_for_alert(alert_data):
     """
     Find the route that should receive an alert.
 
-    Route intake token has priority. When a request is authenticated by a route
-    token, the alert is forced into that route. Labels cannot move it to another
-    route.
+    Route intake token has priority for selecting a route, but route matchers
+    still work as an allow-list filter. This prevents unwanted alerts from
+    being accepted into a route even when the request uses this route token.
     """
-
     forced_route_id = alert_data.get("forced_route_id")
 
     if forced_route_id:
@@ -60,7 +59,14 @@ def find_route_for_alert(alert_data):
             return None
 
         if route.source != alert_data["source"]:
-            alert_data["routing_error"] = f"route source '{route.source}' does not match alert source '{alert_data['source']}'"
+            alert_data["routing_error"] = (
+                f"route source '{route.source}' does not match alert source "
+                f"'{alert_data['source']}'"
+            )
+            return None
+
+        if not match_alert(alert_data, route.matchers or {}):
+            alert_data["routing_error"] = "alert does not match route matchers"
             return None
 
         return route
@@ -81,7 +87,9 @@ def find_route_for_alert(alert_data):
             team = get_active_team_by_slug(team_slug)
 
             if not team:
-                alert_data["routing_error"] = f"team '{team_slug}' was not found or is inactive"
+                alert_data["routing_error"] = (
+                    f"team '{team_slug}' was not found or is inactive"
+                )
                 return None
 
             routes = routes_repo.list_routes(

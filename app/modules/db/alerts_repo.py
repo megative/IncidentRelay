@@ -354,7 +354,9 @@ def update_alert_from_payload(alert, alert_data, status, group_key):
     """
     Update an alert from normalized payload data.
     """
+    now = datetime.utcnow()
 
+    alert.last_seen_at = now
     previous_status = alert.status
     alert.previous_status = previous_status
     alert.last_seen_at = datetime.utcnow()
@@ -367,6 +369,8 @@ def update_alert_from_payload(alert, alert_data, status, group_key):
         alert.status = previous_status
     else:
         alert.status = status
+    if status == "resolved" and not alert.resolved_at:
+        alert.resolved_at = now
     alert.save()
     return alert, previous_status
 
@@ -391,6 +395,7 @@ def resolve_alert(alert_id):
 
     alert = get_alert(alert_id)
     alert.status = "resolved"
+    alert.resolved_at = datetime.utcnow()
     alert.save()
     return alert
 

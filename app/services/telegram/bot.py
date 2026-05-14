@@ -6,6 +6,7 @@ from telebot.apihelper import ApiTelegramException
 
 from app.settings import Config
 from app.services.telegram.actions import build_telegram_action_data
+from app.services.links import build_alert_web_url
 
 
 logger = logging.getLogger("oncall.telegram")
@@ -71,46 +72,57 @@ def build_alert_keyboard(channel, alert):
     Build Telegram inline keyboard for alert actions.
     """
     config = channel.config or {}
-
-    if not config.get("actions_enabled", True):
-        return None
-
-    if alert.status not in {"firing", "acknowledged"}:
-        return None
+    actions_enabled = config.get("actions_enabled", True)
+    alert_url = build_alert_web_url(alert)
 
     keyboard = types.InlineKeyboardMarkup(row_width=2)
+    has_buttons = False
 
-    if alert.status == "acknowledged":
-        keyboard.add(
-            types.InlineKeyboardButton(
-                "Resolve",
-                callback_data=build_telegram_action_data(
-                    "resolve",
-                    alert.id,
-                    channel.id,
+    if actions_enabled and alert.status in {"firing", "acknowledged"}:
+        if alert.status == "acknowledged":
+            keyboard.add(
+                types.InlineKeyboardButton(
+                    "Resolve",
+                    callback_data=build_telegram_action_data(
+                        "resolve",
+                        alert.id,
+                        channel.id,
+                    ),
+                )
+            )
+            has_buttons = True
+        else:
+            keyboard.add(
+                types.InlineKeyboardButton(
+                    "Acknowledge",
+                    callback_data=build_telegram_action_data(
+                        "ack",
+                        alert.id,
+                        channel.id,
+                    ),
+                ),
+                types.InlineKeyboardButton(
+                    "Resolve",
+                    callback_data=build_telegram_action_data(
+                        "resolve",
+                        alert.id,
+                        channel.id,
+                    ),
                 ),
             )
-        )
-        return keyboard
+            has_buttons = True
 
-    keyboard.add(
-        types.InlineKeyboardButton(
-            "✅ Acknowledge",
-            callback_data=build_telegram_action_data(
-                "ack",
-                alert.id,
-                channel.id,
-            ),
-        ),
-        types.InlineKeyboardButton(
-            "🟢 Resolve",
-            callback_data=build_telegram_action_data(
-                "resolve",
-                alert.id,
-                channel.id,
-            ),
-        ),
-    )
+    if alert_url:
+        keyboard.add(
+            types.InlineKeyboardButton(
+                "Open alert",
+                url=alert_url,
+            )
+        )
+        has_buttons = True
+
+    if not has_buttons:
+        return None
 
     return keyboard
 

@@ -257,7 +257,7 @@ function renderRoutesTable() {
             $("<tr>").append(
                 $("<td>")
                     .attr("colspan", "8")
-                    .addClass("routes-empty-cell")
+                    .addClass("empty-cell")
                     .text("No routes")
             )
         );
@@ -290,7 +290,7 @@ function renderRouteRow(route) {
             )
             .append(
                 $("<div>")
-                    .addClass("route-row-subtitle")
+                    .addClass("row-subtitle")
                     .text("Route #" + route.id)
             )
     );
@@ -689,7 +689,7 @@ function resetRouteForm() {
     $("#route-id").val("");
     $("#route-name").val("");
     $("#route-source").val("alertmanager");
-    $("#route-matchers").val('{"labels":{"team":"infra"}}');
+    $("#route-matchers").val('{}');
     $("#route-group-by").val('["alertname","instance"]');
     $("#route-enabled").prop("checked", true);
     $("#route-rotation").val("");
@@ -859,3 +859,7 @@ function getFilteredRoutes() {
 
     return sortTableData(filtered, routesSortState, routesSortColumns);
 }
+
+$(document).on("click", "#format-route-matchers", function () {
+    formatJsonTextarea("#route-matchers", {}, "Alert filters JSON");
+});

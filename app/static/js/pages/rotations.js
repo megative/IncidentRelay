@@ -172,7 +172,7 @@ function refreshRotations(doneCallback) {
                 $("<tr>").append(
                     $("<td>")
                         .attr("colspan", "9")
-                        .addClass("rotations-empty-cell")
+                        .addClass("empty-cell")
                         .text("No rotations")
                 )
             );
@@ -183,7 +183,7 @@ function refreshRotations(doneCallback) {
                     $("<tr>").append(
                         $("<td>")
                             .attr("colspan", "6")
-                            .addClass("rotations-empty-cell")
+                            .addClass("empty-cell")
                             .text("No rotation selected")
                     )
                 );
@@ -194,7 +194,7 @@ function refreshRotations(doneCallback) {
                     $("<tr>").append(
                         $("<td>")
                             .attr("colspan", "6")
-                            .addClass("rotations-empty-cell")
+                            .addClass("empty-cell")
                             .text("No rotation selected")
                     )
                 );
@@ -852,7 +852,7 @@ function renderRotationsTable() {
             $("<tr>").append(
                 $("<td>")
                     .attr("colspan", "8")
-                    .addClass("rotations-empty-cell")
+                    .addClass("empty-cell")
                     .text("No rotations")
             )
         );
@@ -884,7 +884,7 @@ function renderRotationRow(rotation) {
             .append(rotationName)
             .append(
                 $("<div>")
-                    .addClass("rotation-row-subtitle")
+                    .addClass("row-subtitle")
                     .text(rotation.description || "Rotation #" + rotation.id)
             )
     );

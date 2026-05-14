@@ -133,7 +133,7 @@
         </div>
 
         <div class="app-modal-body">
-            <div class="form-body routes-form-grid">
+            <div class="form-body form-grid">
                 <input id="route-id" type="hidden">
 
                 <div>
@@ -162,7 +162,7 @@
                     </select>
                 </div>
 
-                <div class="routes-form-wide">
+                <div class="app-form-wide">
                     <label>Channels</label>
                     <select id="route-channels" class="input" multiple></select>
                     <div class="help-text">
@@ -170,17 +170,65 @@
                     </div>
                 </div>
 
-                <div class="routes-form-wide">
-                    <label>Matchers JSON</label>
-                    <textarea id="route-matchers" class="input" rows="5">{"labels":{"team":"infra"}}</textarea>
+                <div class="app-field app-form-wide">
+                  <div class="app-json-header">
+                    <label for="route-matchers">Alert filters JSON</label>
+        
+                    <button
+                      id="format-route-matchers"
+                      type="button"
+                      class="btn btn-small"
+                    >
+                      <i class="fas fa-code"></i>
+                      Format
+                    </button>
+                  </div>
+        
+                  <div class="app-json-editor">
+                    <div class="app-json-gutter">1</div>
+                    <textarea
+                      id="route-matchers"
+                      class="input"
+                      rows="5"
+                      spellcheck="false"
+                    >{}</textarea>
+                  </div>
+        
+                  <div class="app-help">
+                    Only alerts matching these conditions will be accepted by this route. Empty object means accept all alerts for this route.
+                  </div>
                 </div>
 
-                <div class="routes-form-wide">
-                    <label>Group by JSON</label>
-                    <textarea id="route-group-by" class="input" rows="3">["alertname","instance"]</textarea>
-                </div>
+{#                <div class="app-field app-form-wide">#}
+{#                  <div class="app-json-header">#}
+{#                    <label for="route-group-by">Matchers JSON</label>#}
+{##}
+{#                    <button#}
+{#                      id="format-route-group-by"#}
+{#                      type="button"#}
+{#                      class="btn btn-small"#}
+{#                    >#}
+{#                      <i class="fas fa-code"></i>#}
+{#                      Format#}
+{#                    </button>#}
+{#                  </div>#}
+{##}
+{#                  <div class="app-json-editor">#}
+{#                    <div class="app-json-gutter">1</div>#}
+{#                    <textarea#}
+{#                      id="route-group-by"#}
+{#                      class="input"#}
+{#                      rows="5"#}
+{#                      spellcheck="false"#}
+{#                    >["alertname","instance"]</textarea>#}
+{#                  </div>#}
+{##}
+{#                  <div class="app-help">#}
+{#                    Example: {"labels":{"host":"host1"}}. Matching alerts will be suppressed during the route window.#}
+{#                  </div>#}
+{#                </div>#}
 
-                <label class="routes-checkbox">
+                <label class="checkbox">
                     <input id="route-enabled" type="checkbox" checked>
                     <span>Enabled</span>
                 </label>

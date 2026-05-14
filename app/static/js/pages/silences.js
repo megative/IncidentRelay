@@ -183,7 +183,7 @@ function renderSilencesTable() {
             $("<tr>").append(
                 $("<td>")
                     .attr("colspan", "7")
-                    .addClass("silences-empty-cell")
+                    .addClass("empty-cell")
                     .text("No silences")
             )
         );
@@ -216,7 +216,7 @@ function renderSilenceRow(silence) {
             )
             .append(
                 $("<div>")
-                    .addClass("silence-row-subtitle")
+                    .addClass("row-subtitle")
                     .text("Silence #" + silence.id)
             )
     );

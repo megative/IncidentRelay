@@ -269,7 +269,7 @@ function renderChannels() {
             $("<tr>").append(
                 $("<td>")
                     .attr("colspan", "7")
-                    .addClass("channels-empty-cell")
+                    .addClass("empty-cell")
                     .text("No channels")
             )
         );
@@ -301,7 +301,7 @@ function renderChannelRow(channel) {
             )
             .append(
                 $("<div>")
-                    .addClass("channel-row-subtitle")
+                    .addClass("row-subtitle")
                     .text("Channel #" + channel.id)
             )
     );
@@ -493,19 +493,6 @@ function fillChannelFields(type, config) {
         $("#cfg-email-smtp-host").val(config.smtp_host || "");
         $("#cfg-email-smtp-port").val(config.smtp_port || 587);
     }
-
-    if (type === "voice_call") {
-        $("#cfg-voice-provider").val(config.provider || "");
-        $("#cfg-voice-provider-config").val(
-            JSON.stringify(config.provider_config || {}, null, 2)
-        );
-        $("#cfg-voice-dtmf-actions").val(
-            JSON.stringify(config.dtmf_actions || {}, null, 2)
-        );
-        $("#cfg-voice-notification-rules").val(
-            JSON.stringify(config.notification_rules || [], null, 2)
-        );
-    }
 }
 
 function clearChannelFields() {
@@ -528,11 +515,6 @@ function clearChannelFields() {
     $("#cfg-mm-webhook-url").val("");
 
     $(".cfg-channel-severity").prop("checked", false);
-    $("#cfg-voice-provider").val("");
-    $("#cfg-voice-provider-config").val("{}");
-    $("#cfg-voice-dtmf-actions").val("{}");
-    $("#cfg-voice-notification-rules").val("[]");
-    $("#cfg-voice-notification-rules").val("[]");
 }
 
 function confirmChannelAction(options, onConfirm) {
@@ -978,19 +960,6 @@ function getChannelNotifySeverities() {
         return this.value;
     }).get();
 }
-
-
-function setChannelNotifySeverities(severities) {
-    /*
-     * Fill channel-level severity checkboxes.
-     */
-    severities = Array.isArray(severities) ? severities : [];
-
-    $(".cfg-channel-severity").each(function () {
-        $(this).prop("checked", severities.includes($(this).val()));
-    });
-}
-
 
 function getChannelSeverityLabel(channel) {
     /*

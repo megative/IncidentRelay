@@ -120,7 +120,66 @@ function alertActivityValue(alert) {
      */
     return alert.last_seen_at || alert.updated_at || alert.created_at || alert.first_seen_at || null;
 }
+function getAlertIdFromPath(pathname) {
+    /*
+     * Return alert ID from /alerts/<id>.
+     */
+    const match = String(pathname || "").match(/^\/alerts\/(\d+)\/?$/);
 
+    if (!match) {
+        return null;
+    }
+
+    return Number(match[1]);
+}
+
+function buildAlertDetailsUrl(alertId) {
+    /*
+     * Build a browser URL for an alert details page.
+     */
+    return "/alerts/" + encodeURIComponent(alertId);
+}
+
+function buildAlertListUrl() {
+    /*
+     * Return the Alerts list URL while preserving current filters.
+     */
+    return "/alerts" + (window.location.search || "");
+}
+
+function openAlertDetailsPage(alertId) {
+    /*
+     * Open alert details and put a shareable URL into the browser address bar.
+     */
+    const url = buildAlertDetailsUrl(alertId);
+
+    history.pushState({ path: url }, "", url);
+    showAlertDetails(alertId);
+}
+
+function syncAlertDetailsFromUrl() {
+    /*
+     * Open or close alert details according to the current browser URL.
+     */
+    const alertId = getAlertIdFromPath(window.location.pathname);
+
+    if (!alertId) {
+        if (alertDetailsModal().hasClass("is-open")) {
+            closeAlertDetailsModal({ updateUrl: false });
+        }
+
+        return;
+    }
+
+    if (
+        currentDetailsAlertId === alertId &&
+        alertDetailsModal().hasClass("is-open")
+    ) {
+        return;
+    }
+
+    showAlertDetails(alertId);
+}
 function alertDuration(alert) {
     /*
      * Calculate alert age from created/first_seen_at to now.
@@ -369,6 +428,7 @@ function renderAlertsPage() {
     renderActiveAlertFilters(alertsPagination);
     renderAlertsTable(alertsCache);
     renderAlertsPagination(alertsPagination);
+    syncAlertDetailsFromUrl();
 }
 
 function renderAlertsPagination(pagination) {
@@ -464,13 +524,14 @@ function renderAlertPageRow(alert) {
 
     row.append(
         $("<td>").append(
-            $("<button>")
-                .attr("type", "button")
+            $("<a>")
+                .attr("href", buildAlertDetailsUrl(alert.id))
                 .attr("title", "View alert details")
                 .addClass("alerts-id-link")
                 .text("#" + alert.id)
-                .on("click", function () {
-                    showAlertDetails(alert.id);
+                .on("click", function (event) {
+                    event.preventDefault();
+                    openAlertDetailsPage(alert.id);
                 })
         )
     );
@@ -506,6 +567,7 @@ function renderAlertPageRow(alert) {
     row.append($("<td>").text(alert.assignee || "-"));
     row.append($("<td>").text(formatDateTimeMinutes(alertCreatedValue(alert))));
     row.append($("<td>").text(formatDateTimeMinutes(alert.last_seen_at)));
+    row.append($("<td>").append(renderEscalationCount(alert)));
     row.append($("<td>").append(renderReminderCount(alert)));
 
     const actionsCell = $("<td>").addClass("actions-cell");
@@ -567,6 +629,18 @@ function renderReminderCount(alert) {
      * Render reminder counter badge.
      */
     const count = alert.reminder_count || 0;
+
+    return $("<span>")
+        .addClass("alerts-reminder-badge")
+        .toggleClass("is-active", count > 0)
+        .text(count);
+}
+
+function renderEscalationCount(alert) {
+    /*
+     * Render reminder Escalation badge.
+     */
+    const count = alert.escalation_level || 0;
 
     return $("<span>")
         .addClass("alerts-reminder-badge")
@@ -845,16 +919,27 @@ function openAlertDetailsModal() {
 }
 
 
-function closeAlertDetailsModal() {
+function closeAlertDetailsModal(options) {
     /*
      * Close alert details modal.
      */
+    options = options || {};
+
     alertDetailsModal()
         .css("display", "none")
         .removeClass("is-open");
 
     $("body").removeClass("modal-open");
     currentDetailsAlertId = null;
+
+    if (options.updateUrl === false) {
+        return;
+    }
+
+    if (getAlertIdFromPath(window.location.pathname)) {
+        const url = buildAlertListUrl();
+        history.pushState({ path: url }, "", url);
+    }
 }
 function alertsResponseItems(response) {
     /*

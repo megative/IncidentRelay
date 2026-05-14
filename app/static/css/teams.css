@@ -29,21 +29,6 @@
     text-decoration: underline;
 }
 
-.team-row-subtitle {
-    margin-top: 4px;
-    color: var(--muted);
-    font-size: 12px;
-}
-.teams-form-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-}
-
-.teams-form-wide {
-    grid-column: 1 / -1;
-}
-
 .teams-member-form-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(150px, 1fr));
@@ -52,34 +37,12 @@
     padding: 0;
 }
 
-.teams-checkbox {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    color: #344054;
-    font-size: 13px;
-    font-weight: 700;
-}
-
-.teams-checkbox input {
-    width: 16px;
-    height: 16px;
-    margin: 0;
-}
-
 .teams-modal-table-wrapper {
     margin-top: 16px;
     border-top: 1px solid var(--border);
 }
 
-.teams-empty-cell {
-    padding: 18px;
-    color: var(--muted);
-    text-align: center;
-}
-
 @media (max-width: 900px) {
-    .teams-form-grid,
     .teams-member-form-grid {
         grid-template-columns: 1fr;
     }

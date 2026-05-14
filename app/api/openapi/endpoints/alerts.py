@@ -59,6 +59,124 @@ def response(description, schema=None):
     return item
 
 
+def date_time_property(description, nullable=False):
+    """Build an OpenAPI date-time property."""
+    schema = {
+        "type": "string",
+        "format": "date-time",
+        "description": description,
+    }
+
+    if nullable:
+        schema["nullable"] = True
+
+    return schema
+
+
+def user_short_schema():
+    """Build a compact user schema."""
+    return {
+        "type": "object",
+        "nullable": True,
+        "properties": {
+            "id": {"type": "integer"},
+            "username": {"type": "string"},
+            "display_name": {"type": "string", "nullable": True},
+            "email": {"type": "string", "nullable": True},
+            "telegram_user_id": {"type": "string", "nullable": True},
+            "slack_user_id": {"type": "string", "nullable": True},
+            "mattermost_user_id": {"type": "string", "nullable": True},
+        },
+    }
+
+
+def alert_schema(include_payload=False, include_details=False):
+    """Build an alert response schema."""
+    properties = {
+        "id": {"type": "integer"},
+        "team_id": {"type": "integer", "nullable": True},
+        "team_slug": {"type": "string", "nullable": True},
+        "team_name": {"type": "string", "nullable": True},
+        "route_id": {"type": "integer", "nullable": True},
+        "route_name": {"type": "string", "nullable": True},
+        "route_source": {"type": "string", "nullable": True},
+        "rotation_id": {"type": "integer", "nullable": True},
+        "rotation_name": {"type": "string", "nullable": True},
+        "rotation_reminder_interval_seconds": {"type": "integer", "nullable": True},
+        "source": {"type": "string"},
+        "external_id": {"type": "string", "nullable": True},
+        "dedup_key": {"type": "string"},
+        "group_key": {"type": "string"},
+        "title": {"type": "string"},
+        "message": {"type": "string", "nullable": True},
+        "severity": {"type": "string", "nullable": True},
+        "status": {"type": "string"},
+        "previous_status": {"type": "string", "nullable": True},
+        "silenced": {"type": "boolean"},
+        "labels": {"type": "object", "additionalProperties": True},
+        "labels_count": {"type": "integer"},
+        "assignee": {"type": "string", "nullable": True},
+        "assignee_id": {"type": "integer", "nullable": True},
+        "assignee_details": user_short_schema(),
+        "acknowledged_by": {"type": "string", "nullable": True},
+        "acknowledged_by_details": user_short_schema(),
+        "acknowledged_at": date_time_property("Alert acknowledgement timestamp in UTC.", nullable=True),
+        "first_seen_at": date_time_property("First time this alert occurrence was seen in UTC."),
+        "last_seen_at": date_time_property("Last time this alert occurrence was seen in UTC."),
+        "resolved_at": date_time_property("Time when this alert was resolved in UTC.", nullable=True),
+        "last_notification_at": date_time_property("Last notification timestamp in UTC.", nullable=True),
+        "reminder_count": {"type": "integer"},
+        "escalation_level": {"type": "integer"},
+    }
+
+    if include_payload:
+        properties["payload"] = {
+            "type": "object",
+            "nullable": True,
+            "additionalProperties": True,
+        }
+
+    if include_details:
+        properties["events"] = {
+            "type": "array",
+            "items": {"type": "object", "additionalProperties": True},
+        }
+        properties["notifications"] = {
+            "type": "array",
+            "items": {"type": "object", "additionalProperties": True},
+        }
+
+    return {
+        "type": "object",
+        "properties": properties,
+    }
+
+
+def alert_list_schema():
+    """Build list alerts response schema."""
+    return {
+        "type": "object",
+        "properties": {
+            "items": {
+                "type": "array",
+                "items": alert_schema(),
+            },
+            "pagination": {
+                "type": "object",
+                "additionalProperties": True,
+            },
+            "summary": {
+                "type": "object",
+                "additionalProperties": True,
+            },
+            "sort": {
+                "type": "object",
+                "additionalProperties": True,
+            },
+        },
+    }
+
+
 def tags():
     """
     Return OpenAPI tags.
@@ -167,7 +285,7 @@ def paths():
                         },
                     ),
                 ],
-                "responses": {"200": response("List of alerts.")},
+                "responses": {"200": response("List of alerts.", alert_list_schema()),},
             }
         },
         "/api/alerts/{alert_id}": {
@@ -177,7 +295,13 @@ def paths():
                 "description": "Returns a single alert with labels, payload, route, team, assignee and status details.",
                 "operationId": "getAlert",
                 "parameters": [path_param("alert_id", "Alert id.")],
-                "responses": {"200": response("Alert details."), "404": response("Alert not found.")},
+                "responses": {
+                    "200": response(
+                        "Alert details.",
+                        alert_schema(include_payload=True, include_details=True),
+                    ),
+                    "404": response("Alert not found."),
+                },
             }
         },
         "/api/alerts/{alert_id}/ack": {
@@ -200,7 +324,10 @@ def paths():
                     },
                     required=False,
                 ),
-                "responses": {"200": response("Alert acknowledged."), "404": response("Alert not found.")},
+                "responses": {
+                    "200": response("Alert acknowledged.", alert_schema()),
+                    "404": response("Alert not found."),
+                },
             }
         },
         "/api/alerts/{alert_id}/resolve": {
@@ -223,7 +350,10 @@ def paths():
                     },
                     required=False,
                 ),
-                "responses": {"200": response("Alert resolved."), "404": response("Alert not found.")},
+                "responses": {
+                    "200": response("Alert resolved.", alert_schema()),
+                    "404": response("Alert not found."),
+                },
             }
         },
         "/api/alerts/{alert_id}/events": {

@@ -8,9 +8,10 @@ import requests
 from app.settings import Config
 from app.notifiers.base import BaseNotifier
 from app.notifiers.voice.base import VoiceCallRequest
-from app.notifiers.voice.loader import create_voice_provider, resolve_env_values
+from app.notifiers.voice.loader import create_voice_provider
 from app.services.telegram.bot import send_telegram_alert, update_telegram_alert
 from app.services.telegram.templates import format_telegram_alert_message
+from app.services.links import build_alert_web_url
 
 logger = logging.getLogger("oncall.alerts")
 
@@ -65,6 +66,7 @@ class IncomingWebhookNotifier(BaseNotifier):
             json={
                 "text": text,
                 "alert_id": alert.id,
+                "alert_url": build_alert_web_url(alert),
                 "team": alert.team.slug if alert.team else None,
                 "status": alert.status,
                 "source": alert.source,
@@ -215,6 +217,7 @@ class MattermostNotifier(IncomingWebhookNotifier):
         """
         Build a Mattermost post payload.
         """
+        alert_url = build_alert_web_url(alert)
 
         attachment = {
             "fallback": alert.title,
@@ -223,6 +226,9 @@ class MattermostNotifier(IncomingWebhookNotifier):
             "text": self._text_for_alert(alert, text, event_type),
             "fields": self._fields(alert),
         }
+
+        if alert_url:
+            attachment["title_link"] = alert_url
 
         if include_actions and self._can_show_actions(alert):
             attachment["actions"] = self._actions(channel, alert)
@@ -283,11 +289,15 @@ class MattermostNotifier(IncomingWebhookNotifier):
         """
         Return Mattermost attachment fields.
         """
-
-        assignee = alert.assignee.display_name or alert.assignee.username if alert.assignee else "-"
+        assignee = (
+            alert.assignee.display_name or alert.assignee.username
+            if alert.assignee
+            else "-"
+        )
         team = alert.team.slug if alert.team else "-"
+        alert_url = build_alert_web_url(alert)
 
-        return [
+        fields = [
             {"short": True, "title": "Team", "value": team},
             {"short": True, "title": "Status", "value": alert.status},
             {"short": True, "title": "Severity", "value": alert.severity or "-"},
@@ -295,6 +305,15 @@ class MattermostNotifier(IncomingWebhookNotifier):
             {"short": True, "title": "Source", "value": alert.source},
             {"short": True, "title": "Alert ID", "value": str(alert.id)},
         ]
+
+        if alert_url:
+            fields.append({
+                "short": False,
+                "title": "Open",
+                "value": f"[Open alert]({alert_url})",
+            })
+
+        return fields
 
     def _actions(self, channel, alert):
         """

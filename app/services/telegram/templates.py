@@ -151,6 +151,7 @@ def _state_note(alert: Any, event_type: str, actor: Any = None) -> list[str]:
         return [
             "🟢 <b>Alert has been resolved.</b>",
             f"👤 <b>Resolved by:</b> {_person_name(user)}",
+            f"🕒 <b>Resolved at:</b> {_html(_format_dt(getattr(alert, 'resolved_at', None)))}",
         ]
 
     if event_type == "acknowledged" or status == "acknowledged":

@@ -185,7 +185,7 @@ function renderTeamsTable() {
             $("<tr>").append(
                 $("<td>")
                     .attr("colspan", "6")
-                    .addClass("teams-empty-cell")
+                    .addClass("empty-cell")
                     .text("No teams")
             )
         );
@@ -449,7 +449,7 @@ function loadTeamMembers(teamId, teamName) {
                 $("<tr>").append(
                     $("<td>")
                         .attr("colspan", "6")
-                        .addClass("teams-empty-cell")
+                        .addClass("empty-cell")
                         .text("No members")
                 )
             );

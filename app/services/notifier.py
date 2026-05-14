@@ -5,6 +5,7 @@ from app.settings import Config
 from app.modules.db import alerts_repo, notifications_repo, routes_repo
 from app.notifiers.registry import get_notifier
 from app.services.severity import normalize_severity, normalize_severity_list
+from app.services.links import build_alert_web_url
 
 
 EDITABLE_EVENTS = {"acknowledged", "resolved"}
@@ -12,22 +13,29 @@ logger = logging.getLogger("oncall.notifications")
 
 
 def format_alert_message(alert, event_type="notification"):
-    """
-    Format a plain text alert notification.
-    """
-
-    assignee = alert.assignee.display_name or alert.assignee.username if alert.assignee else "unknown"
-    team = alert.team.slug if alert.team else "unknown"
-    return (
-        f"{event_type.upper()}: {alert.title}\n"
-        f"Team: {team}\n"
-        f"Status: {alert.status}\n"
-        f"Severity: {alert.severity or '-'}\n"
-        f"Assignee: {assignee}\n"
-        f"Source: {alert.source}\n"
-        f"Message: {alert.message or '-'}\n"
-        f"ACK URL: {Config.PUBLIC_BASE_URL}/api/alerts/{alert.id}/ack"
+    """Format a plain text alert notification."""
+    assignee = (
+        alert.assignee.display_name or alert.assignee.username
+        if alert.assignee
+        else "unknown"
     )
+    team = alert.team.slug if alert.team else "unknown"
+    alert_url = build_alert_web_url(alert)
+
+    lines = [
+        f"{event_type.upper()}: {alert.title}",
+        f"Team: {team}",
+        f"Status: {alert.status}",
+        f"Severity: {alert.severity or '-'}",
+        f"Assignee: {assignee}",
+        f"Source: {alert.source}",
+        f"Message: {alert.message or '-'}",
+    ]
+
+    if alert_url:
+        lines.append(f"Alert URL: {alert_url}")
+
+    return "\n".join(lines)
 
 
 def get_channel_notify_on_severities(channel):
