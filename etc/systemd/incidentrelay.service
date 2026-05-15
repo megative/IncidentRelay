@@ -5,12 +5,12 @@ After=network.target
 [Service]
 Type=simple
 
-User=www-data
-Group=www-data
+User=incidentrelay
+Group=incidentrelay
 
 WorkingDirectory=/var/www/incidentrelay
 
-Environment="PYTHONUNBUFFERED=1"
+Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 
 ExecStart=/usr/local/bin/gunicorn \
     --workers 4 \
