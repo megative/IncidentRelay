@@ -78,16 +78,6 @@ class MigrationState(BaseModel):
     applied_at = DateTimeField(default=datetime.utcnow)
 
 
-class Version(BaseModel):
-    """
-    Persisted service version.
-    """
-
-    id = AutoField()
-    version = CharField(unique=True)
-    updated_at = DateTimeField(default=datetime.utcnow)
-
-
 class Group(SoftDeleteModel):
     """
     Access boundary for all resources.
