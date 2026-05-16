@@ -185,7 +185,11 @@
                             <label for="admin-user-phone">Phone</label>
                             <input
                                 id="admin-user-phone"
-                                class="input"
+                                type="tel"
+                                inputmode="tel"
+                                maxlength="21"
+                                pattern="\+?[0-9]{5,20}"
+                                data-phone-input="true"
                                 placeholder="+77001234567"
                             >
 

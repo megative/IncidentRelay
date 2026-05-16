@@ -13,16 +13,22 @@ teams_bp = Blueprint("teams_api", __name__)
 
 @teams_bp.route("", methods=["GET"])
 def list_teams():
-    """
-    Return teams visible to the current user.
-    """
+    """Return teams visible to the current user."""
     user = request.current_user
 
+    include_inactive = request.args.get(
+        "include_inactive",
+        default=False,
+        type=lambda value: str(value).lower() in {"1", "true", "yes", "on"},
+    )
+
+    active_only = not include_inactive
+
     if user and user.is_admin:
-        teams = teams_repo.list_teams(active_only=False)
+        teams = teams_repo.list_teams(active_only=active_only)
     else:
         teams = teams_repo.list_teams(
-            active_only=False,
+            active_only=active_only,
             group_ids=get_allowed_group_ids(),
         )
 

@@ -1,17 +1,40 @@
 from datetime import datetime
 
-from app.modules.db.models import Silence
+from app.modules.db.models import Group, Silence, Team
 
 
-def list_silences(team_id=None, team_ids=None, include_deleted=False):
-    """
-    Return silence rules.
-    """
-
-    query = Silence.select().order_by(Silence.id.desc())
+def list_silences(
+    team_id=None,
+    team_ids=None,
+    active_only=True,
+    include_deleted=False,
+):
+    """Return silence rules."""
+    query = (
+        Silence
+        .select(Silence)
+        .join(Team, on=(Silence.team == Team.id))
+        .switch(Silence)
+        .order_by(Silence.id.desc())
+    )
 
     if not include_deleted:
         query = query.where(Silence.deleted == False)
+
+    if active_only:
+        query = query.where(
+            (Team.active == True) &
+            (Team.deleted == False)
+        )
+        query = (
+            query
+            .join(Group, on=(Team.group == Group.id))
+            .where(
+                (Group.active == True) &
+                (Group.deleted == False)
+            )
+            .switch(Silence)
+        )
 
     if team_id:
         query = query.where(Silence.team == team_id)

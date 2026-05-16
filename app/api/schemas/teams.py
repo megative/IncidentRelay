@@ -1,6 +1,7 @@
 from pydantic import Field
 
 from app.api.schemas.base import ApiModel
+from app.api.schemas.limits import DESCRIPTION_MAX_LENGTH
 
 
 class TeamBaseSchema(ApiModel):
@@ -9,9 +10,9 @@ class TeamBaseSchema(ApiModel):
     """
 
     group_id: int
-    slug: str = Field(min_length=2, max_length=80, pattern=r"^[a-z0-9][a-z0-9_-]*$")
-    name: str = Field(min_length=2, max_length=120)
-    description: str | None = None
+    slug: str = Field(min_length=2, max_length=20, pattern=r"^[a-z0-9][a-z0-9_-]*$")
+    name: str = Field(min_length=2, max_length=40)
+    description: str | None = Field(default=None, max_length=DESCRIPTION_MAX_LENGTH)
     escalation_enabled: bool = True
     escalation_after_reminders: int = Field(default=2, ge=0, le=100)
     active: bool = True

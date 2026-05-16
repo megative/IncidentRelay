@@ -185,3 +185,33 @@ body {
         font-size: 32px;
     }
 }
+.login-status-error {
+    color: #991b1b;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+}
+
+.login-status-success {
+    color: #166534;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+}
+
+.login-status-info {
+    color: #1e3a8a;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+}
+
+#login-status {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.4;
+    white-space: pre-line;
+}
+
+#login-status:empty {
+    display: none;
+}

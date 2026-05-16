@@ -1,17 +1,41 @@
 from datetime import datetime
 
-from app.modules.db.models import AlertRouteChannel, NotificationChannel
+from app.modules.db.models import AlertRouteChannel, Group, NotificationChannel, Team
 
 
-def list_channels(team_id=None, team_ids=None, enabled_only=False, include_deleted=False):
-    """
-    Return notification channels.
-    """
-
-    query = NotificationChannel.select().order_by(NotificationChannel.id.asc())
+def list_channels(
+    team_id=None,
+    team_ids=None,
+    enabled_only=False,
+    active_only=True,
+    include_deleted=False,
+):
+    """Return notification channels."""
+    query = (
+        NotificationChannel
+        .select(NotificationChannel)
+        .join(Team, on=(NotificationChannel.team == Team.id))
+        .switch(NotificationChannel)
+        .order_by(NotificationChannel.id.asc())
+    )
 
     if not include_deleted:
         query = query.where(NotificationChannel.deleted == False)
+
+    if active_only:
+        query = query.where(
+            (Team.active == True) &
+            (Team.deleted == False)
+        )
+        query = (
+            query
+            .join(Group, on=(Team.group == Group.id))
+            .where(
+                (Group.active == True) &
+                (Group.deleted == False)
+            )
+            .switch(NotificationChannel)
+        )
 
     if team_id:
         query = query.where(NotificationChannel.team == team_id)

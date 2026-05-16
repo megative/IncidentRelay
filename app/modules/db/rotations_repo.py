@@ -1,17 +1,41 @@
 from datetime import datetime
 
-from app.modules.db.models import Rotation, RotationMember, RotationOverride, TeamUser
+from app.modules.db.models import Group, Rotation, RotationMember, RotationOverride, Team, TeamUser
 
 
-def list_rotations(team_id=None, team_ids=None, enabled_only=False, include_deleted=False):
-    """
-    Return rotations.
-    """
-
-    query = Rotation.select().order_by(Rotation.id.asc())
+def list_rotations(
+    team_id=None,
+    team_ids=None,
+    enabled_only=False,
+    active_only=True,
+    include_deleted=False,
+):
+    """Return rotations."""
+    query = (
+        Rotation
+        .select(Rotation)
+        .join(Team, on=(Rotation.team == Team.id))
+        .switch(Rotation)
+        .order_by(Rotation.id.asc())
+    )
 
     if not include_deleted:
         query = query.where(Rotation.deleted == False)
+
+    if active_only:
+        query = query.where(
+            (Team.active == True) &
+            (Team.deleted == False)
+        )
+        query = (
+            query
+            .join(Group, on=(Team.group == Group.id))
+            .where(
+                (Group.active == True) &
+                (Group.deleted == False)
+            )
+            .switch(Rotation)
+        )
 
     if team_id:
         query = query.where(Rotation.team == team_id)

@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import Field, model_validator
 
 from app.api.schemas.base import ApiModel
+from app.api.schemas.limits import DESCRIPTION_MAX_LENGTH
 
 
 INTERVAL_SECONDS = {
@@ -20,7 +21,7 @@ class RotationCreateSchema(ApiModel):
 
     team_id: int = Field(ge=1)
     name: str = Field(min_length=2, max_length=120)
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=DESCRIPTION_MAX_LENGTH)
     start_at: datetime
     rotation_type: str = Field(default="daily", pattern=r"^(daily|weekly|custom)$")
     interval_value: int = Field(default=1, ge=1, le=365)
@@ -71,7 +72,7 @@ class RotationOverrideCreateSchema(ApiModel):
     user_id: int = Field(ge=1)
     starts_at: datetime
     ends_at: datetime
-    reason: str | None = None
+    reason: str | None = Field(default=None, max_length=DESCRIPTION_MAX_LENGTH)
 
     @model_validator(mode="after")
     def validate_range(self):

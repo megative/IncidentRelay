@@ -1,5 +1,18 @@
+function setLoginStatus(message, type) {
+    /*
+     * Show login page status message.
+     */
+    $("#login-status")
+        .css("display", "block")
+        .removeClass("login-status-error login-status-success login-status-info")
+        .addClass("login-status-" + (type || "info"))
+        .text(message || "");
+}
+
 function login(event) {
-    /* Request a JWT token and store it locally. */
+    /*
+     * Request a JWT token and store it locally.
+     */
     if (event) {
         event.preventDefault();
     }
@@ -8,9 +21,11 @@ function login(event) {
     const password = $("#password").val();
 
     if (!username || !password) {
-        $("#login-status").text("Please enter username and password");
+        setLoginStatus("Please enter username and password", "error");
         return;
     }
+
+    setLoginStatus("Signing in...", "info");
 
     apiPost(
         "/api/auth/login",
@@ -20,10 +35,26 @@ function login(event) {
         },
         function (data) {
             localStorage.setItem("oncall_jwt", data.access_token);
-            $("#login-status").text(
-                "Logged in as " + data.user.username + "\nExpires at: " + data.expires_at
+
+            setLoginStatus(
+                "Logged in as " + data.user.username + "\nExpires at: " + data.expires_at,
+                "success"
             );
+
             window.location.href = "/";
+        },
+        function (xhr) {
+            const message = getApiErrorMessage(
+                xhr,
+                "Invalid username or password"
+            );
+
+            if (xhr && xhr.status === 401) {
+                setLoginStatus("Invalid username or password", "error");
+                return;
+            }
+
+            setLoginStatus(message, "error");
         }
     );
 }

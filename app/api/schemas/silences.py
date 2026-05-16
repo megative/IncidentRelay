@@ -4,6 +4,7 @@ from typing import Any, Dict
 from pydantic import Field, model_validator
 
 from app.api.schemas.base import ApiModel
+from app.api.schemas.limits import DESCRIPTION_MAX_LENGTH
 
 
 class SilenceCreateSchema(ApiModel):
@@ -12,8 +13,8 @@ class SilenceCreateSchema(ApiModel):
     """
 
     team_id: int = Field(ge=1)
-    name: str = Field(min_length=2, max_length=120)
-    reason: str | None = None
+    name: str = Field(min_length=2, max_length=20)
+    reason: str | None = Field(default=None, max_length=DESCRIPTION_MAX_LENGTH)
     matchers: Dict[str, Any] = Field(default_factory=dict)
     starts_at: datetime
     ends_at: datetime

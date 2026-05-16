@@ -51,7 +51,15 @@
 
                         <div class="profile-field">
                             <label for="profile-phone">Phone</label>
-                            <input id="profile-phone" class="input">
+                            <input
+                                id="profile-phone"
+                                type="tel"
+                                inputmode="tel"
+                                maxlength="21"
+                                pattern="\+?[0-9]{5,20}"
+                                data-phone-input="true"
+                                placeholder="+77001234567"
+                            >
                         </div>
                     </div>
 

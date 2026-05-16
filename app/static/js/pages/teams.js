@@ -41,7 +41,7 @@ function refreshTeams() {
     /*
      * Refresh teams table and details.
      */
-    apiGet("/api/teams", function (teams) {
+    apiGet("/api/teams?include_inactive=1", function (teams) {
         teamsCache = asArray(teams);
 
         renderTeamsSummary(teamsCache);
