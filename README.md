@@ -1,10 +1,10 @@
 # IncidentRelay
 
-**Self-hosted on-call shifter, scheduler and routing, alert delivery, and escalation for teams that want control over their incident workflow.**
+**Self-hosted on-call scheduling, alert routing, alert delivery, reminders, and escalations for teams that want control over their incident workflow.**
 
-IncidentRelay helps SRE, DevOps, platform, infrastructure, and operations teams route alerts to the right people through the right channels — without depending on a hosted incident-management platform.
+IncidentRelay helps SRE, DevOps, platform, infrastructure, and operations teams route alerts to the right people through the right channels without depending on a hosted incident-management platform.
 
-It gives you the core building blocks of an on-call system:
+It provides the core building blocks of an on-call system:
 
 - access groups and RBAC-style group roles;
 - teams and on-call rotations;
@@ -14,6 +14,7 @@ It gives you the core building blocks of an on-call system:
 - acknowledge and resolve workflows;
 - reminders and escalation to the next on-call user;
 - rotation overrides;
+- alert silences;
 - calendar view for on-call schedules;
 - personal API tokens;
 - Swagger/OpenAPI documentation.
@@ -38,8 +39,7 @@ A route owns its own intake token, so external systems send alerts to an exact a
 ROUTE_INTAKE_TOKEN -> Route -> Team -> Rotation -> Channels
 ```
 
-Channels only describe where notifications are delivered.  
-Routes decide which team receives the alert and which channels are used.
+Channels only describe where notifications are delivered. Routes decide which team receives the alert and which channels are used.
 
 This keeps alert delivery easier to reason about, easier to audit, and safer for self-hosted deployments.
 
@@ -67,6 +67,10 @@ Unacknowledged alerts can trigger repeated reminders and then escalate to the ne
 
 Mattermost Bot API mode supports interactive `Acknowledge` and `Resolve` buttons, message updates, and severity-based attachment colors.
 
+### Telegram actions and worker
+
+Telegram notifications can include action buttons and alert links. Telegram callback/polling processing is handled by the optional `incidentrelay-telegram-worker` service.
+
 ### Pluggable voice calls
 
 IncidentRelay can be extended with custom voice providers for self-hosted installations. Providers can implement text-to-speech calls, call status callbacks, DTMF button callbacks, ACK / Resolve actions from phone keypad, and optional call status polling.
@@ -93,7 +97,7 @@ IncidentRelay includes Swagger/OpenAPI documentation and personal API tokens wit
 |---|---|
 | Mattermost | Incoming webhook mode or Bot API mode with buttons and updates |
 | Slack | Webhook notifications |
-| Telegram | Bot notifications |
+| Telegram | Bot notifications and optional action buttons |
 | Discord | Webhook notifications |
 | Microsoft Teams | Webhook notifications |
 | Email | Email recipients |
@@ -102,85 +106,19 @@ IncidentRelay includes Swagger/OpenAPI documentation and personal API tokens wit
 
 ---
 
-## Quick start
+## Installation
 
-## Systemd installation
+Choose the installation method that matches your environment.
 
-IncidentRelay can be installed as two systemd services:
+### Docker Compose
 
-```text
-incidentrelay-web.service        # HTTP API, UI, webhooks
-incidentrelay-scheduler.service  # reminders, escalations, periodic jobs
-```
-
-Quick start:
-
-```bash
-sudo git clone https://github.com/roxy-wi/IncidentRelay.git /var/www/incidentrelay
-cd /var/www/incidentrelay
-
-sudo python3 -m venv /var/www/incidentrelay/venv
-sudo /var/www/incidentrelay/venv/bin/pip install --upgrade pip
-sudo /var/www/incidentrelay/venv/bin/pip install -r requirements.txt
-sudo /var/www/incidentrelay/venv/bin/pip install gunicorn
-
-sudo mkdir -p /etc/incidentrelay /var/lib/incidentrelay /var/log/incidentrelay
-sudo cp etc/incidentrelay/incidentrelay.conf /etc/incidentrelay/incidentrelay.conf
-
-sudo chown -R www-data:www-data /var/www/incidentrelay
-sudo chown -R www-data:www-data /var/lib/incidentrelay
-sudo chown -R www-data:www-data /var/log/incidentrelay
-
-sudo cp systemd/incidentrelay-web.service /etc/systemd/system/
-sudo cp systemd/incidentrelay-scheduler.service /etc/systemd/system/
-sudo systemctl daemon-reload
-
-sudo -u www-data \
-  INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
-  /var/www/incidentrelay/venv/bin/python app/migrate.py migrate
-
-sudo systemctl enable --now incidentrelay-web
-sudo systemctl enable --now incidentrelay-scheduler
-```
-
-Create the first admin user:
-
-```bash
-sudo -u www-data \
-  INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
-  /var/www/incidentrelay/venv/bin/python manage.py create-admin \
-    --username admin \
-    --password 'change-me-123' \
-    --email admin@example.com
-```
-
-Read more:
-
-[Systemd Installation](docs/getting-started/systemd.md)
-
-
-## Docker installation
-
-The recommended self-hosted installation method is Docker Compose.
-
-By default, IncidentRelay starts with SQLite and two containers:
-
-```text
-incidentrelay-web        # HTTP API, UI, webhooks
-incidentrelay-scheduler  # reminders, escalations, periodic jobs
-```
-
-Start:
+Recommended for quick start, testing, and simple self-hosted deployments.
 
 ```bash
 docker compose up -d --build
 ```
 
-SQLite data is stored in the `incidentrelay-data` Docker volume.
-
-The scheduler runs in a separate container, so reminder and escalation jobs are not duplicated by web workers.
-
-For PostgreSQL:
+With PostgreSQL:
 
 ```bash
 docker compose \
@@ -189,29 +127,167 @@ docker compose \
   up -d
 ```
 
-For production behind Nginx/HAProxy, bind the container port to localhost:
+Read more: [Docker installation](docs/getting-started/docker.md)
 
-```yaml
-ports:
-  - "127.0.0.1:8080:8080"
+### RedHat-like distributions from RPM repository
+
+Recommended for RHEL, Rocky Linux, AlmaLinux, and CentOS Stream.
+
+```bash
+sudo dnf install -y curl
+sudo curl -fsSL \
+  https://repo.incidentrelay.io/incidentrelay.repo \
+  -o /etc/yum.repos.d/incidentrelay.repo
+sudo dnf makecache
+sudo dnf install -y incidentrelay
 ```
 
-and set:
+For older yum-based systems:
+
+```bash
+sudo yum install -y curl
+sudo curl -fsSL \
+  https://repo.incidentrelay.io/incidentrelay.repo \
+  -o /etc/yum.repos.d/incidentrelay.repo
+sudo yum makecache
+sudo yum install -y incidentrelay
+```
+
+Read more: [RedHat RPM installation](docs/getting-started/rpm-installation.md)
+
+### Manual systemd installation
+
+Recommended when you want to run IncidentRelay directly from source code or manage the Python environment manually.
+
+Read more: [Systemd installation](docs/getting-started/systemd.md)
+
+---
+
+## Runtime layout
+
+Common paths used by the RPM and systemd installation:
+
+```text
+/var/www/incidentrelay                  # application code
+/var/www/incidentrelay/venv             # Python environment or venv-compatible wrapper
+/etc/incidentrelay/incidentrelay.conf   # main configuration file
+/var/lib/incidentrelay                  # runtime data
+/var/log/incidentrelay                  # logs
+/usr/local/lib/incidentrelay/voice_providers  # custom voice providers
+```
+
+Systemd services:
+
+```text
+incidentrelay-web.service               # HTTP API, UI, webhooks
+incidentrelay-scheduler.service         # reminders, escalations, periodic jobs
+incidentrelay-telegram-worker.service   # optional Telegram callbacks/polling
+```
+
+System user:
+
+```text
+incidentrelay
+```
+
+---
+
+## Configuration
+
+IncidentRelay reads the configuration file path from:
+
+```text
+INCEDENTRELAY_CONFIG_FILE
+```
+
+Example:
+
+```bash
+export INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
+```
+
+For production, set the public URL used for generated links and callback URLs:
 
 ```ini
 [server]
 public_base_url = https://incidentrelay.example.com
 ```
 
-Read more:
+SQLite is suitable for small single-node installations:
 
-- [Docker installation](docs/getting-started/docker.md)
-- [Scheduler](docs/administration/scheduler.md)
+```ini
+[database]
+type = sqlite
+path = /var/lib/incidentrelay/incidentrelay.db
+```
 
+PostgreSQL is recommended for larger or long-running production installations:
+
+```ini
+[database]
+type = postgresql
+host = 127.0.0.1
+port = 5432
+name = incidentrelay
+user = incidentrelay
+password = change-me
+```
+
+Read more: [Configuration](docs/getting-started/configuration.md)
 
 ---
 
-## Basic setup flow
+## First setup
+
+After installation, initialize the database and create the first administrator.
+
+### Run database migrations
+
+For RPM/systemd installations:
+
+```bash
+sudo -u incidentrelay \
+  INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
+  /var/www/incidentrelay/venv/bin/python \
+  /var/www/incidentrelay/manage.py migrate
+```
+
+For Docker installations:
+
+```bash
+docker compose exec incidentrelay-web \
+  python manage.py migrate
+```
+
+### Create the first admin user
+
+For RPM/systemd installations:
+
+```bash
+sudo -u incidentrelay \
+  INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
+  /var/www/incidentrelay/venv/bin/python \
+  /var/www/incidentrelay/manage.py create-admin \
+  --username admin \
+  --password 'change-me-123' \
+  --email admin@example.com
+```
+
+For Docker installations:
+
+```bash
+docker compose exec incidentrelay-web \
+  python manage.py create-admin \
+  --username admin \
+  --password 'change-me-123' \
+  --email admin@example.com
+```
+
+Change the password and email before using these commands in production.
+
+---
+
+## Basic UI setup flow
 
 After the first login:
 
@@ -231,9 +307,7 @@ After the first login:
 13. Acknowledge or resolve the alert
 ```
 
-Detailed guide:
-
-[First login and initial setup](docs/getting-started/first-login.md)
+Detailed guide: [First login and initial setup](docs/getting-started/first-login.md)
 
 ---
 
@@ -285,9 +359,7 @@ Mattermost has two modes.
 - message updates after ACK / Resolve;
 - severity-based colors.
 
-More details:
-
-[Mattermost integration](docs/integrations/mattermost.md)
+More details: [Mattermost integration](docs/integrations/mattermost.md)
 
 ---
 
@@ -322,12 +394,30 @@ Start here:
 
 ---
 
+## API documentation
+
+Swagger UI is available at:
+
+```text
+/docs
+```
+
+OpenAPI JSON is available at:
+
+```text
+/api/openapi.json
+```
+
+---
+
 ## Documentation
 
 | Topic | Link |
 |---|---|
 | Getting started | [docs/getting-started/](docs/getting-started/index.md) |
-| Installation | [docs/getting-started/installation.md](docs/getting-started/installation.md) |
+| Docker installation | [docs/getting-started/docker.md](docs/getting-started/docker.md) |
+| RedHat RPM installation | [docs/getting-started/redhat-rpm-installation.md](docs/getting-started/redhat-rpm-installation.md) |
+| Systemd installation | [docs/getting-started/systemd.md](docs/getting-started/systemd.md) |
 | Configuration | [docs/getting-started/configuration.md](docs/getting-started/configuration.md) |
 | First login | [docs/getting-started/first-login.md](docs/getting-started/first-login.md) |
 | Groups and RBAC | [docs/concepts/groups-and-rbac.md](docs/concepts/groups-and-rbac.md) |
@@ -345,44 +435,9 @@ Start here:
 | Profile and API tokens | [docs/usage/profile-and-tokens.md](docs/usage/profile-and-tokens.md) |
 | Logging | [docs/administration/logging.md](docs/administration/logging.md) |
 | Troubleshooting | [docs/administration/troubleshooting.md](docs/administration/troubleshooting.md) |
+| Demo data | [docs/administration/demo-data.md](docs/administration/demo-data.md) |
+| Schema check | [docs/administration/schema-check.md](docs/administration/schema-check.md) |
 | Custom voice providers | [docs/voice-providers/index.md](docs/voice-providers/index.md) |
-| Swagger/OpenAPI notes | [docs/api/voice-call-openapi.md](docs/api/voice-call-openapi.md) |
-
-Swagger UI is available at:
-
-```text
-/docs
-```
-
-OpenAPI JSON is available at:
-
-```text
-/api/openapi.json
-```
-
----
-
-## Documentation website
-
-The documentation is ready to be published with MkDocs Material.
-
-Install MkDocs Material:
-
-```bash
-pip install mkdocs-material
-```
-
-Run local preview:
-
-```bash
-mkdocs serve
-```
-
-Open:
-
-```text
-http://127.0.0.1:8000
-```
 
 ---
 
@@ -402,9 +457,7 @@ Static demo-data check:
 python app/check_demo_data.py
 ```
 
-More details:
-
-[Demo data](docs/administration/demo-data.md)
+More details: [Demo data](docs/administration/demo-data.md)
 
 ---
 
@@ -422,9 +475,7 @@ Expected output:
 Schema check OK: all model tables and columns exist.
 ```
 
-More details:
-
-[Schema check](docs/administration/schema-check.md)
+More details: [Schema check](docs/administration/schema-check.md)
 
 ---
 
@@ -444,12 +495,10 @@ If an alert is not visible or not delivered:
 9. Check JSON logs by error_id if the server returned one.
 ```
 
-More details:
-
-[Troubleshooting](docs/administration/troubleshooting.md)
+More details: [Troubleshooting](docs/administration/troubleshooting.md)
 
 ---
 
 ## License
 
-Add your project license here.
+See [LICENSE](LICENSE).
