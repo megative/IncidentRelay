@@ -1,11 +1,131 @@
 import os
 from pathlib import Path
 
+import pytest
+
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
+TEST_DB = ROOT_DIR / "tests" / ".tmp" / "incidentrelay-ci.db"
 TEST_CONFIG = ROOT_DIR / "tests" / "incidentrelay.test.conf"
 
+# Must be set before importing app.settings/app.db/app models.
 os.environ.setdefault("INCEDENTRELAY_CONFIG_FILE", str(TEST_CONFIG))
+os.environ.setdefault("PYTHONPATH", str(ROOT_DIR))
 
 (ROOT_DIR / "tests" / ".tmp").mkdir(parents=True, exist_ok=True)
 (ROOT_DIR / "logs").mkdir(parents=True, exist_ok=True)
+
+
+from app import create_app  # noqa: E402
+from app.db import init_database  # noqa: E402
+from app.modules.db.migrations import migrate  # noqa: E402
+from app.modules.db.models import (  # noqa: E402
+    Alert,
+    AlertEvent,
+    AlertNotification,
+    AlertNotificationEvent,
+    AlertRoute,
+    AlertRouteChannel,
+    ApiToken,
+    AppLock,
+    AuditLog,
+    Group,
+    NotificationChannel,
+    Role,
+    Rotation,
+    RotationMember,
+    RotationOverride,
+    Silence,
+    Team,
+    TeamUser,
+    User,
+    UserGroup,
+    UserRole,
+)
+
+
+CLEANUP_MODELS = [
+    AlertNotificationEvent,
+    AlertNotification,
+    AlertEvent,
+    Silence,
+    AlertRouteChannel,
+    Alert,
+    AlertRoute,
+    NotificationChannel,
+    RotationOverride,
+    RotationMember,
+    Rotation,
+    TeamUser,
+    UserGroup,
+    UserRole,
+    AuditLog,
+    ApiToken,
+    AppLock,
+    Role,
+    User,
+    Team,
+    Group,
+]
+
+
+@pytest.fixture(scope="session", autouse=True)
+def migrated_database():
+    TEST_DB.parent.mkdir(parents=True, exist_ok=True)
+
+    if TEST_DB.exists():
+        TEST_DB.unlink()
+
+    db = init_database()
+    db.connect(reuse_if_open=True)
+    migrate()
+    db.close()
+
+    yield
+
+    db = init_database()
+    if not db.is_closed():
+        db.close()
+
+
+@pytest.fixture(autouse=True)
+def clean_database(migrated_database):
+    db = init_database()
+    db.connect(reuse_if_open=True)
+
+    for model in CLEANUP_MODELS:
+        if db.table_exists(model._meta.table_name):
+            model.delete().execute()
+
+    yield
+
+    if db.is_closed():
+        db.connect(reuse_if_open=True)
+
+    for model in CLEANUP_MODELS:
+        if db.table_exists(model._meta.table_name):
+            model.delete().execute()
+
+    if not db.is_closed():
+        db.close()
+
+
+@pytest.fixture
+def db(migrated_database):
+    db = init_database()
+    db.connect(reuse_if_open=True)
+    yield db
+    if not db.is_closed():
+        db.close()
+
+
+@pytest.fixture
+def app(migrated_database):
+    flask_app = create_app()
+    flask_app.config.update(TESTING=True)
+    return flask_app
+
+
+@pytest.fixture
+def client(app):
+    return app.test_client()

@@ -1,0 +1,49 @@
+from types import SimpleNamespace
+
+from app.login import create_access_token, decode_access_token, hash_password, verify_password
+from app.services.auth import create_raw_token, get_bearer_token, hash_token, token_has_scope
+
+
+def test_password_hash_is_not_plaintext_and_can_be_verified():
+    password_hash = hash_password("password-123")
+
+    assert password_hash != "password-123"
+    assert verify_password("password-123", password_hash)
+    assert not verify_password("wrong-password", password_hash)
+
+
+def test_jwt_access_token_round_trip():
+    user = SimpleNamespace(id=42, username="alice", is_admin=True)
+
+    token = create_access_token(user)
+    payload = decode_access_token(token)
+
+    assert payload["sub"] == "42"
+    assert payload["username"] == "alice"
+    assert payload["is_admin"] is True
+
+
+def test_api_token_hash_is_stable_and_not_plaintext():
+    raw = create_raw_token()
+
+    assert raw.startswith("ir_")
+    assert hash_token(raw) == hash_token(raw)
+    assert hash_token(raw) != raw
+
+
+def test_token_scope_matching():
+    token = SimpleNamespace(scopes=["alerts:write", "routes:read"])
+
+    assert token_has_scope(token, "alerts:write")
+    assert token_has_scope(token, ["alerts:write", "admin"])
+    assert not token_has_scope(token, "admin")
+
+
+def test_get_bearer_token_extracts_authorization_header(app):
+    with app.test_request_context("/", headers={"Authorization": "Bearer test-token"}):
+        assert get_bearer_token() == "test-token"
+
+
+def test_get_bearer_token_rejects_non_bearer_header(app):
+    with app.test_request_context("/", headers={"Authorization": "Basic abc"}):
+        assert get_bearer_token() is None
