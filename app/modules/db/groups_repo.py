@@ -1,12 +1,19 @@
 from datetime import datetime
 
 from app.db import database_proxy as db
+from app.api.schemas.roles import (
+    GROUP_EDITOR_ROLE,
+    GROUP_USER_ADMIN_ROLE,
+    GROUP_VIEWER_ROLE,
+)
 from app.modules.db.models import (
     AlertRoute,
     ApiToken,
     Group,
     NotificationChannel,
     Rotation,
+    RotationMember,
+    RotationOverride,
     Silence,
     Team,
     TeamUser,
@@ -16,29 +23,19 @@ from app.modules.db.models import (
 
 
 def list_groups(active_only=False, include_deleted=False):
-    """
-    Return groups ordered by id.
-    """
-
+    """Return groups ordered by id."""
     query = Group.select().order_by(Group.id.asc())
-
     if not include_deleted:
         query = query.where(Group.deleted == False)
-
     if active_only:
         query = query.where(Group.active == True)
-
     return list(query)
 
 
-def list_groups_for_user(user, write_required=False):
-    """
-    Return active groups visible to a user.
-    """
-
+def list_groups_for_user(user, write_required=False, manage_users_required=False):
+    """Return active groups visible to a user."""
     if user and user.is_admin:
         return list_groups(active_only=True)
-
     if not user:
         return []
 
@@ -55,72 +52,58 @@ def list_groups_for_user(user, write_required=False):
         .order_by(UserGroup.id.asc())
     )
 
-    if write_required:
-        query = query.where(UserGroup.role == "rw")
+    if manage_users_required:
+        query = query.where(UserGroup.role == GROUP_USER_ADMIN_ROLE)
+    elif write_required:
+        query = query.where(UserGroup.role == GROUP_EDITOR_ROLE)
 
     return [membership.group for membership in query]
 
 
 def get_group(group_id, include_deleted=False):
-    """
-    Return a group by id.
-    """
-
+    """Return a group by id."""
     query = Group.select().where(Group.id == group_id)
-
     if not include_deleted:
         query = query.where(Group.deleted == False)
-
     return query.get()
 
 
-def create_group(slug, name, description=None):
-    """
-    Create a group.
-    """
-
-    return Group.create(slug=slug, name=name, description=description)
+def create_group(slug, name, description=None, active=True):
+    """Create a group."""
+    return Group.create(
+        slug=slug,
+        name=name,
+        description=description,
+        active=active,
+    )
 
 
 def update_group(group_id, data):
-    """
-    Update a group.
-    """
-
+    """Update a group."""
     group = get_group(group_id)
-
     for field in ["slug", "name", "description", "active"]:
         if field in data:
             setattr(group, field, data[field])
-
     group.save()
     return group
 
 
-def add_user_to_group(user_id, group_id, role="read_only"):
-    """
-    Add a user to a group.
-    """
-
+def add_user_to_group(user_id, group_id, role=GROUP_VIEWER_ROLE):
+    """Add a user to a group."""
     membership, created = UserGroup.get_or_create(
         user=user_id,
         group=group_id,
         defaults={"role": role},
     )
-
     if not created:
         membership.role = role
         membership.active = True
         membership.save()
-
     return membership
 
 
 def list_user_groups(user_id):
-    """
-    Return active group memberships for a user.
-    """
-
+    """Return active group memberships for a user."""
     return list(
         UserGroup
         .select(UserGroup)
@@ -135,10 +118,7 @@ def list_user_groups(user_id):
 
 
 def get_user_group_role(user_id, group_id):
-    """
-    Return the role a user has in an active group.
-    """
-
+    """Return the role a user has in an active group."""
     membership = (
         UserGroup
         .select(UserGroup)
@@ -152,23 +132,16 @@ def get_user_group_role(user_id, group_id):
         )
         .first()
     )
-
     return membership.role if membership else None
 
 
 def get_group_membership(membership_id):
-    """
-    Return a group membership by id.
-    """
-
+    """Return a group membership by id."""
     return UserGroup.get_by_id(membership_id)
 
 
 def update_group_membership(membership_id, role, active=True):
-    """
-    Update a group membership.
-    """
-
+    """Update a group membership."""
     membership = get_group_membership(membership_id)
     membership.role = role
     membership.active = active
@@ -177,10 +150,7 @@ def update_group_membership(membership_id, role, active=True):
 
 
 def disable_group_membership(membership_id):
-    """
-    Disable a group membership.
-    """
-
+    """Disable a group membership."""
     membership = get_group_membership(membership_id)
     membership.active = False
     membership.save()
@@ -188,8 +158,7 @@ def disable_group_membership(membership_id):
 
 
 def soft_delete_group(group_id):
-    """
-    Soft-delete a group and disable all resources under it.
+    """Soft-delete a group and disable all resources under it.
 
     The operation is intentionally soft-delete based:
     - historical alerts and audit logs stay readable;
@@ -198,18 +167,15 @@ def soft_delete_group(group_id):
     - group memberships are disabled.
     """
     now = datetime.utcnow()
-
     with db.atomic():
         group = get_group(group_id)
-
         group.deleted = True
         group.deleted_at = now
         group.active = False
         group.save()
 
         team_ids = [
-            team.id
-            for team in (
+            team.id for team in (
                 Team
                 .select(Team.id)
                 .where(
@@ -317,11 +283,8 @@ def soft_delete_group(group_id):
 
 
 def delete_group_membership(membership_id: int) -> dict:
-    """
-    Permanently remove user from group, all group teams and all group rotations.
-    """
+    """Permanently remove user from group, all group teams and all group rotations."""
     membership = get_group_membership(membership_id)
-
     group_id = membership.group.id
     user_id = membership.user.id
 
@@ -331,7 +294,6 @@ def delete_group_membership(membership_id: int) -> dict:
             .select(Team.id)
             .where(Team.group == group_id)
         )
-
         rotation_ids_query = (
             Rotation
             .select(Rotation.id)
@@ -339,20 +301,17 @@ def delete_group_membership(membership_id: int) -> dict:
         )
 
         RotationMember.delete().where(
-            (RotationMember.user == user_id) &
-            (RotationMember.rotation.in_(rotation_ids_query))
+            (RotationMember.user == user_id)
+            & (RotationMember.rotation.in_(rotation_ids_query))
         ).execute()
-
         RotationOverride.delete().where(
-            (RotationOverride.user == user_id) &
-            (RotationOverride.rotation.in_(rotation_ids_query))
+            (RotationOverride.user == user_id)
+            & (RotationOverride.rotation.in_(rotation_ids_query))
         ).execute()
-
         TeamUser.delete().where(
-            (TeamUser.user == user_id) &
-            (TeamUser.team.in_(team_ids_query))
+            (TeamUser.user == user_id)
+            & (TeamUser.team.in_(team_ids_query))
         ).execute()
-
         membership.delete_instance()
 
     return {

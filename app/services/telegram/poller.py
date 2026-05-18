@@ -41,7 +41,13 @@ def poll_telegram_channels_once(timeout=20):
     processed = 0
 
     for channel in list_polling_telegram_channels():
-        processed += poll_telegram_channel_once(channel, timeout=timeout)
+        try:
+            processed += poll_telegram_channel_once(channel, timeout=timeout)
+        except Exception:
+            logger.exception(
+                "telegram channel poll failed",
+                extra={"extra": {"channel_id": channel.id}},
+            )
 
     return processed
 

@@ -55,6 +55,9 @@ def get_telegram_bot(bot_token):
     if not bot_token:
         raise RuntimeError("telegram bot_token is missing")
 
+    if not is_valid_telegram_bot_token(bot_token):
+        raise RuntimeError("telegram bot_token is invalid")
+
     bot = _bots.get(bot_token)
 
     if bot:
@@ -221,3 +224,7 @@ def answer_telegram_callback(channel, callback_query_id, text, show_alert=False)
         text=text,
         show_alert=show_alert,
     )
+
+
+def is_valid_telegram_bot_token(bot_token):
+    return bool(bot_token and ":" in str(bot_token))

@@ -1,53 +1,73 @@
 from flask import Blueprint, jsonify, request
-from peewee import DoesNotExist
+from peewee import DoesNotExist, IntegrityError
 
-from app.login import hash_password
+from app.api.schemas.roles import GROUP_VIEWER_ROLE
+from app.api.schemas.users import UserCreateSchema, UserUpdateSchema
 from app.db import database_proxy as db
-from app.api.schemas.users import UserUpdateSchema, UserCreateSchema
-from app.modules.db import users_repo, groups_repo
+from app.login import hash_password
+from app.modules.db import groups_repo, users_repo
 from app.services.audit import write_audit
-from app.services.rbac import require_admin_user, require_permission, require_group_write
+from app.services.rbac import require_admin_user, require_permission
 from app.services.serializers import serialize_user
 from app.services.validation import validate_body
 
-
 admin_users_bp = Blueprint("admin_users_api", __name__)
+
+
+def serialize_admin_user(user):
+    """Serialize a user for the admin workspace with group membership metadata."""
+    memberships = groups_repo.list_user_groups(user.id)
+    data = serialize_user(user, groups=memberships)
+    current_user = getattr(request, "current_user", None)
+    data["is_current_user"] = bool(current_user and current_user.id == user.id)
+
+    active_group_id = data.get("active_group_id")
+    active_membership = None
+    if active_group_id:
+        for membership in memberships:
+            if membership.group.id == active_group_id:
+                active_membership = membership
+                break
+    elif memberships:
+        active_membership = memberships[0]
+        data["active_group_id"] = active_membership.group.id
+        data["active_group_slug"] = active_membership.group.slug
+
+    data["active_group_role"] = active_membership.role if active_membership else None
+    return data
 
 
 @admin_users_bp.route("", methods=["GET"])
 @require_permission("users:admin")
 def admin_list_users():
-    """
-    Return users for the admin workspace.
-    """
-
-    return jsonify([serialize_user(user) for user in users_repo.list_users()])
+    """Return users for the admin workspace."""
+    admin_error = require_admin_user()
+    if admin_error:
+        return admin_error
+    return jsonify([serialize_admin_user(user) for user in users_repo.list_users()])
 
 
 @admin_users_bp.route("", methods=["POST"])
 @require_permission("users:admin")
 def admin_create_user():
-    """Create a user and optionally add it to a group."""
+    """Create a user and optionally add it to a group. Global admin only."""
+    admin_error = require_admin_user()
+    if admin_error:
+        return admin_error
 
     payload, error = validate_body(UserCreateSchema)
     if error:
         return error
 
     data = payload.model_dump()
-
     group_id = data.pop("group_id", None)
-    group_role = data.pop("group_role", "read_only")
-
+    group_role = data.pop("group_role", GROUP_VIEWER_ROLE)
     password = data.pop("password", None)
     if password:
         data["password_hash"] = hash_password(password)
 
     group = None
     if group_id:
-        error = require_group_write(group_id)
-        if error:
-            return error
-
         try:
             group = groups_repo.get_group(group_id)
         except DoesNotExist:
@@ -55,24 +75,28 @@ def admin_create_user():
                 "error": "group_not_found",
                 "message": "Selected group was not found",
             }), 404
-
         if not group.active:
             return jsonify({
                 "error": "group_inactive",
                 "message": "Selected group is inactive",
             }), 400
 
-    with db.atomic():
-        user = users_repo.create_user(**data)
-
-        if group_id:
-            groups_repo.add_user_to_group(
-                user_id=user.id,
-                group_id=group_id,
-                role=group_role,
-            )
-            users_repo.set_active_group(user.id, group_id)
+    try:
+        with db.atomic():
+            user = users_repo.create_user(**data)
+            if group_id:
+                groups_repo.add_user_to_group(
+                    user_id=user.id,
+                    group_id=group_id,
+                    role=group_role,
+                )
+                users_repo.set_active_group(user.id, group_id)
             user = users_repo.get_user(user.id)
+    except IntegrityError:
+        return jsonify({
+            "error": "user_conflict",
+            "message": "User with this username or unique field already exists",
+        }), 409
 
     audit_data = {
         **data,
@@ -80,7 +104,6 @@ def admin_create_user():
         "group_id": group_id,
         "group_role": group_role if group_id else None,
     }
-
     write_audit(
         "user.create",
         object_type="user",
@@ -88,27 +111,23 @@ def admin_create_user():
         group_id=group.id if group else None,
         data=audit_data,
     )
-
-    return jsonify(serialize_user(user)), 201
+    return jsonify(serialize_admin_user(user)), 201
 
 
 @admin_users_bp.route("/<int:user_id>", methods=["GET"])
 @require_permission("users:admin")
 def admin_get_user(user_id):
-    """
-    Return one user for the admin workspace.
-    """
-
-    return jsonify(serialize_user(users_repo.get_user(user_id)))
+    """Return one user for the admin workspace."""
+    admin_error = require_admin_user()
+    if admin_error:
+        return admin_error
+    return jsonify(serialize_admin_user(users_repo.get_user(user_id)))
 
 
 @admin_users_bp.route("/<int:user_id>", methods=["PUT"])
 @require_permission("users:admin")
 def admin_update_user(user_id):
-    """
-    Update a user from the admin workspace.
-    """
-
+    """Update a user from the admin workspace."""
     admin_error = require_admin_user()
     if admin_error:
         return admin_error
@@ -118,25 +137,74 @@ def admin_update_user(user_id):
         return error
 
     data = payload.model_dump()
-    password = data.pop("password", None)
+    group_update_requested = "group_id" in payload.model_fields_set
+    group_id = data.pop("group_id", None)
+    group_role = data.pop("group_role", GROUP_VIEWER_ROLE)
 
+    if request.current_user and request.current_user.id == user_id and data.get("active") is False:
+        return jsonify({
+            "error": "self_deactivation_denied",
+            "message": "You cannot disable your own user account",
+        }), 400
+
+    group = None
+    if group_update_requested and group_id:
+        try:
+            group = groups_repo.get_group(group_id)
+        except DoesNotExist:
+            return jsonify({
+                "error": "group_not_found",
+                "message": "Selected group was not found",
+            }), 404
+        if not group.active:
+            return jsonify({
+                "error": "group_inactive",
+                "message": "Selected group is inactive",
+            }), 400
+
+    password = data.pop("password", None)
     if password:
         data["password_hash"] = hash_password(password)
 
-    user = users_repo.update_user(user_id, data)
-    write_audit("admin.user.update", object_type="user", object_id=user.id, data={**data, "password_hash": "***" if password else None})
-    return jsonify(serialize_user(user))
+    try:
+        with db.atomic():
+            user = users_repo.update_user(user_id, data)
+            if group_update_requested:
+                if group_id:
+                    groups_repo.add_user_to_group(
+                        user_id=user.id,
+                        group_id=group_id,
+                        role=group_role,
+                    )
+                    users_repo.set_active_group(user.id, group_id)
+                else:
+                    users_repo.set_active_group(user.id, None)
+            user = users_repo.get_user(user.id)
+    except IntegrityError:
+        return jsonify({
+            "error": "user_conflict",
+            "message": "User with this username or unique field already exists",
+        }), 409
+
+    audit_payload = {**data, "password_hash": "***" if password else None}
+    if group_update_requested:
+        audit_payload["group_id"] = group_id
+        audit_payload["group_role"] = group_role if group_id else None
+
+    write_audit(
+        "admin.user.update",
+        object_type="user",
+        object_id=user.id,
+        group_id=group.id if group else None,
+        data=audit_payload,
+    )
+    return jsonify(serialize_admin_user(user))
 
 
 @admin_users_bp.route("/<int:user_id>", methods=["DELETE"])
 @require_permission("users:admin")
 def admin_delete_user(user_id):
-    """
-    Remove a user from the admin workspace.
-
-    This is a soft-delete. Historical alerts remain safe, but memberships,
-    rotations and personal API tokens are revoked.
-    """
+    """Remove a user from the admin workspace."""
     admin_error = require_admin_user()
     if admin_error:
         return admin_error
@@ -148,7 +216,6 @@ def admin_delete_user(user_id):
         user = users_repo.soft_delete_user(user_id)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 409
-
     if not user:
         return jsonify({"error": "User not found"}), 404
 
@@ -163,10 +230,8 @@ def admin_delete_user(user_id):
             "memberships_removed": True,
         },
     )
-
     return jsonify({
         "deleted": True,
         "id": user.id,
         "username": user.username,
     })
-

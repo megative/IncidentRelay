@@ -3,18 +3,15 @@ from flask import Blueprint, jsonify, request
 from app.modules.db import alerts_repo, notifications_repo
 from app.services.alerts import acknowledge_alert, resolve_alert
 from app.services.audit import write_audit
-from app.services.rbac import get_allowed_team_ids, require_team_read, require_team_write
+from app.services.rbac import get_allowed_team_ids, require_team_read, require_team_respond
 from app.services.serializers import serialize_alert, serialize_alert_event
-
 
 alerts_bp = Blueprint("alerts_api", __name__)
 
 
 @alerts_bp.route("", methods=["GET"])
 def list_alerts():
-    """
-    Return alerts with backend pagination, filters and sorting.
-    """
+    """Return alerts with backend pagination, filters and sorting."""
     team_id = request.args.get("team_id", type=int)
     if team_id:
         error = require_team_read(team_id)
@@ -36,7 +33,6 @@ def list_alerts():
         sort=request.args.get("sort", "activity"),
         order=request.args.get("order", "desc"),
     )
-
     return jsonify({
         "items": [serialize_alert(alert) for alert in page["items"]],
         "pagination": page["pagination"],
@@ -47,18 +43,15 @@ def list_alerts():
 
 @alerts_bp.route("/<int:alert_id>", methods=["GET"])
 def get_alert(alert_id):
-    """
-    Return a single alert with payload, events and notification delivery records.
-    """
-
+    """Return a single alert with payload, events and notification delivery records."""
     alert = alerts_repo.get_alert(alert_id)
     if alert.team_id:
         error = require_team_read(alert.team_id)
         if error:
             return error
+
     events = alerts_repo.list_alert_events(alert_id)
     notifications = notifications_repo.list_notifications_for_alert(alert_id)
-
     return jsonify(
         serialize_alert(
             alert,
@@ -72,13 +65,10 @@ def get_alert(alert_id):
 
 @alerts_bp.route("/<int:alert_id>/ack", methods=["POST"])
 def ack_alert(alert_id):
-    """
-    Acknowledge an alert.
-    """
-
+    """Acknowledge an alert."""
     alert_before = alerts_repo.get_alert(alert_id)
     if alert_before.team_id:
-        error = require_team_write(alert_before.team_id)
+        error = require_team_respond(alert_before.team_id)
         if error:
             return error
 
@@ -98,13 +88,10 @@ def ack_alert(alert_id):
 
 @alerts_bp.route("/<int:alert_id>/resolve", methods=["POST"])
 def resolve_alert_view(alert_id):
-    """
-    Resolve an alert.
-    """
-
+    """Resolve an alert."""
     alert_before = alerts_repo.get_alert(alert_id)
     if alert_before.team_id:
-        error = require_team_write(alert_before.team_id)
+        error = require_team_respond(alert_before.team_id)
         if error:
             return error
 
@@ -124,11 +111,8 @@ def resolve_alert_view(alert_id):
 
 @alerts_bp.route("/<int:alert_id>/events", methods=["GET"])
 def list_alert_events(alert_id):
-    """
-    Return alert events.
-    """
+    """Return alert events."""
     alert = alerts_repo.get_alert(alert_id)
-
     if alert.team_id:
         error = require_team_read(alert.team_id)
         if error:

@@ -1,12 +1,22 @@
 from flask import Blueprint, jsonify, request
 
-from app.api.schemas.teams import TeamCreateSchema, TeamUpdateSchema, TeamUserAddSchema, TeamUserUpdateSchema
+from app.api.schemas.roles import TEAM_MANAGER_ROLE
+from app.api.schemas.teams import (
+    TeamCreateSchema,
+    TeamUpdateSchema,
+    TeamUserAddSchema,
+    TeamUserUpdateSchema,
+)
 from app.modules.db import groups_repo, teams_repo
 from app.services.audit import write_audit
-from app.services.rbac import get_allowed_group_ids, require_group_write, require_team_read, require_team_write
+from app.services.rbac import (
+    get_allowed_team_ids,
+    require_group_write,
+    require_team_read,
+    require_team_write,
+)
 from app.services.serializers import serialize_team
 from app.services.validation import validate_body
-
 
 teams_bp = Blueprint("teams_api", __name__)
 
@@ -15,45 +25,36 @@ teams_bp = Blueprint("teams_api", __name__)
 def list_teams():
     """Return teams visible to the current user."""
     user = request.current_user
-
     include_inactive = request.args.get(
         "include_inactive",
         default=False,
         type=lambda value: str(value).lower() in {"1", "true", "yes", "on"},
     )
-
     active_only = not include_inactive
 
     if user and user.is_admin:
         teams = teams_repo.list_teams(active_only=active_only)
     else:
-        teams = teams_repo.list_teams(
-            active_only=active_only,
-            group_ids=get_allowed_group_ids(),
-        )
-
+        team_ids = get_allowed_team_ids(use_active_group=True)
+        teams = [
+            team for team in teams_repo.list_teams(active_only=active_only)
+            if team.id in team_ids
+        ]
     return jsonify([serialize_team(team) for team in teams])
 
 
 @teams_bp.route("/<int:team_id>", methods=["GET"])
 def get_team(team_id):
-    """
-    Return a single team.
-    """
-
+    """Return a single team."""
     error = require_team_read(team_id)
     if error:
         return error
-
     return jsonify(serialize_team(teams_repo.get_team(team_id)))
 
 
 @teams_bp.route("", methods=["POST"])
 def create_team():
-    """
-    Create a team.
-    """
-
+    """Create a team."""
     payload, error = validate_body(TeamCreateSchema)
     if error:
         return error
@@ -71,16 +72,24 @@ def create_team():
         escalation_after_reminders=payload.escalation_after_reminders,
     )
 
-    write_audit("team.create", object_type="team", object_id=team.id, group_id=team.group_id, team_id=team.id, data=payload.model_dump())
+    user = request.current_user
+    if user and not user.is_admin:
+        teams_repo.add_user_to_team(team.id, user.id, TEAM_MANAGER_ROLE)
+
+    write_audit(
+        "team.create",
+        object_type="team",
+        object_id=team.id,
+        group_id=team.group_id,
+        team_id=team.id,
+        data=payload.model_dump(),
+    )
     return jsonify(serialize_team(team)), 201
 
 
 @teams_bp.route("/<int:team_id>", methods=["PUT"])
 def update_team(team_id):
-    """
-    Update a team.
-    """
-
+    """Update a team."""
     error = require_team_write(team_id)
     if error:
         return error
@@ -89,7 +98,13 @@ def update_team(team_id):
     if error:
         return error
 
-    if payload.group_id != teams_repo.get_team(team_id).group_id:
+    current_team = teams_repo.get_team(team_id)
+    if payload.group_id != current_team.group_id:
+        if not request.current_user.is_admin:
+            return jsonify({
+                "error": "group_change_denied",
+                "message": "Only global admin can move a team to another group",
+            }), 403
         group_error = require_group_write(payload.group_id)
         if group_error:
             return group_error
@@ -103,22 +118,25 @@ def update_team(team_id):
         "escalation_after_reminders": payload.escalation_after_reminders,
         "active": payload.active,
     })
-
-    write_audit("team.update", object_type="team", object_id=team.id, group_id=team.group_id, team_id=team.id, data=payload.model_dump())
+    write_audit(
+        "team.update",
+        object_type="team",
+        object_id=team.id,
+        group_id=team.group_id,
+        team_id=team.id,
+        data=payload.model_dump(),
+    )
     return jsonify(serialize_team(team))
 
 
 @teams_bp.route("/<int:team_id>", methods=["DELETE"])
 def delete_team(team_id):
-    """
-    Remove a team and all non-historical resources under it.
-    """
+    """Remove a team and all non-historical resources under it."""
     error = require_team_write(team_id)
     if error:
         return error
 
     team = teams_repo.remove_team(team_id)
-
     write_audit(
         "team.remove",
         object_type="team",
@@ -133,7 +151,6 @@ def delete_team(team_id):
             "historical_alerts_preserved": True,
         },
     )
-
     return jsonify({
         "deleted": True,
         "id": team.id,
@@ -142,10 +159,7 @@ def delete_team(team_id):
 
 @teams_bp.route("/<int:team_id>/users", methods=["GET"])
 def list_team_users(team_id):
-    """
-    Return team users.
-    """
-
+    """Return team users."""
     error = require_team_read(team_id)
     if error:
         return error
@@ -165,10 +179,7 @@ def list_team_users(team_id):
 
 @teams_bp.route("/<int:team_id>/users", methods=["POST"])
 def add_team_user(team_id):
-    """
-    Add a user to a team.
-    """
-
+    """Add an existing group user to a team."""
     error = require_team_write(team_id)
     if error:
         return error
@@ -177,22 +188,28 @@ def add_team_user(team_id):
     if error:
         return error
 
-    membership = teams_repo.add_user_to_team(team_id, payload.user_id, payload.role)
     team = teams_repo.get_team(team_id)
+    if team.group_id and not groups_repo.get_user_group_role(payload.user_id, team.group_id):
+        return jsonify({
+            "error": "user_not_in_group",
+            "message": "User must already belong to the team's group before being added to the team",
+        }), 400
 
-    if team.group_id:
-        groups_repo.add_user_to_group(payload.user_id, team.group_id, payload.role)
-
-    write_audit("team.user.add", object_type="team", object_id=team_id, group_id=team.group_id, team_id=team_id, data=payload.model_dump())
+    membership = teams_repo.add_user_to_team(team_id, payload.user_id, payload.role)
+    write_audit(
+        "team.user.add",
+        object_type="team",
+        object_id=team_id,
+        group_id=team.group_id,
+        team_id=team_id,
+        data=payload.model_dump(),
+    )
     return jsonify({"id": membership.id}), 201
 
 
 @teams_bp.route("/users/<int:membership_id>", methods=["PUT"])
 def update_team_user(membership_id):
-    """
-    Update a team membership.
-    """
-
+    """Update a team membership."""
     membership = teams_repo.get_team_membership(membership_id)
     error = require_team_write(membership.team.id)
     if error:
@@ -207,7 +224,6 @@ def update_team_user(membership_id):
         role=payload.role,
         active=payload.active,
     )
-
     write_audit(
         "team.user.update",
         object_type="team",
@@ -216,7 +232,6 @@ def update_team_user(membership_id):
         team_id=membership.team.id,
         data={"membership_id": membership.id, **payload.model_dump()},
     )
-
     return jsonify({
         "id": membership.id,
         "user_id": membership.user.id,
@@ -229,17 +244,13 @@ def update_team_user(membership_id):
 
 @teams_bp.route("/users/<int:membership_id>", methods=["DELETE"])
 def delete_team_user(membership_id):
-    """
-    Remove a user from a team and from all rotations of this team.
-    """
+    """Remove a user from a team and from all rotations of this team."""
     membership = teams_repo.get_team_membership(membership_id)
-
     error = require_team_write(membership.team.id)
     if error:
         return error
 
     data = teams_repo.delete_team_membership(membership_id)
-
     write_audit(
         "team.user.remove",
         object_type="team",
@@ -252,5 +263,4 @@ def delete_team_user(membership_id):
             "removed_from_team_rotations": True,
         },
     )
-
     return jsonify({"deleted": True, "id": membership_id})

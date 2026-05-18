@@ -26,6 +26,40 @@ ALLOWED_PROFILE_TOKEN_SCOPES = {
 }
 
 
+def get_profile_groups(user):
+    """Return groups visible in the profile page."""
+    memberships = groups_repo.list_user_groups(user.id)
+
+    if not user.is_admin:
+        return memberships
+
+    memberships_by_group_id = {
+        membership.group.id: membership
+        for membership in memberships
+        if membership.active
+    }
+
+    result = []
+
+    for group in groups_repo.list_groups(active_only=True):
+        membership = memberships_by_group_id.get(group.id)
+
+        if membership:
+            result.append(membership)
+            continue
+
+        result.append({
+            "id": None,
+            "group_id": group.id,
+            "group_slug": group.slug,
+            "group_name": group.name,
+            "role": "admin",
+            "active": True,
+        })
+
+    return result
+
+
 def validate_profile_token_scopes(requested_scopes):
     """
     Validate scopes for a newly created personal API token.
@@ -70,7 +104,7 @@ def get_profile():
     Return the current user profile.
     """
 
-    memberships = groups_repo.list_user_groups(request.current_user.id)
+    memberships = get_profile_groups(request.current_user)
     return jsonify(serialize_user(request.current_user, groups=memberships))
 
 
@@ -88,7 +122,7 @@ def update_profile():
     user = users_repo.update_user(request.current_user.id, data)
     write_audit("profile.update", object_type="user", object_id=user.id, user_id=user.id, data=data)
 
-    return jsonify(serialize_user(user, groups=groups_repo.list_user_groups(user.id)))
+    return jsonify(serialize_user(user, groups=get_profile_groups(user)))
 
 
 @profile_bp.route("/change-password", methods=["POST"])
@@ -217,4 +251,4 @@ def set_active_group():
         user_id=user.id,
     )
 
-    return jsonify(serialize_user(user, groups=groups_repo.list_user_groups(user.id)))
+    return jsonify(serialize_user(user, groups=get_profile_groups(user)))

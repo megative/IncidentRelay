@@ -1,0 +1,9 @@
+## Backend changes policy
+
+Any backend code change must be covered by tests.
+
+When changing backend logic:
+- add new tests for new behavior;
+- update existing tests for changed behavior;
+- do not remove failing tests unless the tested behavior was intentionally removed;
+- if a backend change does not need tests, explain why in the pull request.

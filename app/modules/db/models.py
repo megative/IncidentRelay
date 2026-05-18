@@ -16,9 +16,7 @@ from app.db import database_proxy
 
 
 class JSONTextField(TextField):
-    """
-    Store JSON-compatible values in a portable text field.
-    """
+    """Store JSON-compatible values in a portable text field."""
 
     def db_value(self, value):
         if value is None:
@@ -28,10 +26,8 @@ class JSONTextField(TextField):
     def python_value(self, value):
         if value is None:
             return None
-
         if isinstance(value, (dict, list)):
             return value
-
         try:
             return json.loads(value)
         except Exception:
@@ -39,27 +35,21 @@ class JSONTextField(TextField):
 
 
 class BaseModel(Model):
-    """
-    Base model for all tables.
-    """
+    """Base model for all tables."""
 
     class Meta:
         database = database_proxy
 
 
 class SoftDeleteModel(BaseModel):
-    """
-    Base model for soft-deletable resources.
-    """
+    """Base model for soft-deletable resources."""
 
     deleted = BooleanField(default=False, index=True)
     deleted_at = DateTimeField(null=True)
 
 
 class Migration(BaseModel):
-    """
-    Applied migration record.
-    """
+    """Applied migration record."""
 
     id = AutoField()
     name = CharField(unique=True)
@@ -67,9 +57,7 @@ class Migration(BaseModel):
 
 
 class MigrationState(BaseModel):
-    """
-    Legacy migration state record kept for backward compatibility.
-    """
+    """Legacy migration state record kept for backward compatibility."""
 
     id = AutoField()
     version = IntegerField(unique=True)
@@ -79,9 +67,7 @@ class MigrationState(BaseModel):
 
 
 class Group(SoftDeleteModel):
-    """
-    Access boundary for all resources.
-    """
+    """Access boundary for all resources."""
 
     id = AutoField()
     slug = CharField(unique=True)
@@ -95,9 +81,7 @@ class Group(SoftDeleteModel):
 
 
 class Team(SoftDeleteModel):
-    """
-    Independent on-call team inside a group.
-    """
+    """Independent on-call team inside a group."""
 
     id = AutoField()
     group = ForeignKeyField(Group, null=True, backref="teams", on_delete="CASCADE")
@@ -111,9 +95,7 @@ class Team(SoftDeleteModel):
 
 
 class User(SoftDeleteModel):
-    """
-    On-call user.
-    """
+    """On-call user."""
 
     id = AutoField()
     username = CharField(unique=True)
@@ -131,18 +113,18 @@ class User(SoftDeleteModel):
 
 
 class UserGroup(BaseModel):
-    """
-    User membership in a group.
+    """User membership in a group.
 
-    role values:
-    - read_only: can view resources and alerts;
-    - rw: can create, edit and operate resources.
+    Role values:
+    - viewer: can see group-scoped data;
+    - editor: can create/edit group-level operational resources;
+    - user_admin: can create and manage users only inside this group boundary.
     """
 
     id = AutoField()
     user = ForeignKeyField(User, backref="group_memberships", on_delete="CASCADE")
     group = ForeignKeyField(Group, backref="user_memberships", on_delete="CASCADE")
-    role = CharField(default="read_only")
+    role = CharField(default="viewer")
     active = BooleanField(default=True)
     created_at = DateTimeField(default=datetime.utcnow)
 
@@ -153,9 +135,7 @@ class UserGroup(BaseModel):
 
 
 class Role(BaseModel):
-    """
-    RBAC role placeholder.
-    """
+    """RBAC role placeholder."""
 
     id = AutoField()
     name = CharField(unique=True)
@@ -165,9 +145,7 @@ class Role(BaseModel):
 
 
 class UserRole(BaseModel):
-    """
-    RBAC user role assignment placeholder.
-    """
+    """RBAC user role assignment placeholder."""
 
     id = AutoField()
     user = ForeignKeyField(User, backref="role_assignments", on_delete="CASCADE")
@@ -182,14 +160,18 @@ class UserRole(BaseModel):
 
 
 class TeamUser(BaseModel):
-    """
-    Membership between teams and users.
+    """Membership between teams and users.
+
+    Role values:
+    - viewer: can see team resources;
+    - responder: can see team resources and ack/resolve alerts;
+    - manager: can manage team resources and team membership.
     """
 
     id = AutoField()
     team = ForeignKeyField(Team, backref="memberships", on_delete="CASCADE")
     user = ForeignKeyField(User, backref="team_memberships", on_delete="CASCADE")
-    role = CharField(default="member")
+    role = CharField(default="viewer")
     active = BooleanField(default=True)
     created_at = DateTimeField(default=datetime.utcnow)
 
@@ -200,9 +182,7 @@ class TeamUser(BaseModel):
 
 
 class Rotation(SoftDeleteModel):
-    """
-    On-call rotation for a specific team.
-    """
+    """On-call rotation for a specific team."""
 
     id = AutoField()
     team = ForeignKeyField(Team, backref="rotations", on_delete="CASCADE")
@@ -227,9 +207,7 @@ class Rotation(SoftDeleteModel):
 
 
 class RotationMember(BaseModel):
-    """
-    User position inside a rotation.
-    """
+    """User position inside a rotation."""
 
     id = AutoField()
     rotation = ForeignKeyField(Rotation, backref="members", on_delete="CASCADE")
@@ -245,9 +223,7 @@ class RotationMember(BaseModel):
 
 
 class RotationOverride(BaseModel):
-    """
-    Temporary override for a rotation.
-    """
+    """Temporary override for a rotation."""
 
     id = AutoField()
     rotation = ForeignKeyField(Rotation, backref="overrides", on_delete="CASCADE")
@@ -259,9 +235,7 @@ class RotationOverride(BaseModel):
 
 
 class NotificationChannel(SoftDeleteModel):
-    """
-    Notification target.
-    """
+    """Notification target."""
 
     id = AutoField()
     group = ForeignKeyField(Group, null=True, backref="channels", on_delete="CASCADE")
@@ -279,9 +253,7 @@ class NotificationChannel(SoftDeleteModel):
 
 
 class AlertRoute(SoftDeleteModel):
-    """
-    Route incoming alerts to a team, rotation and channels.
-    """
+    """Route incoming alerts to a team, rotation and channels."""
 
     id = AutoField()
     team = ForeignKeyField(Team, backref="alert_routes", on_delete="CASCADE")
@@ -302,9 +274,7 @@ class AlertRoute(SoftDeleteModel):
 
 
 class AlertRouteChannel(BaseModel):
-    """
-    Link an alert route to notification channels.
-    """
+    """Link an alert route to notification channels."""
 
     id = AutoField()
     route = ForeignKeyField(AlertRoute, backref="route_channels", on_delete="CASCADE")
@@ -317,12 +287,9 @@ class AlertRouteChannel(BaseModel):
 
 
 class Alert(BaseModel):
-    """
-    Alert stored after normalization and routing.
-    """
+    """Alert stored after normalization and routing."""
 
     id = AutoField()
-
     team = ForeignKeyField(Team, null=True, backref="alerts", on_delete="SET NULL")
     route = ForeignKeyField(AlertRoute, null=True, backref="alerts", on_delete="SET NULL")
     rotation = ForeignKeyField(Rotation, null=True, backref="alerts", on_delete="SET NULL")
@@ -357,9 +324,7 @@ class Alert(BaseModel):
 
 
 class AlertEvent(BaseModel):
-    """
-    Alert history event.
-    """
+    """Alert history event."""
 
     id = AutoField()
     alert = ForeignKeyField(Alert, backref="events", on_delete="CASCADE")
@@ -370,9 +335,7 @@ class AlertEvent(BaseModel):
 
 
 class AlertNotification(BaseModel):
-    """
-    Delivery record for a notification sent to an external channel.
-    """
+    """Delivery record for a notification sent to an external channel."""
 
     id = AutoField()
     alert = ForeignKeyField(Alert, backref="notifications", on_delete="CASCADE")
@@ -382,12 +345,10 @@ class AlertNotification(BaseModel):
     external_channel_id = CharField(null=True)
     last_event_type = CharField(null=True)
     last_error = TextField(null=True)
-
     provider_status = CharField(null=True)
     provider_payload = JSONTextField(null=True)
     last_callback_at = DateTimeField(null=True)
     callback_count = IntegerField(default=0)
-
     created_at = DateTimeField(default=datetime.utcnow)
     updated_at = DateTimeField(default=datetime.utcnow)
 
@@ -422,9 +383,7 @@ class AlertNotificationEvent(BaseModel):
 
 
 class Silence(SoftDeleteModel):
-    """
-    Alert silence rule for a team.
-    """
+    """Alert silence rule for a team."""
 
     id = AutoField()
     team = ForeignKeyField(Team, backref="silences", on_delete="CASCADE")
@@ -439,9 +398,7 @@ class Silence(SoftDeleteModel):
 
 
 class ApiToken(SoftDeleteModel):
-    """
-    Hashed API token.
-    """
+    """Hashed API token."""
 
     id = AutoField()
     user = ForeignKeyField(User, null=True, backref="api_tokens", on_delete="CASCADE")
@@ -458,9 +415,7 @@ class ApiToken(SoftDeleteModel):
 
 
 class AuditLog(BaseModel):
-    """
-    Audit log entry for API actions.
-    """
+    """Audit log entry for API actions."""
 
     id = AutoField()
     group = ForeignKeyField(Group, null=True, backref="audit_logs", on_delete="SET NULL")
@@ -476,9 +431,7 @@ class AuditLog(BaseModel):
 
 
 class AppLock(BaseModel):
-    """
-    Distributed application lock stored in the database.
-    """
+    """Distributed application lock stored in the database."""
 
     id = AutoField()
     name = CharField(unique=True)

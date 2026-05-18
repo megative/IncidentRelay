@@ -83,7 +83,7 @@ def serialize_user(user, groups=None):
     }
 
     if groups is not None:
-        data["groups"] = [serialize_user_group(item) for item in groups]
+        data["groups"] = [serialize_profile_group(item) for item in groups]
 
     return data
 
@@ -326,3 +326,11 @@ def serialize_api_token(token):
         "expires_at": expires_at.isoformat() if expires_at else None,
         "last_used_at": token.last_used_at.isoformat() if token.last_used_at else None,
     }
+
+
+def serialize_profile_group(item):
+    """Serialize a real UserGroup membership or a synthetic profile group."""
+    if isinstance(item, dict):
+        return item
+
+    return serialize_user_group(item)

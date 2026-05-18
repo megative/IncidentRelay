@@ -126,6 +126,7 @@ class Config:
     SMTP_USE_TLS = settings.get_bool("smtp", "use_tls", True)
 
     VOICE_PROVIDER = settings.get("voice", "provider", "stub")
+    VOICE_CALLBACK_SECRET = settings.get("voice", "callback_secret", SECRET_KEY)
     VOICE_TEXT_TEMPLATE = settings.get("voice", "text_template", "")
     VOICE_DTMF_ACTIONS = settings.get_json(
         "voice",

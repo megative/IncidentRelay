@@ -1,65 +1,77 @@
----
-title: Groups and RBAC
-description: Access groups and group roles
----
-
 # Groups and RBAC
 
-## Group
+IncidentRelay uses two permission layers:
 
-A group is an access boundary.
+1. **Group roles** define the access boundary and group-level administration.
+2. **Team roles** define what a user can do inside a specific team.
 
-All teams belong to a group. Users only see resources from groups they belong to. A user can belong to multiple groups.
+A user must belong to a group before they can belong to a team in that group.
+Adding a user to a team does **not** add the user to the group automatically.
 
-## Group role
+## Group roles
 
-A user can have one of these roles inside a group:
+| Role | UI label | Purpose |
+|---|---|---|
+| `viewer` | Group Viewer | Can see resources inside the group boundary. |
+| `editor` | Group Editor | Can create or edit group-level operational resources, for example create a team in the group. |
+| `user_admin` | Group Admin | Can create and manage users only inside this group boundary. |
 
-```text
-read_only
-rw
-```
+`user_admin` is intentionally limited:
 
-`read_only` can view resources and alerts.
+- can create a new user only through the selected group endpoint;
+- the created user is automatically linked to that group;
+- cannot pass or override `group_id` in the request body;
+- cannot create a global admin user;
+- cannot assign another `user_admin`; only global admin can do that;
+- cannot add an existing user to a group;
+- cannot move a user between groups;
+- cannot globally disable or delete a user.
 
-`rw` can create, edit, acknowledge, and resolve resources in that group.
+Adding an existing user to a group changes the group boundary and is global-admin only.
 
-Admin users can see and manage everything.
+## Team roles
 
-## Active group
+| Role | UI label | Purpose |
+|---|---|---|
+| `viewer` | Team Viewer | Can see team resources and alerts. |
+| `responder` | Team Responder | Can see team resources and acknowledge/resolve alerts. |
+| `manager` | Team Manager | Can manage team resources, team users, channels, routes, rotations and silences. |
 
-Users can choose their active group from Profile.
+A group `editor` does not automatically become manager of every team in the group.
+Team write access requires the `manager` team role.
 
-Active group limits resource lists in the UI.
+When a non-admin group `editor` creates a new team, IncidentRelay adds that creator as `manager` of the created team.
 
-To see all accessible resources, select:
+## Permission matrix
 
-```text
-All my groups
-```
+| Action | Required permission |
+|---|---|
+| List visible groups | Any active group membership or global admin |
+| Create group | Global admin |
+| Update group properties | Group `editor` or global admin |
+| Delete group | Global admin |
+| List group users | Group readable membership or global admin |
+| Create a user inside a group | Group `user_admin` or global admin |
+| Add existing user to group | Global admin |
+| Assign `user_admin` role | Global admin |
+| Disable group membership | Group `user_admin` or global admin |
+| Remove group membership | Global admin |
+| Create team in group | Group `editor` or global admin |
+| Read team | Team `viewer`, `responder`, `manager` or global admin |
+| Acknowledge/resolve alert | Team `responder`, `manager` or global admin |
+| Manage team resources | Team `manager` or global admin |
+| Add user to team | Team `manager` or global admin; target user must already be in the team group |
 
-## Editing memberships
+## Migration from old roles
 
-The web UI supports editing and disabling memberships:
+The RBAC migration renames existing roles:
 
-```text
-Administration -> Groups -> Members
-Teams -> Members
-Rotations -> Members
-```
+| Old location | Old value | New value |
+|---|---|---|
+| Group membership | `read_only` | `viewer` |
+| Group membership | `rw` | `editor` |
+| Team membership | `read_only` | `viewer` |
+| Team membership | `member` | `responder` |
+| Team membership | `rw` | `manager` |
 
-For group and team memberships you can change:
-
-```text
-role
-active flag
-```
-
-For rotation members you can change:
-
-```text
-position
-active flag
-```
-
-Disabling a membership keeps historical records intact.
+After migration, old role values should no longer be accepted by request schemas.

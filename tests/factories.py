@@ -17,7 +17,6 @@ from app.modules.db.models import (
     UserGroup,
 )
 
-
 _counter = 0
 
 
@@ -40,10 +39,10 @@ def create_user(
     email: str | None = None,
     is_admin: bool = False,
     active: bool = True,
+    group_role: str = "editor",
 ) -> User:
     username = username or unique("user")
     email = email or f"{username}@example.com"
-
     user = User.create(
         username=username,
         display_name=username.title(),
@@ -53,10 +52,8 @@ def create_user(
         is_admin=is_admin,
         active_group=group,
     )
-
     if group is not None:
-        UserGroup.create(user=user, group=group, role="rw", active=True)
-
+        UserGroup.create(user=user, group=group, role=group_role, active=True)
     return user
 
 
@@ -66,7 +63,7 @@ def create_team(group: Group, name: str | None = None, slug: str | None = None) 
     return Team.create(group=group, name=name, slug=slug, active=True)
 
 
-def add_user_to_team(team: Team, user: User, role: str = "rw") -> TeamUser:
+def add_user_to_team(team: Team, user: User, role: str = "manager") -> TeamUser:
     return TeamUser.create(team=team, user=user, role=role, active=True)
 
 
@@ -92,10 +89,8 @@ def create_rotation(
         timezone="UTC",
         enabled=True,
     )
-
     for index, user in enumerate(users or []):
         RotationMember.create(rotation=rotation, user=user, position=index, active=True)
-
     return rotation
 
 

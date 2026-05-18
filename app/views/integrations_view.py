@@ -164,7 +164,7 @@ def voice_callback(channel_id, secret):
         return jsonify({"error": "channel is not voice_call"}), 400
 
     config = channel.config or {}
-    expected_secret = config.get("callback_secret") or Config.VOICE_CALLBACK_SECRET
+    expected_secret = Config.VOICE_CALLBACK_SECRET
 
     if not expected_secret or secret != expected_secret:
         return jsonify({"error": "voice callback rejected"}), 403

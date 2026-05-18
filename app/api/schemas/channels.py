@@ -40,8 +40,18 @@ class ChannelBaseSchema(ApiModel):
 
         self.config = config
 
-        if self.channel_type == "telegram" and (not config.get("bot_token") or not config.get("chat_id")):
-            raise ValueError("telegram channel requires bot_token and chat_id")
+        if self.channel_type == "telegram":
+            bot_token = str(config.get("bot_token") or "").strip()
+            chat_id = str(config.get("chat_id") or "").strip()
+
+            if not bot_token or not chat_id:
+                raise ValueError("telegram channel requires bot_token and chat_id")
+
+            if ":" not in bot_token:
+                raise ValueError("telegram bot_token must contain ':'")
+
+            config["bot_token"] = bot_token
+            config["chat_id"] = chat_id
 
         if self.channel_type in {"slack", "webhook", "discord", "teams"} and not config.get("webhook_url"):
             raise ValueError(f"{self.channel_type} channel requires webhook_url")

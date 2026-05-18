@@ -1,5 +1,35 @@
 let lastGeneratedProfileToken = "";
 
+const PROFILE_GROUP_ROLE_LABELS = {
+    viewer: "Group Viewer",
+    editor: "Group Editor",
+    user_admin: "Group Admin",
+    read_only: "Group Viewer",
+    rw: "Group Editor",
+};
+
+function normalizeProfileGroupRole(role) {
+    /*
+     * Normalize legacy group role values for old sessions/data that may still be
+     * present before or during RBAC migration.
+     */
+    if (role === "read_only") {
+        return "viewer";
+    }
+    if (role === "rw") {
+        return "editor";
+    }
+    return role || "viewer";
+}
+
+function formatProfileGroupRole(role) {
+    /*
+     * Render group role labels with the new RBAC names.
+     */
+    const normalizedRole = normalizeProfileGroupRole(role);
+    return PROFILE_GROUP_ROLE_LABELS[normalizedRole] || normalizedRole;
+}
+
 function getProfileInitials(profile) {
     /*
      * Build short initials for the profile avatar.
@@ -14,19 +44,26 @@ function getProfileInitials(profile) {
     return source.substring(0, 2).toUpperCase();
 }
 
-
 function setProfileStatus(selector, message, isError) {
     /*
      * Render a small inline status message.
      */
     const element = $(selector);
-
     element
         .text(message || "")
         .toggleClass("status-firing", !!isError)
         .toggleClass("status-resolved", !!message && !isError);
 }
 
+function setProfileInlineStatus(selector, message, isError) {
+    /*
+     * Render inline profile status.
+     */
+    $(selector)
+        .text(message || "")
+        .toggleClass("status-firing", !!isError)
+        .toggleClass("status-resolved", !!message && !isError);
+}
 
 function renderProfileHeader(profile) {
     /*
@@ -38,7 +75,6 @@ function renderProfileHeader(profile) {
     if (profile.username) {
         metaItems.push("@" + profile.username);
     }
-
     if (profile.email) {
         metaItems.push(profile.email);
     }
@@ -46,10 +82,8 @@ function renderProfileHeader(profile) {
     $("#profile-avatar").text(getProfileInitials(profile));
     $("#profile-display-title").text(title);
     $("#profile-display-meta").text(metaItems.join(" · ") || "No contact information");
-
     renderProfileGroupsSummary(profile.groups || []);
 }
-
 
 function renderProfileGroupsSummary(groups) {
     /*
@@ -69,15 +103,15 @@ function renderProfileGroupsSummary(groups) {
     }
 
     groups.forEach(function (membership) {
+        const groupName = membership.group_name || membership.group_slug || ("Group #" + membership.group_id);
         container.append(
             $("<span>")
                 .addClass("badge")
                 .addClass("badge-info")
-                .text(membership.group_name + " · " + membership.role)
+                .text(groupName + " · " + formatProfileGroupRole(membership.role))
         );
     });
 }
-
 
 function renderProfileGroupsList(groups) {
     /*
@@ -93,23 +127,24 @@ function renderProfileGroupsList(groups) {
 
     groups.forEach(function (membership) {
         const item = $("<div>").addClass("profile-group-item");
+        const groupName = membership.group_name || membership.group_slug || ("Group #" + membership.group_id);
 
         item.append(
             $("<div>")
                 .addClass("profile-group-name")
-                .text(membership.group_name || membership.group_slug || ("Group #" + membership.group_id))
+                .text(groupName)
         );
-
         item.append(
-            $("<div>")
-                .addClass(membership.role === "rw" ? "role-rw" : "role-read-only")
-                .text(membership.role === "rw" ? "Read/write" : "Read only")
+            $("<span>")
+                .addClass("badge")
+                .addClass("badge-info")
+                .addClass("profile-group-role")
+                .text(formatProfileGroupRole(membership.role))
         );
 
         container.append(item);
     });
 }
-
 
 function fillProfileGroupSelects(profile) {
     /*
@@ -125,14 +160,14 @@ function fillProfileGroupSelects(profile) {
     activeGroupSelect.append($("<option>").val("").text("All my groups"));
 
     (profile.groups || []).forEach(function (membership) {
-        const label = membership.group_name + " (" + membership.role + ")";
+        const groupName = membership.group_name || membership.group_slug || ("Group #" + membership.group_id);
+        const label = groupName + " (" + formatProfileGroupRole(membership.role) + ")";
 
         tokenGroupSelect.append(
             $("<option>")
                 .val(String(membership.group_id))
                 .text(label)
         );
-
         activeGroupSelect.append(
             $("<option>")
                 .val(String(membership.group_id))
@@ -144,7 +179,6 @@ function fillProfileGroupSelects(profile) {
         activeGroupSelect.val(String(profile.active_group_id));
     }
 }
-
 
 function loadProfile() {
     /*
@@ -169,13 +203,11 @@ function loadProfile() {
     });
 }
 
-
 function saveProfile() {
     /*
      * Save the current user profile.
      */
     setProfileStatus("#profile-save-status", "Saving...", false);
-
     apiPut(
         "/api/profile",
         {
@@ -184,119 +216,12 @@ function saveProfile() {
             phone: $("#profile-phone").val() || null,
             telegram_user_id: $("#profile-telegram").val() || null,
             slack_user_id: $("#profile-slack").val() || null,
-            mattermost_user_id: $("#profile-mattermost").val() || null
+            mattermost_user_id: $("#profile-mattermost").val() || null,
         },
         function (profile) {
             setProfileStatus("#profile-save-status", "Saved", false);
             renderProfileHeader(profile);
             loadProfile();
-        }
-    );
-}
-
-
-function changeProfilePassword() {
-    /*
-     * Change current user password.
-     */
-    const oldPassword = $("#profile-old-password").val();
-    const newPassword = $("#profile-new-password").val();
-
-    if (!oldPassword || !newPassword) {
-        setProfileStatus("#profile-password-status", "Old and new password are required.", true);
-        return;
-    }
-
-    apiPost(
-        "/api/profile/change-password",
-        {
-            old_password: oldPassword,
-            new_password: newPassword
-        },
-        function () {
-            $("#profile-old-password").val("");
-            $("#profile-new-password").val("");
-            setProfileStatus("#profile-password-status", "Password changed", false);
-        }
-    );
-}
-
-
-function createProfileToken() {
-    /*
-     * Generate a personal API token.
-     */
-    const groupId = $("#profile-token-group").val();
-    const scopes = $("#profile-token-scopes").val() || ["alerts:read"];
-    const days = Number($("#profile-token-days").val() || 0);
-    const name = $("#profile-token-name").val().trim() || "personal-api-token";
-
-    if (days < 0) {
-        setProfileStatus("#profile-token-status", "Expiration days cannot be negative.", true);
-        return;
-    }
-
-    setProfileStatus("#profile-token-status", "Generating...", false);
-
-    apiPost(
-        "/api/profile/tokens",
-        {
-            name: name,
-            group_id: groupId ? Number(groupId) : null,
-            scopes: scopes,
-            days: days
-        },
-        function (data) {
-            lastGeneratedProfileToken = data.token || "";
-
-            $("#profile-token-result").text(JSON.stringify(data, null, 2));
-            $("#copy-profile-token").toggleClass("is-hidden", !lastGeneratedProfileToken);
-
-            setProfileStatus("#profile-token-status", "Token generated", false);
-        }
-    );
-}
-
-
-function copyProfileToken() {
-    /*
-     * Copy the last generated profile token to the clipboard.
-     */
-    if (!lastGeneratedProfileToken) {
-        return;
-    }
-
-    navigator.clipboard.writeText(lastGeneratedProfileToken).then(function () {
-        setProfileStatus("#profile-token-status", "Token copied", false);
-    });
-}
-
-
-function saveActiveGroup() {
-    /*
-     * Set the active group from the profile page.
-     */
-    const groupId = $("#profile-active-group").val();
-
-    setProfileStatus("#profile-active-group-status", "Updating...", false);
-
-    apiPost(
-        "/api/profile/active-group",
-        {
-            group_id: groupId ? Number(groupId) : null
-        },
-        function (user) {
-            currentUser = user;
-
-            updateAuthUi();
-            renderProfileHeader(user);
-            renderProfileGroupsList(user.groups || []);
-
-            fillTeamSelect("#global-team-filter", true, function () {
-                navigate(window.location.pathname, false);
-            });
-
-            setProfileStatus("#profile-active-group-status", "Active group updated", false);
         }
     );
 }
@@ -308,7 +233,6 @@ function profileModal(selector) {
     return $(selector);
 }
 
-
 function openProfileModal(selector) {
     /*
      * Open a profile modal.
@@ -316,7 +240,6 @@ function openProfileModal(selector) {
     profileModal(selector).css("display", "flex").addClass("is-open");
     $("body").addClass("modal-open");
 }
-
 
 function closeProfileModal(selector) {
     /*
@@ -326,18 +249,6 @@ function closeProfileModal(selector) {
     $("body").removeClass("modal-open");
 }
 
-
-function setProfileInlineStatus(selector, message, isError) {
-    /*
-     * Render inline profile status.
-     */
-    $(selector)
-        .text(message || "")
-        .toggleClass("status-firing", !!isError)
-        .toggleClass("status-resolved", !!message && !isError);
-}
-
-
 function loadProfileTokens() {
     /*
      * Load current user's personal API tokens.
@@ -346,7 +257,6 @@ function loadProfileTokens() {
         renderProfileTokens(asArray(tokens));
     });
 }
-
 
 function renderProfileTokens(tokens) {
     /*
@@ -372,7 +282,6 @@ function renderProfileTokens(tokens) {
     });
 }
 
-
 function renderProfileTokenRow(token) {
     /*
      * Render one token metadata row.
@@ -386,7 +295,6 @@ function renderProfileTokenRow(token) {
     row.append($("<td>").text(formatDateTime24(token.created_at, {seconds: false})));
     row.append($("<td>").text(token.expires_at ? formatDateTime24(token.expires_at, {seconds: false}) : "Never"));
     row.append($("<td>").text(token.last_used_at ? formatDateTime24(token.last_used_at, {seconds: false}) : "Never"));
-
     row.append(
         $("<td>").append(
             $("<span>")
@@ -397,7 +305,6 @@ function renderProfileTokenRow(token) {
     );
 
     const actions = $("<div>").addClass("table-actions");
-
     if (token.active && !token.expired) {
         actions.append(
             $("<button>")
@@ -411,10 +318,8 @@ function renderProfileTokenRow(token) {
     }
 
     row.append($("<td>").addClass("actions-cell").append(actions));
-
     return row;
 }
-
 
 function revokeProfileToken(token) {
     /*
@@ -429,7 +334,6 @@ function revokeProfileToken(token) {
     });
 }
 
-
 function resetProfileTokenModal() {
     /*
      * Reset token generation modal output.
@@ -439,7 +343,6 @@ function resetProfileTokenModal() {
     $("#copy-profile-token").addClass("is-hidden");
     setProfileInlineStatus("#profile-token-status", "", false);
 }
-
 
 function createProfileToken() {
     /*
@@ -460,20 +363,17 @@ function createProfileToken() {
             name: name,
             group_id: groupId ? Number(groupId) : null,
             scopes: $("#profile-token-scopes").val() || ["alerts:read"],
-            days: days
+            days: days,
         },
         function (data) {
             lastGeneratedProfileToken = data.token || "";
-
             $("#profile-token-result").text(lastGeneratedProfileToken || JSON.stringify(data, null, 2));
             $("#copy-profile-token").toggleClass("is-hidden", !lastGeneratedProfileToken);
-
             setProfileInlineStatus("#profile-token-status", "Token generated", false);
             loadProfileTokens();
         }
     );
 }
-
 
 function copyProfileToken() {
     /*
@@ -487,7 +387,6 @@ function copyProfileToken() {
         setProfileInlineStatus("#profile-token-status", "Token copied", false);
     });
 }
-
 
 function changeProfilePassword() {
     /*
@@ -509,16 +408,39 @@ function changeProfilePassword() {
         "/api/profile/change-password",
         {
             old_password: oldPassword,
-            new_password: newPassword
+            new_password: newPassword,
         },
         function () {
             $("#profile-old-password").val("");
             $("#profile-new-password").val("");
-
             setProfileInlineStatus("#profile-password-modal-status", "Password changed", false);
             setProfileInlineStatus("#profile-password-status", "Password changed", false);
-
             closeProfileModal("#profile-password-modal");
+        }
+    );
+}
+
+function saveActiveGroup() {
+    /*
+     * Set the active group from the profile page.
+     */
+    const groupId = $("#profile-active-group").val();
+
+    setProfileStatus("#profile-active-group-status", "Updating...", false);
+    apiPost(
+        "/api/profile/active-group",
+        {
+            group_id: groupId ? Number(groupId) : null,
+        },
+        function (user) {
+            currentUser = user;
+            updateAuthUi();
+            renderProfileHeader(user);
+            renderProfileGroupsList(user.groups || []);
+            fillTeamSelect("#global-team-filter", true, function () {
+                navigate(window.location.pathname, false);
+            });
+            setProfileStatus("#profile-active-group-status", "Active group updated", false);
         }
     );
 }
@@ -557,7 +479,6 @@ $(document).on("keydown", function (event) {
     if ($("#profile-token-modal").hasClass("is-open")) {
         closeProfileModal("#profile-token-modal");
     }
-
     if ($("#profile-password-modal").hasClass("is-open")) {
         closeProfileModal("#profile-password-modal");
     }
@@ -569,4 +490,5 @@ $(document).on("click", "#change-profile-password", changeProfilePassword);
 $(document).on("click", "#save-profile", saveProfile);
 $(document).on("click", "#save-profile-top", saveProfile);
 $(document).on("click", "#save-active-group", saveActiveGroup);
+
 loadProfileTokens();
