@@ -45,6 +45,6 @@ def test_normalize_severity_list_deduplicates_values_after_normalization():
     ]
 
 
-def test_normalize_severity_list_rejects_non_list_non_string():
+def test_normalize_severity_list_rejects_invalid_type():
     with pytest.raises(ValueError):
         normalize_severity_list({"severity": "critical"})

@@ -11,6 +11,7 @@ def test_version_api_is_public(client):
 
     assert response.status_code == 200
     payload = response.get_json()
+
     assert payload["service_version"] == get_service_version()
     assert "migrations" in payload
 
@@ -26,3 +27,4 @@ def test_protected_api_requires_auth(client):
 
     assert response.status_code == 401
     assert response.is_json
+    assert response.get_json()["error"] == "JWT or API token authentication is required"

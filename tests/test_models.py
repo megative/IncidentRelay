@@ -35,7 +35,7 @@ def test_json_field_round_trip_for_channel_config(db):
     channel = create_channel(
         group,
         config={
-            "url": "https://example.com/webhook",
+            "webhook_url": "https://example.com/webhook",
             "headers": {"X-Test": "yes"},
             "enabled": True,
             "retries": [1, 2, 3],
@@ -49,11 +49,11 @@ def test_json_field_round_trip_for_channel_config(db):
     assert fetched.config["retries"] == [1, 2, 3]
 
 
-def test_soft_active_flags_default_to_enabled(db):
+def test_active_flags_default_to_enabled(db):
     group = Group.create(name="Infra", slug="infra")
     user = create_user(username="alice", group=group)
     team = create_team(group, slug="sre")
 
-    assert group.is_active is True
-    assert user.is_active is True
-    assert team.is_active is True
+    assert group.active is True
+    assert user.active is True
+    assert team.active is True

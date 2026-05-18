@@ -12,25 +12,28 @@ def test_make_json_safe_converts_non_serializable_values():
     value = make_json_safe(
         {
             "ok": True,
-            "items": {1, 2},
+            "items": (1, 2),
             "error": ValueError("bad"),
         }
     )
 
-    assert value["ok"] is True
-    assert sorted(value["items"]) == [1, 2]
-    assert value["error"] == "bad"
+    assert value == {
+        "ok": True,
+        "items": [1, 2],
+        "error": "bad",
+    }
 
 
 def test_normalize_validation_error_returns_compact_details():
     try:
         ExampleBody.model_validate({"name": "test", "count": "not-an-int"})
     except Exception as exc:
-        result = normalize_validation_error(exc)
+        result = normalize_validation_error(exc.errors()[0])
 
-    assert result["error"] == "validation_error"
-    assert result["message"] == "Request validation failed"
-    assert result["details"][0]["field"] == "count"
+    assert result["field"] == "count"
+    assert result["loc"] == ["count"]
+    assert result["type"] == "int_parsing"
+    assert "message" in result
 
 
 def test_validate_body_accepts_valid_json(app):
@@ -49,7 +52,7 @@ def test_validate_body_accepts_valid_json(app):
 
 def test_validate_body_rejects_invalid_json(app):
     @app.post("/_test/invalid-json")
-    def route():
+    def route_invalid_json():
         payload, error = validate_body(ExampleBody)
         if error:
             return error
@@ -62,12 +65,13 @@ def test_validate_body_rejects_invalid_json(app):
     )
 
     assert response.status_code == 400
-    assert response.get_json()["error"] == "invalid_json"
+    assert response.get_json()["error"] == "validation_error"
+    assert response.get_json()["message"] == "Request body must be valid JSON"
 
 
 def test_validate_body_rejects_schema_errors(app):
     @app.post("/_test/schema-error")
-    def route():
+    def route_schema_error():
         payload, error = validate_body(ExampleBody)
         if error:
             return error
@@ -77,3 +81,5 @@ def test_validate_body_rejects_schema_errors(app):
 
     assert response.status_code == 400
     assert response.get_json()["error"] == "validation_error"
+    assert response.get_json()["message"] == "Request validation failed"
+    assert response.get_json()["details"][0]["field"] == "count"

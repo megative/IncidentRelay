@@ -34,18 +34,18 @@ def test_rotation_members_are_ordered_by_position(db):
 def test_route_can_have_notification_channel(db):
     group = create_group(slug="infra")
     team = create_team(group, slug="sre")
-    channel = create_channel(group)
-    route = create_route(group, team)
+    channel = create_channel(group, team)
+    route = create_route(team)
 
     attach_channel(route, channel)
 
     assert AlertRouteChannel.select().where(AlertRouteChannel.route == route).count() == 1
 
 
-def test_alert_is_persisted_with_labels_and_annotations(db):
+def test_alert_is_persisted_with_labels_and_payload(db):
     group = create_group(slug="infra")
     team = create_team(group, slug="sre")
-    route = create_route(group, team)
+    route = create_route(team)
 
     alert = create_alert(route)
 
@@ -54,4 +54,6 @@ def test_alert_is_persisted_with_labels_and_annotations(db):
     assert fetched.status == "firing"
     assert fetched.severity == "critical"
     assert fetched.labels["alertname"] == "DiskFull"
-    assert fetched.annotations["summary"] == "Disk is full"
+    assert fetched.payload["source"] == "test"
+    assert fetched.team == team
+    assert fetched.route == route

@@ -2,6 +2,8 @@ from app.services.matchers import get_nested_value, match_alert, match_value
 
 
 ALERT = {
+    "source": "alertmanager",
+    "title": "DiskFull",
     "status": "firing",
     "severity": "critical",
     "labels": {
@@ -35,10 +37,15 @@ def test_match_value_supports_exact_list_regex_contains_and_not():
     assert not match_value("critical", {"not": "critical"})
 
 
-def test_match_alert_supports_labels_and_fields():
+def test_match_alert_supports_top_level_labels_title_regex_and_fields():
+    assert match_alert(ALERT, {})
     assert match_alert(ALERT, {"labels": {"team": "infra"}})
     assert match_alert(ALERT, {"severity": "critical"})
-    assert match_alert(ALERT, {"labels.alertname": {"regex": "^Disk"}})
+    assert match_alert(ALERT, {"source": "alertmanager"})
+    assert match_alert(ALERT, {"title_regex": "^Disk"})
+    assert match_alert(ALERT, {"fields": {"labels.alertname": {"regex": "^Disk"}}})
 
     assert not match_alert(ALERT, {"labels": {"team": "backend"}})
     assert not match_alert(ALERT, {"severity": "warning"})
+    assert not match_alert(ALERT, {"source": "zabbix"})
+    assert not match_alert(ALERT, {"title_regex": "^CPU"})

@@ -43,6 +43,7 @@ name = IncidentRelay
     assert settings.get_int("missing", "value", 15) == 15
     assert settings.get_bool("missing", "value", True) is True
     assert settings.get_json("missing", "value", {"x": 1}) == {"x": 1}
+    assert settings.get_section("missing", {"fallback": "yes"}) == {"fallback": "yes"}
 
 
 def test_settings_invalid_json_raises_runtime_error(tmp_path):

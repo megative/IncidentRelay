@@ -28,13 +28,14 @@ def test_alertmanager_endpoint_requires_token(client):
     response = client.post("/api/integrations/alertmanager", json=alertmanager_payload())
 
     assert response.status_code == 401
+    assert response.is_json
 
 
 def test_alertmanager_endpoint_accepts_valid_route_token(client, monkeypatch, db):
-    raw_token = "ir_test_route_token"
+    raw_token = "test-route-token"
     group = create_group(slug="infra")
     team = create_team(group, slug="sre")
-    create_route(group, team, token_hash=hash_token(raw_token))
+    create_route(team, source="alertmanager", token_hash=hash_token(raw_token))
 
     calls = []
 
@@ -56,20 +57,21 @@ def test_alertmanager_endpoint_accepts_valid_route_token(client, monkeypatch, db
     assert response.status_code == 200
     assert response.get_json() == {"ok": True, "count": 1}
     assert calls[0][0]["source"] == "alertmanager"
-    assert calls[0][0]["title"] == "DiskFull"
+    assert calls[0][0]["title"] == "Disk is full"
 
 
 def test_webhook_endpoint_rejects_invalid_payload_with_valid_route_token(client, db):
-    raw_token = "ir_test_route_token"
+    raw_token = "test-route-token"
     group = create_group(slug="infra")
     team = create_team(group, slug="sre")
-    create_route(group, team, token_hash=hash_token(raw_token))
+    create_route(team, source="webhook", token_hash=hash_token(raw_token))
 
     response = client.post(
         "/api/integrations/webhook",
         headers={"Authorization": f"Bearer {raw_token}"},
-        json={"unknown": "payload"},
+        json={"message": "missing required title"},
     )
 
     assert response.status_code == 400
     assert response.is_json
+    assert response.get_json()["error"] == "validation_error"

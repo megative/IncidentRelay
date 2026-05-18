@@ -13,13 +13,13 @@ def test_make_hash_is_stable():
 
 
 def test_make_dedup_key_is_stable_for_equal_payloads():
-    payload = {"labels": {"alertname": "DiskFull", "instance": "host1"}}
+    labels = {"alertname": "DiskFull", "instance": "host1"}
 
-    assert make_dedup_key("alertmanager", "fp1", "DiskFull", payload) == make_dedup_key(
+    assert make_dedup_key("alertmanager", "fp1", "DiskFull", labels) == make_dedup_key(
         "alertmanager",
         "fp1",
         "DiskFull",
-        payload,
+        labels,
     )
 
 
@@ -33,6 +33,7 @@ def test_normalize_alertmanager_payload():
                     "alertname": "DiskFull",
                     "severity": "critical",
                     "instance": "host1",
+                    "team": "infra",
                 },
                 "annotations": {
                     "summary": "Disk is full",
@@ -48,31 +49,34 @@ def test_normalize_alertmanager_payload():
 
     assert len(alerts) == 1
     assert alerts[0]["source"] == "alertmanager"
+    assert alerts[0]["team_slug"] == "infra"
     assert alerts[0]["status"] == "firing"
     assert alerts[0]["severity"] == "critical"
-    assert alerts[0]["title"] == "DiskFull"
+    assert alerts[0]["title"] == "Disk is full"
     assert alerts[0]["message"] == "/var is 95% full"
+    assert alerts[0]["dedup_key"] == "disk-full-host1-var"
     assert alerts[0]["labels"]["instance"] == "host1"
 
 
 def test_normalize_zabbix_payload():
     payload = {
         "event_id": "123",
-        "event_status": "PROBLEM",
-        "event_name": "CPU load is high",
-        "event_severity": "High",
-        "host_name": "host1",
-        "trigger_description": "Load average is high",
-        "tags": {"team": "infra"},
+        "title": "CPU load is high",
+        "message": "Load average is high",
+        "severity": "High",
+        "status": "firing",
+        "labels": {"team": "infra"},
     }
 
     alerts = normalize_zabbix(payload)
 
     assert len(alerts) == 1
     assert alerts[0]["source"] == "zabbix"
+    assert alerts[0]["team_slug"] == "infra"
     assert alerts[0]["status"] == "firing"
-    assert alerts[0]["severity"] == "high"
+    assert alerts[0]["severity"] == "High"
     assert alerts[0]["title"] == "CPU load is high"
+    assert alerts[0]["message"] == "Load average is high"
 
 
 def test_normalize_webhook_payload():
@@ -83,13 +87,15 @@ def test_normalize_webhook_payload():
         "severity": "info",
         "fingerprint": "fp-1",
         "labels": {"team": "infra"},
-        "annotations": {"runbook": "https://example.com"},
+        "external_id": "external-1",
     }
 
     alerts = normalize_webhook(payload)
 
     assert len(alerts) == 1
     assert alerts[0]["source"] == "webhook"
+    assert alerts[0]["team_slug"] == "infra"
     assert alerts[0]["status"] == "resolved"
+    assert alerts[0]["dedup_key"] == "fp-1"
     assert alerts[0]["title"] == "DiskFull"
     assert alerts[0]["labels"]["team"] == "infra"
