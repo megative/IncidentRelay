@@ -6,26 +6,42 @@ from app.modules.db.models import BaseModel
 import app.modules.db.models as models
 
 
+ABSTRACT_MODEL_NAMES = {
+    "SoftDeleteModel",
+}
+
+
 def model_classes():
     """
-    Return all Peewee model classes.
+    Return concrete Peewee model classes only.
     """
-
     result = []
 
     for _, obj in vars(models).items():
-        if inspect.isclass(obj) and issubclass(obj, BaseModel) and obj is not BaseModel:
-            result.append(obj)
+        if not inspect.isclass(obj):
+            continue
+
+        if not issubclass(obj, BaseModel):
+            continue
+
+        if obj is BaseModel:
+            continue
+
+        if obj.__name__ in ABSTRACT_MODEL_NAMES:
+            continue
+
+        result.append(obj)
 
     return sorted(result, key=lambda model: model._meta.table_name)
 
 
 def main():
     """
-    Check that all model tables and model columns exist in the configured DB.
+    Check that all concrete model tables and model columns exist
+    in the configured DB.
     """
-
     db = init_database()
+    db.connect(reuse_if_open=True)
     tables = set(db.get_tables())
     ok = True
 
@@ -44,6 +60,9 @@ def main():
         if missing_columns:
             print(f"MISSING COLUMNS: {table}: {', '.join(missing_columns)}")
             ok = False
+
+    if not db.is_closed():
+        db.close()
 
     if ok:
         print("Schema check OK: all model tables and columns exist.")

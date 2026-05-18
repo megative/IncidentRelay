@@ -62,7 +62,7 @@ jobs:
 
       - name: Check database schema
         run: |
-          python app/check_schema.py
+          python -m app.check_schema.py
 
       - name: Check templates
         run: |
