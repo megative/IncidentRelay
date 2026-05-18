@@ -62,12 +62,12 @@ jobs:
 
       - name: Check database schema
         run: |
-          python -m app.check_schema.py
+          python -m app.check_schema
 
       - name: Check templates
         run: |
-          python app/check_templates.py
+          python -m app.check_templates
 
-      - name: Run pytest
+      - name: Run pytest with coverage
         run: |
-          pytest -q
+          pytest --cov=app --cov-report=term-missing --cov-fail-under=35
