@@ -24,15 +24,15 @@ def list_channels(
 
     if active_only:
         query = query.where(
-            (Team.active == True) &
-            (Team.deleted == False)
+            (Team.active == True)
+            & (Team.deleted == False)
         )
         query = (
             query
             .join(Group, on=(Team.group == Group.id))
             .where(
-                (Group.active == True) &
-                (Group.deleted == False)
+                (Group.active == True)
+                & (Group.deleted == False)
             )
             .switch(NotificationChannel)
         )
@@ -51,10 +51,7 @@ def list_channels(
 
 
 def get_channel(channel_id, include_deleted=False):
-    """
-    Return a channel by id.
-    """
-
+    """Return a channel by id."""
     query = NotificationChannel.select().where(NotificationChannel.id == channel_id)
 
     if not include_deleted:
@@ -63,11 +60,34 @@ def get_channel(channel_id, include_deleted=False):
     return query.get()
 
 
-def create_channel(team_id, name, channel_type, config, enabled=True, group_id=None):
-    """
-    Create a notification channel.
-    """
+def get_channel_by_team_and_name(
+    team_id,
+    name,
+    *,
+    exclude_channel_id=None,
+    include_deleted=True,
+):
+    """Return a channel with the same name in the same team, if any.
 
+    The database has a unique constraint on (team_id, name). Deleted channels are
+    included by default because they still occupy that unique key.
+    """
+    query = NotificationChannel.select().where(
+        (NotificationChannel.team == team_id)
+        & (NotificationChannel.name == name)
+    )
+
+    if exclude_channel_id is not None:
+        query = query.where(NotificationChannel.id != exclude_channel_id)
+
+    if not include_deleted:
+        query = query.where(NotificationChannel.deleted == False)
+
+    return query.first()
+
+
+def create_channel(team_id, name, channel_type, config, enabled=True, group_id=None):
+    """Create a notification channel."""
     return NotificationChannel.create(
         group=group_id,
         team=team_id,
@@ -79,10 +99,7 @@ def create_channel(team_id, name, channel_type, config, enabled=True, group_id=N
 
 
 def create_channel_if_missing(team_id, name, channel_type, config):
-    """
-    Create a notification channel if missing.
-    """
-
+    """Create a notification channel if missing."""
     channel, _ = NotificationChannel.get_or_create(
         team=team_id,
         name=name,
@@ -99,10 +116,7 @@ def create_channel_if_missing(team_id, name, channel_type, config):
 
 
 def update_channel(channel_id, data):
-    """
-    Update a notification channel.
-    """
-
+    """Update a notification channel."""
     channel = get_channel(channel_id)
 
     for field in ["group", "team", "name", "channel_type", "config", "enabled"]:
@@ -114,8 +128,7 @@ def update_channel(channel_id, data):
 
 
 def set_channel_enabled(channel_id, enabled):
-    """
-    Enable or disable a notification channel without deleting it.
+    """Enable or disable a notification channel without deleting it.
 
     Disabled channels stay visible in channel management UI and can be enabled
     again later. Delivery code should use enabled channels only.
@@ -123,41 +136,31 @@ def set_channel_enabled(channel_id, enabled):
     channel = get_channel(channel_id)
     channel.enabled = enabled
     channel.save()
-
     return channel
 
 
 def disable_channel(channel_id):
-    """
-    Disable a notification channel without deleting it.
-    """
+    """Disable a notification channel without deleting it."""
     return set_channel_enabled(channel_id, False)
 
 
 def enable_channel(channel_id):
-    """
-    Enable a previously disabled notification channel.
-    """
+    """Enable a previously disabled notification channel."""
     return set_channel_enabled(channel_id, True)
 
 
 def soft_delete_channel(channel_id):
-    """
-    Soft-delete a notification channel without removing historical references.
-    """
+    """Soft-delete a notification channel without removing historical references."""
     channel = get_channel(channel_id)
-
     channel.enabled = False
     channel.deleted = True
     channel.deleted_at = datetime.utcnow()
     channel.save()
-
     return channel
 
 
 def delete_channel(channel_id):
-    """
-    Soft-delete a notification channel and remove active route links.
+    """Soft-delete a notification channel and remove active route links.
 
     Route/channel links are active configuration, so they are removed when the
     channel is deleted. Historical alerts remain preserved.
@@ -167,4 +170,3 @@ def delete_channel(channel_id):
     ).execute()
 
     return soft_delete_channel(channel_id)
-

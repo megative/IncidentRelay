@@ -124,7 +124,11 @@ def create_channel(
         team=team,
         name=unique("channel"),
         channel_type=channel_type,
-        config=config or {"webhook_url": "https://example.com/webhook"},
+        config=(
+            {"webhook_url": ""}
+            if config is None
+            else config
+        ),
         enabled=True,
     )
 

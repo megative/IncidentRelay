@@ -99,3 +99,38 @@ def test_normalize_webhook_payload():
     assert alerts[0]["dedup_key"] == "fp-1"
     assert alerts[0]["title"] == "DiskFull"
     assert alerts[0]["labels"]["team"] == "infra"
+
+
+def test_normalize_zabbix_uses_defaults_for_none_values():
+    alerts = normalize_zabbix(
+        {
+            "event_id": "123",
+            "title": "CPUHigh",
+            "message": None,
+            "severity": None,
+            "status": None,
+            "labels": {},
+        }
+    )
+
+    assert alerts == [
+        {
+            "source": "zabbix",
+            "team_slug": None,
+            "external_id": "123",
+            "dedup_key": alerts[0]["dedup_key"],
+            "title": "CPUHigh",
+            "message": "",
+            "severity": "info",
+            "labels": {},
+            "payload": {
+                "event_id": "123",
+                "title": "CPUHigh",
+                "message": None,
+                "severity": None,
+                "status": None,
+                "labels": {},
+            },
+            "status": "firing",
+        }
+    ]

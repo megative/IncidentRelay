@@ -415,35 +415,7 @@
                   style="display: none;"
                 >
                   <div class="app-nested-grid">
-                    <div class="app-field">
-                      <label for="cfg-email-recipients">Recipients</label>
-                      <input
-                        id="cfg-email-recipients"
-                        class="input"
-                        type="text"
-                        placeholder="sre@example.com,noc@example.com"
-                      >
-                    </div>
-
-                    <div class="app-field">
-                      <label for="cfg-email-smtp-host">SMTP host</label>
-                      <input
-                        id="cfg-email-smtp-host"
-                        class="input"
-                        type="text"
-                        placeholder="smtp.example.com"
-                      >
-                    </div>
-
-                    <div class="app-field">
-                      <label for="cfg-email-smtp-port">SMTP port</label>
-                      <input
-                        id="cfg-email-smtp-port"
-                        class="input"
-                        type="number"
-                        value="587"
-                      >
-                    </div>
+                    {% include 'pages/include/email_config_block.html' %}
                   </div>
                 </div>
 

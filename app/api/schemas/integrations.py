@@ -1,6 +1,6 @@
 from typing import Any, Dict, List
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, model_validator
 
 from app.api.schemas.base import ApiModel
 
@@ -55,6 +55,20 @@ class ZabbixWebhookSchema(ApiModel):
     team: str | None = None
     labels: Dict[str, Any] = Field(default_factory=dict)
     fingerprint: str | None = None
+
+    @model_validator(mode="after")
+    def validate_not_empty(self):
+        has_identity = bool(self.event_id or self.trigger_id or self.fingerprint)
+        has_content = bool(self.title or self.subject or self.message)
+        has_labels = bool(self.labels)
+
+        if not (has_identity or has_content or has_labels):
+            raise ValueError(
+                "Zabbix webhook payload must contain at least one of: "
+                "event_id, trigger_id, fingerprint, title, subject, message or labels"
+            )
+
+        return self
 
 
 class GenericWebhookSchema(ApiModel):

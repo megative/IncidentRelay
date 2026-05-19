@@ -10,6 +10,7 @@ from app.services.auth import require_alert_token
 from app.services.normalizers import normalize_alertmanager, normalize_webhook, normalize_zabbix
 from app.services.validation import validate_body
 from app.notifiers.voice.loader import create_voice_provider, resolve_env_values
+from app.services.routing import find_route_for_alert
 
 
 integrations_bp = Blueprint("integrations_api", __name__)
@@ -58,44 +59,88 @@ def process_incoming_alerts(normalized_alerts):
     """
     Store normalized alerts and return created or updated records.
     """
-
     result = []
-
+    routing_errors = []
     intake_route = getattr(request, "current_intake_route", None)
 
-    for alert_data in normalized_alerts:
+    for index, alert_data in enumerate(normalized_alerts):
         if intake_route:
-            # The route intake token is the routing boundary. Alerts submitted
-            # with this token are forced to this route, which already defines
-            # team, rotation and notification channels.
+            # The route intake token is the routing boundary.
+            # Alerts submitted with this token are forced to this route,
+            # which already defines team, rotation and notification channels.
             alert_data["forced_route_id"] = intake_route.id
             alert_data["forced_team_id"] = intake_route.team.id
             alert_data["team_slug"] = intake_route.team.slug
 
+        route = find_route_for_alert(alert_data)
+
+        if not route:
+            routing_errors.append(
+                {
+                    "index": index,
+                    "source": alert_data.get("source"),
+                    "team_slug": alert_data.get("team_slug"),
+                    "title": alert_data.get("title"),
+                    "dedup_key": alert_data.get("dedup_key"),
+                    "routing_error": alert_data.get("routing_error")
+                    or "no enabled route matched alert labels",
+                }
+            )
+
+    if routing_errors:
+        logging.getLogger("oncall.alerts").warning(
+            "incoming alerts rejected by routing",
+            extra={
+                "extra": {
+                    "event_type": "alert_intake_routing_error",
+                    "source": normalized_alerts[0].get("source") if normalized_alerts else None,
+                    "alerts_count": len(normalized_alerts),
+                    "errors": routing_errors,
+                    "route_id": intake_route.id if intake_route else None,
+                    "team_id": intake_route.team.id if intake_route else None,
+                }
+            },
+        )
+
+        return jsonify(
+            {
+                "error": "routing_error",
+                "message": "Alert routing failed",
+                "details": routing_errors,
+            }
+        ), 400
+
+    for alert_data in normalized_alerts:
         alert, created = upsert_alert(alert_data)
+
         if alert is None:
-            return jsonify({
-                "status": "ignored",
-                "reason": "orphan_resolved",
-            }), 202
-        result.append({
-            "id": alert.id,
-            "team_id": alert.team.id if alert.team else None,
-            "team_slug": alert.team.slug if alert.team else None,
-            "route_id": alert.route.id if alert.route else None,
-            "rotation_id": alert.rotation.id if alert.rotation else None,
-            "routing_error": alert_data.get("routing_error"),
-            "created": created,
-            "status": alert.status,
-            "assignee": alert.assignee.username if alert.assignee else None,
-        })
+            return jsonify(
+                {
+                    "status": "ignored",
+                    "reason": "orphan_resolved",
+                }
+            ), 202
+
+        result.append(
+            {
+                "id": alert.id,
+                "team_id": alert.team.id if alert.team else None,
+                "team_slug": alert.team.slug if alert.team else None,
+                "route_id": alert.route.id if alert.route else None,
+                "rotation_id": alert.rotation.id if alert.rotation else None,
+                "routing_error": alert_data.get("routing_error"),
+                "created": created,
+                "status": alert.status,
+                "assignee": alert.assignee.username if alert.assignee else None,
+            }
+        )
 
     logging.getLogger("oncall.alerts").info(
         "incoming alerts processed",
         extra={
             "extra": {
                 "event_type": "alert_intake",
-                "source": normalized_alerts[0]["source"] if normalized_alerts else None,
+                "source": normalized_alerts[0].get("source") if normalized_alerts else None,
                 "alerts_count": len(normalized_alerts),
                 "route_id": intake_route.id if intake_route else None,
                 "team_id": intake_route.team.id if intake_route else None,

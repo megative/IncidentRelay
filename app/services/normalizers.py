@@ -59,10 +59,10 @@ def normalize_zabbix(payload):
         "dedup_key": payload.get("fingerprint") or make_dedup_key("zabbix", external_id, title, labels),
         "title": title,
         "message": payload.get("message") or "",
-        "severity": payload.get("severity"),
+        "severity": payload.get("severity") or "info",
         "labels": labels,
         "payload": payload,
-        "status": payload.get("status", "firing"),
+        "status": payload.get("status") or "firing",
     }]
 
 
@@ -80,8 +80,8 @@ def normalize_webhook(payload):
         "dedup_key": payload.get("fingerprint") or make_dedup_key("webhook", payload.get("external_id"), title, labels),
         "title": title,
         "message": payload.get("message") or "",
-        "severity": payload.get("severity"),
+        "severity": payload.get("severity") or "info",
         "labels": labels,
         "payload": payload,
-        "status": payload.get("status", "firing"),
+        "status": payload.get("status") or "firing",
     }]

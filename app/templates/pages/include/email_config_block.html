@@ -1,0 +1,94 @@
+<div class="app-field app-form-wide channel-config" data-channel-config="email" style="display: none;">
+          <div class="app-help">
+            Email notifications are sent to the assigned user's profile email.
+          </div>
+          <div class="app-field app-form-wide">
+            <div class="app-json-header">
+              <label for="cfg-email-html-template">HTML template</label>
+              <button id="reset-email-template" type="button" class="btn btn-small"><i class="fas fa-undo"></i> Reset default</button>
+            </div>
+            <textarea id="cfg-email-html-template" class="input" rows="14" spellcheck="false" data-default-template="&lt;!doctype html&gt;
+&lt;html&gt;
+  &lt;body style=&quot;margin:0;padding:0;background:#f6f8fb;font-family:Arial,sans-serif;color:#172033;&quot;&gt;
+    &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellspacing=&quot;0&quot; cellpadding=&quot;0&quot; style=&quot;background:#f6f8fb;padding:24px 0;&quot;&gt;
+      &lt;tr&gt;
+        &lt;td align=&quot;center&quot;&gt;
+          &lt;table role=&quot;presentation&quot; width=&quot;640&quot; cellspacing=&quot;0&quot; cellpadding=&quot;0&quot; style=&quot;max-width:640px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e4e8f0;&quot;&gt;
+            &lt;tr&gt;
+              &lt;td style=&quot;padding:22px 26px;background:#111827;color:#ffffff;&quot;&gt;
+                &lt;div style=&quot;font-size:13px;letter-spacing:.08em;text-transform:uppercase;opacity:.8;&quot;&gt;IncidentRelay&lt;/div&gt;
+                &lt;h1 style=&quot;margin:8px 0 0;font-size:22px;line-height:1.3;&quot;&gt;{event_type}: {title}&lt;/h1&gt;
+              &lt;/td&gt;
+            &lt;/tr&gt;
+            &lt;tr&gt;
+              &lt;td style=&quot;padding:24px 26px;&quot;&gt;
+                &lt;p style=&quot;margin:0 0 18px;font-size:15px;line-height:1.6;white-space:pre-line;&quot;&gt;{message}&lt;/p&gt;
+                &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellspacing=&quot;0&quot; cellpadding=&quot;0&quot; style=&quot;border-collapse:collapse;font-size:14px;&quot;&gt;
+                  &lt;tr&gt;&lt;td style=&quot;padding:8px 0;color:#64748b;width:140px;&quot;&gt;Alert ID&lt;/td&gt;&lt;td style=&quot;padding:8px 0;font-weight:600;&quot;&gt;{alert_id}&lt;/td&gt;&lt;/tr&gt;
+                  &lt;tr&gt;&lt;td style=&quot;padding:8px 0;color:#64748b;&quot;&gt;Team&lt;/td&gt;&lt;td style=&quot;padding:8px 0;font-weight:600;&quot;&gt;{team}&lt;/td&gt;&lt;/tr&gt;
+                  &lt;tr&gt;&lt;td style=&quot;padding:8px 0;color:#64748b;&quot;&gt;Status&lt;/td&gt;&lt;td style=&quot;padding:8px 0;font-weight:600;&quot;&gt;{status}&lt;/td&gt;&lt;/tr&gt;
+                  &lt;tr&gt;&lt;td style=&quot;padding:8px 0;color:#64748b;&quot;&gt;Severity&lt;/td&gt;&lt;td style=&quot;padding:8px 0;font-weight:600;&quot;&gt;{severity}&lt;/td&gt;&lt;/tr&gt;
+                  &lt;tr&gt;&lt;td style=&quot;padding:8px 0;color:#64748b;&quot;&gt;Assignee&lt;/td&gt;&lt;td style=&quot;padding:8px 0;font-weight:600;&quot;&gt;{assignee}&lt;/td&gt;&lt;/tr&gt;
+                  &lt;tr&gt;&lt;td style=&quot;padding:8px 0;color:#64748b;&quot;&gt;Source&lt;/td&gt;&lt;td style=&quot;padding:8px 0;font-weight:600;&quot;&gt;{source}&lt;/td&gt;&lt;/tr&gt;
+                &lt;/table&gt;
+                &lt;p style=&quot;margin:22px 0 0;&quot;&gt;
+                  &lt;a href=&quot;{alert_url}&quot; style=&quot;display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:11px 16px;border-radius:9px;font-weight:600;&quot;&gt;Open alert&lt;/a&gt;
+                &lt;/p&gt;
+              &lt;/td&gt;
+            &lt;/tr&gt;
+            &lt;tr&gt;
+              &lt;td style=&quot;padding:16px 26px;background:#f8fafc;color:#64748b;font-size:12px;&quot;&gt;
+                Sent by IncidentRelay. You can customize this email template in the channel settings.
+              &lt;/td&gt;
+            &lt;/tr&gt;
+          &lt;/table&gt;
+        &lt;/td&gt;
+      &lt;/tr&gt;
+    &lt;/table&gt;
+  &lt;/body&gt;
+&lt;/html&gt;">&lt;!doctype html&gt;
+&lt;html&gt;
+  &lt;body style=&quot;margin:0;padding:0;background:#f6f8fb;font-family:Arial,sans-serif;color:#172033;&quot;&gt;
+    &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellspacing=&quot;0&quot; cellpadding=&quot;0&quot; style=&quot;background:#f6f8fb;padding:24px 0;&quot;&gt;
+      &lt;tr&gt;
+        &lt;td align=&quot;center&quot;&gt;
+          &lt;table role=&quot;presentation&quot; width=&quot;640&quot; cellspacing=&quot;0&quot; cellpadding=&quot;0&quot; style=&quot;max-width:640px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e4e8f0;&quot;&gt;
+            &lt;tr&gt;
+              &lt;td style=&quot;padding:22px 26px;background:#111827;color:#ffffff;&quot;&gt;
+                &lt;div style=&quot;font-size:13px;letter-spacing:.08em;text-transform:uppercase;opacity:.8;&quot;&gt;IncidentRelay&lt;/div&gt;
+                &lt;h1 style=&quot;margin:8px 0 0;font-size:22px;line-height:1.3;&quot;&gt;{event_type}: {title}&lt;/h1&gt;
+              &lt;/td&gt;
+            &lt;/tr&gt;
+            &lt;tr&gt;
+              &lt;td style=&quot;padding:24px 26px;&quot;&gt;
+                &lt;p style=&quot;margin:0 0 18px;font-size:15px;line-height:1.6;white-space:pre-line;&quot;&gt;{message}&lt;/p&gt;
+                &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellspacing=&quot;0&quot; cellpadding=&quot;0&quot; style=&quot;border-collapse:collapse;font-size:14px;&quot;&gt;
+                  &lt;tr&gt;&lt;td style=&quot;padding:8px 0;color:#64748b;width:140px;&quot;&gt;Alert ID&lt;/td&gt;&lt;td style=&quot;padding:8px 0;font-weight:600;&quot;&gt;{alert_id}&lt;/td&gt;&lt;/tr&gt;
+                  &lt;tr&gt;&lt;td style=&quot;padding:8px 0;color:#64748b;&quot;&gt;Team&lt;/td&gt;&lt;td style=&quot;padding:8px 0;font-weight:600;&quot;&gt;{team}&lt;/td&gt;&lt;/tr&gt;
+                  &lt;tr&gt;&lt;td style=&quot;padding:8px 0;color:#64748b;&quot;&gt;Status&lt;/td&gt;&lt;td style=&quot;padding:8px 0;font-weight:600;&quot;&gt;{status}&lt;/td&gt;&lt;/tr&gt;
+                  &lt;tr&gt;&lt;td style=&quot;padding:8px 0;color:#64748b;&quot;&gt;Severity&lt;/td&gt;&lt;td style=&quot;padding:8px 0;font-weight:600;&quot;&gt;{severity}&lt;/td&gt;&lt;/tr&gt;
+                  &lt;tr&gt;&lt;td style=&quot;padding:8px 0;color:#64748b;&quot;&gt;Assignee&lt;/td&gt;&lt;td style=&quot;padding:8px 0;font-weight:600;&quot;&gt;{assignee}&lt;/td&gt;&lt;/tr&gt;
+                  &lt;tr&gt;&lt;td style=&quot;padding:8px 0;color:#64748b;&quot;&gt;Source&lt;/td&gt;&lt;td style=&quot;padding:8px 0;font-weight:600;&quot;&gt;{source}&lt;/td&gt;&lt;/tr&gt;
+                &lt;/table&gt;
+                &lt;p style=&quot;margin:22px 0 0;&quot;&gt;
+                  &lt;a href=&quot;{alert_url}&quot; style=&quot;display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:11px 16px;border-radius:9px;font-weight:600;&quot;&gt;Open alert&lt;/a&gt;
+                &lt;/p&gt;
+              &lt;/td&gt;
+            &lt;/tr&gt;
+            &lt;tr&gt;
+              &lt;td style=&quot;padding:16px 26px;background:#f8fafc;color:#64748b;font-size:12px;&quot;&gt;
+                Sent by IncidentRelay. You can customize this email template in the channel settings.
+              &lt;/td&gt;
+            &lt;/tr&gt;
+          &lt;/table&gt;
+        &lt;/td&gt;
+      &lt;/tr&gt;
+    &lt;/table&gt;
+  &lt;/body&gt;
+&lt;/html&gt;</textarea>
+            <div class="app-help">
+              Supported placeholders: {alert_id}, {event_type}, {title}, {message}, {severity}, {status}, {team}, {assignee}, {source}, {alert_url}.
+              Leave the default template unchanged to use the built-in template.
+            </div>
+          </div>
+        </div>

@@ -25,7 +25,21 @@ def upsert_alert(alert_data):
     team = route.team if route else None
     rotation = route.rotation if route else None
     group_key = build_group_key(route, alert_data)
-    status = alert_data.get("status", "firing")
+    status = alert_data.get("status") or "firing"
+
+    if not route:
+        logger.warning(
+            "alert routing failed",
+            extra={
+                "extra": {
+                    "source": alert_data.get("source"),
+                    "dedup_key": alert_data.get("dedup_key"),
+                    "team_slug": alert_data.get("team_slug"),
+                    "routing_error": alert_data.get("routing_error"),
+                }
+            },
+        )
+        return None, False
 
     existing_alert = alerts_repo.find_existing_alert(alert_data["source"], alert_data["dedup_key"], Config.ALERT_GROUP_WINDOW_SECONDS)
     if existing_alert:

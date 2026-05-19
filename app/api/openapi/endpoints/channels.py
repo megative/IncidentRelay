@@ -1,8 +1,5 @@
 def path_param(name, description):
-    """
-    Build an integer path parameter.
-    """
-
+    """Build an integer path parameter."""
     return {
         "name": name,
         "in": "path",
@@ -13,10 +10,7 @@ def path_param(name, description):
 
 
 def query_param(name, description, schema=None, required=False):
-    """
-    Build a query parameter.
-    """
-
+    """Build a query parameter."""
     return {
         "name": name,
         "in": "query",
@@ -27,36 +21,29 @@ def query_param(name, description, schema=None, required=False):
 
 
 def json_body(description, schema, required=True):
-    """
-    Build a JSON request body.
-    """
-
+    """Build a JSON request body."""
     return {
         "required": required,
         "description": description,
         "content": {
             "application/json": {
-                "schema": schema
-            }
+                "schema": schema,
+            },
         },
     }
 
 
 def response(description, schema=None):
-    """
-    Build a JSON response.
-    """
-
+    """Build a JSON response."""
     item = {"description": description}
-
     if schema:
         item["content"] = {
             "application/json": {
-                "schema": schema
-            }
+                "schema": schema,
+            },
         }
-
     return item
+
 
 SEVERITY_FILTER_SCHEMA = {
     "type": "array",
@@ -73,16 +60,28 @@ SEVERITY_FILTER_SCHEMA = {
     "example": ["critical", "high"],
 }
 
-
 CHANNEL_SCHEMA = {
     "type": "object",
     "required": ["name", "channel_type", "config"],
     "properties": {
-        "team_id": {"type": "integer", "nullable": True, "description": "Owner team id."},
+        "team_id": {
+            "type": "integer",
+            "nullable": True,
+            "description": "Owner team id.",
+        },
         "name": {"type": "string", "example": "infra-telegram"},
         "channel_type": {
             "type": "string",
-            "enum": ["telegram", "slack", "mattermost", "webhook", "discord", "teams", "email", "voice_call"],
+            "enum": [
+                "telegram",
+                "slack",
+                "mattermost",
+                "webhook",
+                "discord",
+                "teams",
+                "email",
+                "voice_call",
+            ],
             "example": "telegram",
         },
         "config": {
@@ -95,7 +94,7 @@ CHANNEL_SCHEMA = {
                 "Slack/Webhook/Discord/Teams require webhook_url. "
                 "Mattermost can use webhook_url, or mode=bot_api with api_url, "
                 "bot_token and channel_id for buttons and post updates. "
-                "Email requires recipients. "
+                "Email sends to the assigned user profile email and supports html_template. "
                 "Voice call channels require provider. "
                 "provider_config is passed to the selected provider."
             ),
@@ -112,6 +111,37 @@ CHANNEL_SCHEMA = {
             },
         },
         "enabled": {"type": "boolean", "default": True},
+    },
+}
+
+CHANNEL_CONFLICT_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "error": {"type": "string", "example": "conflict"},
+        "message": {
+            "type": "string",
+            "example": "Channel with this name already exists in this team",
+        },
+        "details": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "field": {"type": "string", "example": "name"},
+                    "loc": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "example": ["name"],
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "Channel name must be unique within a team",
+                    },
+                    "type": {"type": "string", "example": "unique"},
+                    "input": {"type": "string", "example": "cloud-mail"},
+                },
+            },
+        },
     },
 }
 
@@ -191,7 +221,6 @@ VOICE_CALL_CONFIG_SCHEMA = {
     "additionalProperties": True,
 }
 
-
 VOICE_PROVIDER_SCHEMA = {
     "type": "object",
     "properties": {
@@ -245,10 +274,7 @@ CHANNEL_DELETE_RESPONSE_SCHEMA = {
 
 
 def tags():
-    """
-    Return OpenAPI tags.
-    """
-
+    """Return OpenAPI tags."""
     return [
         {
             "name": "channels",
@@ -261,10 +287,7 @@ def tags():
 
 
 def paths():
-    """
-    Return OpenAPI paths for channel endpoints.
-    """
-
+    """Return OpenAPI paths for channel endpoints."""
     return {
         "/api/channels/types": {
             "get": {
@@ -281,8 +304,19 @@ def paths():
                 "summary": "List channels",
                 "description": "Returns notification channels. Optional team_id filters channels by owner team.",
                 "operationId": "listChannels",
-                "parameters": [query_param("team_id", "Filter channels by team id.", {"type": "integer", "minimum": 1})],
-                "responses": {"200": response("List of channels.", {"type": "array", "items": CHANNEL_SCHEMA})},
+                "parameters": [
+                    query_param(
+                        "team_id",
+                        "Filter channels by team id.",
+                        {"type": "integer", "minimum": 1},
+                    )
+                ],
+                "responses": {
+                    "200": response(
+                        "List of channels.",
+                        {"type": "array", "items": CHANNEL_SCHEMA},
+                    )
+                },
             },
             "post": {
                 "tags": ["channels"],
@@ -293,7 +327,11 @@ def paths():
                 ),
                 "operationId": "createChannel",
                 "requestBody": json_body("Channel properties.", CHANNEL_SCHEMA),
-                "responses": {"201": response("Channel created. The full intake_token is returned only in this response."), "400": response("Validation error.")},
+                "responses": {
+                    "201": response("Channel created. The full intake_token is returned only in this response."),
+                    "400": response("Validation error."),
+                    "409": response("Channel name already exists in this team.", CHANNEL_CONFLICT_RESPONSE_SCHEMA),
+                },
             },
         },
         "/api/channels/{channel_id}": {
@@ -312,15 +350,19 @@ def paths():
                 "operationId": "updateChannel",
                 "parameters": [path_param("channel_id", "Channel id.")],
                 "requestBody": json_body("Updated channel properties.", CHANNEL_SCHEMA),
-                "responses": {"200": response("Channel updated."), "400": response("Validation error.")},
+                "responses": {
+                    "200": response("Channel updated."),
+                    "400": response("Validation error."),
+                    "409": response("Channel name already exists in this team.", CHANNEL_CONFLICT_RESPONSE_SCHEMA),
+                },
             },
             "delete": {
                 "tags": ["channels"],
                 "summary": "Delete channel",
                 "description": (
-                    "Soft-deletes a notification channel by setting deleted=true and "
-                    "enabled=false. Deleted channels are hidden from active channel lists "
-                    "and detached from routes. Historical alerts are preserved."
+                    "Soft-deletes a notification channel by setting deleted=true and enabled=false. "
+                    "Deleted channels are hidden from active channel lists and detached from routes. "
+                    "Historical alerts are preserved."
                 ),
                 "operationId": "deleteChannel",
                 "parameters": [path_param("channel_id", "Channel id.")],
@@ -352,10 +394,7 @@ def paths():
             "post": {
                 "tags": ["channels"],
                 "summary": "Enable channel",
-                "description": (
-                    "Enables a previously disabled notification channel by setting "
-                    "enabled=true."
-                ),
+                "description": "Enables a previously disabled notification channel by setting enabled=true.",
                 "operationId": "enableChannel",
                 "parameters": [path_param("channel_id", "Channel id.")],
                 "responses": {

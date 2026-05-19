@@ -3,6 +3,7 @@ from typing import Any, Dict
 from pydantic import Field, model_validator
 
 from app.api.schemas.base import ApiModel
+from app.services.email_templates import normalize_email_html_template
 from app.services.severity import normalize_severity_list
 
 
@@ -22,7 +23,7 @@ class ChannelBaseSchema(ApiModel):
         """Validate channel-specific config fields."""
         config = dict(self.config or {})
 
-        # Backward-compatible alias. Keep notify_on_severities as the canonical key.
+        # Backward-compatible alias. Keep notify_on_severities as canonical key.
         if "notify_on_severities" not in config and "severities" in config:
             config["notify_on_severities"] = config.pop("severities")
 
@@ -37,8 +38,6 @@ class ChannelBaseSchema(ApiModel):
             config["notify_on_severities"] = notify_on_severities
         else:
             config.pop("notify_on_severities", None)
-
-        self.config = config
 
         if self.channel_type == "telegram":
             bot_token = str(config.get("bot_token") or "").strip()
@@ -59,33 +58,35 @@ class ChannelBaseSchema(ApiModel):
         if self.channel_type == "mattermost":
             mode = config.get("mode") or ("bot_api" if config.get("api_url") else "webhook")
             if mode == "bot_api":
-                missing = [name for name in ["api_url", "bot_token", "channel_id"] if not config.get(name)]
+                missing = [
+                    name
+                    for name in ["api_url", "bot_token", "channel_id"]
+                    if not config.get(name)
+                ]
                 if missing:
                     raise ValueError(f"mattermost Bot API mode requires: {', '.join(missing)}")
             if mode == "webhook" and not config.get("webhook_url"):
                 raise ValueError("mattermost webhook mode requires webhook_url")
 
         if self.channel_type == "email":
-            recipients = config.get("recipients")
-            if not isinstance(recipients, list) or not recipients:
-                raise ValueError("email channel requires recipients list")
+            html_template = normalize_email_html_template(config.get("html_template"))
+            if html_template:
+                config["html_template"] = html_template
+            else:
+                config.pop("html_template", None)
 
         if self.channel_type == "voice_call":
             rules = config.get("notification_rules", [])
-
             if not isinstance(rules, list):
                 raise ValueError("voice_call notification_rules must be a list")
 
+        self.config = config
         return self
 
 
 class ChannelCreateSchema(ChannelBaseSchema):
-    """
-    Validate notification channel creation input.
-    """
+    """Validate notification channel creation input."""
 
 
 class ChannelUpdateSchema(ChannelBaseSchema):
-    """
-    Validate notification channel update input.
-    """
+    """Validate notification channel update input."""
