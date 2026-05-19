@@ -1,3 +1,5 @@
+![IncidentRelay](app/static/images/incidentrelay-logo.svg)
+
 # IncidentRelay
 
 **Self-hosted on-call scheduling, alert routing, alert delivery, reminders, and escalations for teams that want control over their incident workflow.**
@@ -20,6 +22,8 @@ It provides the core building blocks of an on-call system:
 - Swagger/OpenAPI documentation.
 
 IncidentRelay is designed for **self-hosted environments** where teams need predictable behavior, clear ownership, easy integrations, and full control over alert routing.
+
+![Alerts](screenshots/alerts.png)
 
 ---
 
@@ -44,6 +48,8 @@ Channels only describe where notifications are delivered. Routes decide which te
 This keeps alert delivery easier to reason about, easier to audit, and safer for self-hosted deployments.
 
 ---
+
+![Callendar](screenshots/callendar.png)
 
 ## Highlights
 
@@ -80,6 +86,8 @@ IncidentRelay can be extended with custom voice providers for self-hosted instal
 IncidentRelay includes Swagger/OpenAPI documentation and personal API tokens with scopes for alerts, resources, and profile access.
 
 ---
+
+![Routes](screenshots/routes.png)
 
 ## Supported integrations
 
