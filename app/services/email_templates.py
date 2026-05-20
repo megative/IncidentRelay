@@ -1,9 +1,9 @@
-"""Email notification HTML templates."""
-
 from __future__ import annotations
 
 from html import escape
 from string import Formatter
+
+from app.modules.common import SafeFormatDict
 
 EMAIL_HTML_TEMPLATE_MAX_LENGTH = 20000
 
@@ -62,11 +62,12 @@ DEFAULT_EMAIL_HTML_TEMPLATE = """<!doctype html>
 </html>"""
 
 
-class _SafeFormatDict(dict):
-    """Keep unknown template placeholders unchanged."""
+def render_email_html(alert, text, event_type="notification", template=None):
+    """Render alert email as HTML."""
+    html_template = (template or "").strip() or DEFAULT_EMAIL_HTML_TEMPLATE
+    values = build_email_template_context(alert, text, event_type)
 
-    def __missing__(self, key):
-        return "{" + key + "}"
+    return html_template.format_map(SafeFormatDict(values))
 
 
 def _stringify(value, default="-"):
@@ -101,7 +102,7 @@ def build_email_template_context(alert, text, event_type="notification"):
 
     alert_url = build_alert_web_url(alert) or "#"
 
-    return _SafeFormatDict(
+    return SafeFormatDict(
         alert_id=_escape_value(getattr(alert, "id", None), "test"),
         event_type=_escape_value(str(event_type or "notification").upper()),
         title=_escape_value(getattr(alert, "title", None), "Alert"),
@@ -142,16 +143,3 @@ def validate_email_html_template(template):
         raise ValueError(f"email html_template has invalid format placeholders: {exc}") from exc
 
     return True
-
-
-def render_email_html(alert, text, event_type="notification", template=None):
-    """Render alert email as HTML."""
-    html_template = (template or "").strip() or DEFAULT_EMAIL_HTML_TEMPLATE
-
-    values = build_email_template_context(alert, text, event_type)
-
-    for key, value in values.items():
-        html_template = html_template.replace("{{ " + key + " }}", value)
-        html_template = html_template.replace("{{" + key + "}}", value)
-
-    return html_template

@@ -13,6 +13,7 @@ from app.services.links import build_alert_web_url
 from app.services.telegram.bot import send_telegram_alert, update_telegram_alert
 from app.services.telegram.templates import format_telegram_alert_message
 from app.settings import Config
+from app.modules.common import SafeFormatDict
 
 logger = logging.getLogger("oncall.alerts")
 
@@ -465,7 +466,7 @@ class VoiceCallNotifier(BaseNotifier):
             "Press 1 to acknowledge. "
             "Press 2 to resolve."
         )
-        values = _SafeFormatDict(
+        values = SafeFormatDict(
             alert_id=getattr(alert, "id", None) or "test",
             event_type=event_type,
             title=getattr(alert, "title", None) or "Alert",
@@ -532,10 +533,3 @@ class VoiceCallNotifier(BaseNotifier):
             "skipped": True,
             "skip_reason": reason,
         }
-
-
-class _SafeFormatDict(dict):
-    """Keep unknown template placeholders unchanged."""
-
-    def __missing__(self, key):
-        return "{" + key + "}"
