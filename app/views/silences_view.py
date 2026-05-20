@@ -12,18 +12,30 @@ silences_bp = Blueprint("silences_api", __name__)
 
 @silences_bp.route("", methods=["GET"])
 def list_silences():
-    """
-    Return silence rules.
-    """
-
+    """Return silence rules."""
     team_id = request.args.get("team_id", type=int)
+    include_expired_history = request.args.get("include_expired_history") in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
     if team_id:
         error = require_team_read(team_id)
         if error:
             return error
-        silences = silences_repo.list_silences(team_id=team_id)
+
+        silences = silences_repo.list_silences(
+            team_id=team_id,
+            include_expired_history=include_expired_history,
+        )
     else:
-        silences = silences_repo.list_silences(team_ids=get_allowed_team_ids())
+        silences = silences_repo.list_silences(
+            team_ids=get_allowed_team_ids(),
+            include_expired_history=include_expired_history,
+        )
+
     return jsonify([serialize_silence(silence) for silence in silences])
 
 

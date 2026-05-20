@@ -6,7 +6,7 @@ from app.modules.db import alerts_repo, users_repo
 from app.services.oncall import get_current_oncall_user, get_next_rotation_user
 from app.services.routing import build_group_key, find_route_for_alert
 from app.services.silences import find_active_silence
-from app.services.notifier import (
+from app.services.notification_service import (
     has_matching_notification_channel,
     notify_alert,
     update_alert_messages,

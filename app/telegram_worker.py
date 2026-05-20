@@ -3,7 +3,7 @@ import signal
 import time
 
 from app import create_app
-from app.services.telegram.poller import poll_telegram_channels_once
+from app.notifiers.telegram.poller import poll_telegram_channels_once
 
 
 logger = logging.getLogger("oncall.telegram")

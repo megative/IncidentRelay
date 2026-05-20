@@ -1,6 +1,7 @@
 import pytest
 
-from app.notifiers.plugins import DiscordNotifier, IncomingWebhookNotifier, MattermostNotifier
+from app.notifiers.plugins import DiscordNotifier, IncomingWebhookNotifier
+from app.notifiers.mattermost.notifier import MattermostNotifier
 from tests.factories import create_alert, create_channel, create_group, create_route, create_team
 
 

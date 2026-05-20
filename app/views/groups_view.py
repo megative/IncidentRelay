@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request
 from peewee import DoesNotExist, IntegrityError
 
+from app.modules.db.common import integrity_conflict, unique_field_conflict
 from app.api.schemas.groups import (
     GroupCreateSchema,
     GroupUpdateSchema,
@@ -51,12 +52,24 @@ def create_group():
     if error:
         return error
 
-    group = groups_repo.create_group(
-        payload.slug,
-        payload.name,
-        payload.description,
-        active=payload.active,
-    )
+    try:
+        group = groups_repo.create_group(
+            payload.slug,
+            payload.name,
+            payload.description,
+            active=payload.active,
+        )
+    except IntegrityError as exc:
+        error_text = str(exc).lower()
+
+        if "slug" in error_text:
+            return unique_field_conflict(
+                "slug",
+                payload.slug,
+                "Group with this slug already exists",
+            )
+
+        return integrity_conflict("Group could not be saved because it conflicts with existing data")
     write_audit("group.create", object_type="group", object_id=group.id, group_id=group.id, data=payload.model_dump())
     return jsonify(serialize_group(group)), 201
 

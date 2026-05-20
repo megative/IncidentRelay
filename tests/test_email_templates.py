@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.services.email_templates import (
+from app.notifiers.email.email_templates import (
     DEFAULT_EMAIL_HTML_TEMPLATE,
     normalize_email_html_template,
     render_email_html,

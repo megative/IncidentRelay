@@ -4,9 +4,9 @@ from datetime import datetime
 from app.db import database_proxy as db
 from app.modules.db import alerts_repo, channels_repo, users_repo
 from app.services.alerts import acknowledge_alert, resolve_alert
-from app.services.telegram.templates import format_telegram_alert_message
-from app.services.telegram.actions import parse_telegram_action_data
-from app.services.telegram.bot import (
+from app.notifiers.telegram.templates import format_telegram_alert_message
+from app.notifiers.telegram.actions import parse_telegram_action_data
+from app.notifiers.telegram.bot import (
     answer_telegram_callback,
     get_telegram_bot,
     update_telegram_alert,

@@ -71,15 +71,10 @@ def notification_log_extra(channel, alert, event_type, result=None, error=None, 
 def get_channel_notify_on_severities(channel):
     """Return normalized channel-level severity filter.
 
-    Empty list means that the channel accepts all severities. The legacy config
-    key 'severities' is accepted for backward compatibility, but
-    'notify_on_severities' is the canonical key.
+    Empty list means that the channel accepts all severities.
     """
     config = channel.config or {}
     raw_severities = config.get("notify_on_severities")
-
-    if raw_severities is None:
-        raw_severities = config.get("severities")
 
     try:
         return set(normalize_severity_list(raw_severities))

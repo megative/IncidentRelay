@@ -1,5 +1,5 @@
 from app.modules.db.models import AlertEvent, AlertNotification
-from app.services.notifier import (
+from app.services.notification_service import (
     channel_matches_alert_severity,
     format_alert_message,
     get_channel_notify_on_severities,

@@ -3,27 +3,18 @@ from types import SimpleNamespace
 from flask import Blueprint, jsonify, request
 from peewee import IntegrityError
 
+import app.modules.db.common as db_common
 from app.api.schemas.channels import ChannelCreateSchema, ChannelUpdateSchema
 from app.modules.db import channels_repo, teams_repo
-from app.notifiers.registry import get_notifier
+from app.notifiers.registry import get_notifier, list_notifier_types
 from app.notifiers.voice.loader import list_voice_providers
+from app.notifiers.email.email_templates import DEFAULT_EMAIL_HTML_TEMPLATE
 from app.services.audit import write_audit
 from app.services.rbac import get_allowed_team_ids, require_team_read, require_team_write
 from app.services.serializers import serialize_channel
 from app.services.validation import validate_body
 
 channels_bp = Blueprint("channels_api", __name__)
-
-CHANNEL_TYPES = [
-    "telegram",
-    "slack",
-    "mattermost",
-    "webhook",
-    "discord",
-    "teams",
-    "email",
-    "voice_call",
-]
 
 
 def channel_name_conflict_response(name):
@@ -41,26 +32,6 @@ def channel_name_conflict_response(name):
             }
         ],
     }), 409
-
-
-def is_channel_name_unique_violation(exc):
-    """Return True when IntegrityError is caused by channel name uniqueness."""
-    message = str(exc)
-    return (
-        "notificationchannel_team_id_name" in message
-        or "notification_channel_team_id_name" in message
-        or "team_id, name" in message
-    )
-
-
-def has_channel_name_conflict(team_id, name, *, exclude_channel_id=None):
-    """Check whether a channel name is already used in this team."""
-    return channels_repo.get_channel_by_team_and_name(
-        team_id,
-        name,
-        exclude_channel_id=exclude_channel_id,
-        include_deleted=True,
-    ) is not None
 
 
 def build_test_assignee(channel):
@@ -81,7 +52,13 @@ def build_test_assignee(channel):
 @channels_bp.route("/types", methods=["GET"])
 def list_channel_types():
     """Return supported channel types."""
-    return jsonify(CHANNEL_TYPES)
+    return jsonify(list_notifier_types())
+
+
+@channels_bp.route("/email-template/default", methods=["GET"])
+def get_default_email_template():
+    """Return the default HTML template used by email channels."""
+    return jsonify({"html_template": DEFAULT_EMAIL_HTML_TEMPLATE})
 
 
 @channels_bp.route("", methods=["GET"])
@@ -123,10 +100,6 @@ def create_channel():
     error = require_team_write(payload.team_id)
     if error:
         return error
-
-    if has_channel_name_conflict(payload.team_id, payload.name):
-        return channel_name_conflict_response(payload.name)
-
     team = teams_repo.get_team(payload.team_id)
 
     try:
@@ -139,9 +112,16 @@ def create_channel():
             group_id=team.group_id,
         )
     except IntegrityError as exc:
-        if is_channel_name_unique_violation(exc):
-            return channel_name_conflict_response(payload.name)
-        raise
+        error_text = str(exc).lower()
+
+        if "slug" in error_text:
+            return db_common.unique_field_conflict(
+                "slug",
+                payload.slug,
+                "Channel with this slug already exists",
+            )
+
+        return db_common.integrity_conflict("Channel could not be saved because it conflicts with existing data")
 
     write_audit(
         "channel.create",
@@ -175,13 +155,6 @@ def update_channel(channel_id):
 
     target_team_id = payload.team_id or current_channel.team_id
 
-    if has_channel_name_conflict(
-        target_team_id,
-        payload.name,
-        exclude_channel_id=current_channel.id,
-    ):
-        return channel_name_conflict_response(payload.name)
-
     update_data = {
         "team": payload.team_id,
         "name": payload.name,
@@ -196,9 +169,16 @@ def update_channel(channel_id):
     try:
         channel = channels_repo.update_channel(channel_id, update_data)
     except IntegrityError as exc:
-        if is_channel_name_unique_violation(exc):
-            return channel_name_conflict_response(payload.name)
-        raise
+        error_text = str(exc).lower()
+
+        if "slug" in error_text:
+            return db_common.unique_field_conflict(
+                "slug",
+                payload.slug,
+                "Channel with this slug already exists",
+            )
+
+        return db_common.integrity_conflict("Channel could not be saved because it conflicts with existing data")
 
     write_audit(
         "channel.update",

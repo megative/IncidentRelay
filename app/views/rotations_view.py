@@ -71,6 +71,7 @@ def create_rotation():
         handoff_time=payload.handoff_time,
         handoff_weekday=payload.handoff_weekday,
         timezone=payload.timezone,
+        enabled=payload.enabled,
     )
     write_audit("rotation.create", object_type="rotation", object_id=rotation.id, team_id=rotation.team.id, data=payload.model_dump(mode="json"))
 

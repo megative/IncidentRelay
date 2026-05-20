@@ -5,7 +5,7 @@ from telebot import apihelper, types
 from telebot.apihelper import ApiTelegramException
 
 from app.settings import Config
-from app.services.telegram.actions import build_telegram_action_data
+from app.notifiers.telegram.actions import build_telegram_action_data
 from app.services.links import build_alert_web_url
 
 

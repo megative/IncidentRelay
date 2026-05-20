@@ -32,6 +32,7 @@ class RotationCreateSchema(ApiModel):
     duration_seconds: int | None = Field(default=None, ge=60)
     reminder_interval_seconds: int = Field(default=300, ge=60, le=2592000)
     add_team_members: bool = True
+    enabled: bool = True
 
     @model_validator(mode="after")
     def set_duration(self):

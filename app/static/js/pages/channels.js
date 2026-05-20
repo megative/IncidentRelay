@@ -1,53 +1,14 @@
-const DEFAULT_EMAIL_HTML_TEMPLATE = `<!doctype html>
-<html>
-  <body style="margin:0;padding:0;background:#f6f8fb;font-family:Arial,sans-serif;color:#172033;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f6f8fb;padding:24px 0;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e4e8f0;">
-            <tr>
-              <td style="padding:22px 26px;background:#111827;color:#ffffff;">
-                <div style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;opacity:.8;">IncidentRelay</div>
-                <h1 style="margin:8px 0 0;font-size:22px;line-height:1.3;">{event_type}: {title}</h1>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:24px 26px;">
-                <p style="margin:0 0 18px;font-size:15px;line-height:1.6;white-space:pre-line;">{message}</p>
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;font-size:14px;">
-                  <tr><td style="padding:8px 0;color:#64748b;width:140px;">Alert ID</td><td style="padding:8px 0;font-weight:600;">{alert_id}</td></tr>
-                  <tr><td style="padding:8px 0;color:#64748b;">Team</td><td style="padding:8px 0;font-weight:600;">{team}</td></tr>
-                  <tr><td style="padding:8px 0;color:#64748b;">Status</td><td style="padding:8px 0;font-weight:600;">{status}</td></tr>
-                  <tr><td style="padding:8px 0;color:#64748b;">Severity</td><td style="padding:8px 0;font-weight:600;">{severity}</td></tr>
-                  <tr><td style="padding:8px 0;color:#64748b;">Assignee</td><td style="padding:8px 0;font-weight:600;">{assignee}</td></tr>
-                  <tr><td style="padding:8px 0;color:#64748b;">Source</td><td style="padding:8px 0;font-weight:600;">{source}</td></tr>
-                </table>
-                <p style="margin:22px 0 0;">
-                  <a href="{alert_url}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:11px 16px;border-radius:9px;font-weight:600;">Open alert</a>
-                </p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:16px 26px;background:#f8fafc;color:#64748b;font-size:12px;">
-                Sent by IncidentRelay. You can customize this email template in the channel settings.
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
-
 let channelsCache = [];
 let channelTeamsCache = [];
 let selectedChannelDetailsId = null;
 let emailDefaultTemplateCache = null;
 
 function loadChannels() {
-    loadChannelGroups(function () {
-        loadChannelTypes();
-        refreshChannels();
+    loadDefaultEmailHtmlTemplate(function () {
+        loadChannelGroups(function () {
+            loadChannelTypes();
+            refreshChannels();
+        });
     });
 }
 
@@ -62,6 +23,28 @@ function loadChannelGroups(callback) {
             return;
         }
         loadChannelTeams(callback);
+    });
+}
+function loadDefaultEmailHtmlTemplate(callback) {
+    if (emailDefaultTemplateCache !== null) {
+        if (typeof callback === "function") {
+            callback(emailDefaultTemplateCache);
+        }
+        return;
+    }
+
+    apiGet("/api/channels/email-template/default", function (response) {
+        response = response || {};
+        emailDefaultTemplateCache = String(response.html_template || "");
+        $("#cfg-email-html-template").data("defaultTemplate", emailDefaultTemplateCache);
+
+        if (!String($("#cfg-email-html-template").val() || "").trim()) {
+            $("#cfg-email-html-template").val(emailDefaultTemplateCache);
+        }
+
+        if (typeof callback === "function") {
+            callback(emailDefaultTemplateCache);
+        }
     });
 }
 
@@ -163,14 +146,15 @@ function showMattermostModeFields() {
 function getDefaultEmailHtmlTemplate() {
     if (emailDefaultTemplateCache === null) {
         const field = $("#cfg-email-html-template");
-        const fieldValue = field.data("defaultTemplate") || field.val();
-        emailDefaultTemplateCache = fieldValue || DEFAULT_EMAIL_HTML_TEMPLATE;
+        emailDefaultTemplateCache = String(field.data("defaultTemplate") || field.val() || "");
     }
     return emailDefaultTemplateCache;
 }
 
 function resetEmailHtmlTemplate() {
-    $("#cfg-email-html-template").val(getDefaultEmailHtmlTemplate());
+    loadDefaultEmailHtmlTemplate(function (template) {
+        $("#cfg-email-html-template").val(template || "");
+    });
 }
 
 function getEmailHtmlTemplateConfigValue() {

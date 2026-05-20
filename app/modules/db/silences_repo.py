@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.modules.db.models import Group, Silence, Team
 
@@ -8,6 +8,9 @@ def list_silences(
     team_ids=None,
     active_only=True,
     include_deleted=False,
+    include_expired_history=False,
+    expired_retention_days=30,
+    now=None,
 ):
     """Return silence rules."""
     query = (
@@ -35,6 +38,10 @@ def list_silences(
             )
             .switch(Silence)
         )
+
+    if not include_expired_history:
+        cutoff = (now or datetime.utcnow()) - timedelta(days=expired_retention_days)
+        query = query.where(Silence.ends_at >= cutoff)
 
     if team_id:
         query = query.where(Silence.team == team_id)
@@ -108,11 +115,11 @@ def update_silence(silence_id, data):
 
 
 def disable_silence(silence_id):
-    """
-    Soft-delete a silence rule.
-    """
-
-    return soft_delete_silence(silence_id)
+    """Disable a silence rule."""
+    silence = get_silence(silence_id)
+    silence.enabled = False
+    silence.save()
+    return silence
 
 
 def soft_delete_silence(silence_id):

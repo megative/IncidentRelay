@@ -19,11 +19,6 @@ TEAM_RESPOND_ROLES = {TEAM_RESPONDER_ROLE, TEAM_MANAGER_ROLE}
 TEAM_WRITE_ROLES = {TEAM_MANAGER_ROLE}
 
 
-# Backward-compatible names for older imports.
-READ_ONLY_ROLE = GROUP_VIEWER_ROLE
-RW_ROLE = GROUP_EDITOR_ROLE
-
-
 def current_user():
     """Return the current request user."""
     return getattr(request, "current_user", None)

@@ -1,5 +1,7 @@
 from flask import Blueprint, jsonify, request
+from peewee import IntegrityError
 
+from app.modules.db.common import integrity_conflict, unique_field_conflict
 from app.api.schemas.roles import TEAM_MANAGER_ROLE
 from app.api.schemas.teams import (
     TeamCreateSchema,
@@ -63,14 +65,26 @@ def create_team():
     if error:
         return error
 
-    team = teams_repo.create_team(
-        group_id=payload.group_id,
-        slug=payload.slug,
-        name=payload.name,
-        description=payload.description,
-        escalation_enabled=payload.escalation_enabled,
-        escalation_after_reminders=payload.escalation_after_reminders,
-    )
+    try:
+        team = teams_repo.create_team(
+            group_id=payload.group_id,
+            slug=payload.slug,
+            name=payload.name,
+            description=payload.description,
+            escalation_enabled=payload.escalation_enabled,
+            escalation_after_reminders=payload.escalation_after_reminders,
+        )
+    except IntegrityError as exc:
+        error_text = str(exc).lower()
+
+        if "slug" in error_text:
+            return unique_field_conflict(
+                "slug",
+                payload.slug,
+                "Team with this slug already exists",
+            )
+
+        return integrity_conflict("Team could not be saved because it conflicts with existing data")
 
     user = request.current_user
     if user and not user.is_admin:
@@ -109,15 +123,28 @@ def update_team(team_id):
         if group_error:
             return group_error
 
-    team = teams_repo.update_team(team_id, {
-        "group": payload.group_id,
-        "slug": payload.slug,
-        "name": payload.name,
-        "description": payload.description,
-        "escalation_enabled": payload.escalation_enabled,
-        "escalation_after_reminders": payload.escalation_after_reminders,
-        "active": payload.active,
-    })
+    try:
+        team = teams_repo.update_team(team_id, {
+            "group": payload.group_id,
+            "slug": payload.slug,
+            "name": payload.name,
+            "description": payload.description,
+            "escalation_enabled": payload.escalation_enabled,
+            "escalation_after_reminders": payload.escalation_after_reminders,
+            "active": payload.active,
+        })
+    except IntegrityError as exc:
+        error_text = str(exc).lower()
+
+        if "slug" in error_text:
+            return unique_field_conflict(
+                "slug",
+                payload.slug,
+                "Team with this slug already exists",
+            )
+
+        return integrity_conflict("Team could not be saved because it conflicts with existing data")
+
     write_audit(
         "team.update",
         object_type="team",

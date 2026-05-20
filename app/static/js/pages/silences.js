@@ -1,6 +1,17 @@
 let silencesCache = [];
 let selectedSilenceDetailsId = null;
+let selectedSilenceSummaryFilter = "";
 
+function buildSilencesApiUrl() {
+    let url = "/api/silences" + selectedTeamQuery();
+
+    if ($("#silences-include-expired-history").is(":checked")) {
+        url += url.indexOf("?") === -1 ? "?" : "&";
+        url += "include_expired_history=1";
+    }
+
+    return url;
+}
 
 function loadSilences() {
     /*
@@ -15,7 +26,7 @@ function refreshSilences() {
     /*
      * Refresh silences table.
      */
-    apiGet("/api/silences" + selectedTeamQuery(), function (silences) {
+    apiGet(buildSilencesApiUrl(), function (silences) {
         silencesCache = asArray(silences);
 
         renderSilencesSummary(silencesCache);
@@ -140,7 +151,7 @@ function getFilteredSilences() {
      * Apply client-side filters.
      */
     const query = String($("#silences-search").val() || "").trim().toLowerCase();
-    const status = String($("#silences-status-filter").val() || "");
+    const status = String($("#silences-status-filter").val() || selectedSilenceSummaryFilter || "");
 
     return silencesCache.filter(function (silence) {
         if (status && getSilenceStatus(silence) !== status) {
@@ -154,7 +165,10 @@ function getFilteredSilences() {
         return getSilenceSearchText(silence).indexOf(query) !== -1;
     });
 }
-
+function applySilenceFilters() {
+    renderSilencesTable();
+    restoreSilenceDetails();
+}
 
 function renderSilencesCounter(filteredSilences, allSilences) {
     /*
@@ -379,13 +393,15 @@ function restoreSilenceDetails() {
     /*
      * Restore details panel after reload.
      */
-    if (!silencesCache.length) {
+    const silences = getFilteredSilences();
+
+    if (!silences.length) {
         renderSilenceDetailsEmpty();
         return;
     }
 
     if (selectedSilenceDetailsId) {
-        const selected = silencesCache.find(function (silence) {
+        const selected = silences.find(function (silence) {
             return Number(silence.id) === Number(selectedSilenceDetailsId);
         });
 
@@ -395,10 +411,14 @@ function restoreSilenceDetails() {
         }
     }
 
-    renderSilenceDetails(silencesCache[0]);
+    renderSilenceDetails(silences[0]);
 }
 
-
+function applySilenceSummaryFilter(status) {
+    selectedSilenceSummaryFilter = status || "";
+    $("#silences-status-filter").val(selectedSilenceSummaryFilter);
+    applySilenceFilters();
+}
 function renderSilenceDetailsEmpty() {
     /*
      * Render empty details state.
@@ -542,8 +562,25 @@ function openCreateSilenceModal() {
 }
 
 
-$(document).on("input", "#silences-search", renderSilencesTable);
-$(document).on("change", "#silences-status-filter", renderSilencesTable);
+$(document).on("input", "#silences-search", applySilenceFilters);
+
+$(document).on("change", "#silences-status-filter", function () {
+    selectedSilenceSummaryFilter = String($(this).val() || "");
+    applySilenceFilters();
+});
+
+$(document).on("change", "#silences-include-expired-history", refreshSilences);
+
+$(document).on("click", "[data-silences-summary-filter]", function () {
+    applySilenceSummaryFilter($(this).data("silences-summary-filter"));
+});
+
+$(document).on("keydown", "[data-silences-summary-filter]", function (event) {
+    if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        applySilenceSummaryFilter($(this).data("silences-summary-filter"));
+    }
+});
 
 $(document).on("click", "#open-silence-create-modal", openCreateSilenceModal);
 $(document).on("click", "#save-silence", saveSilence);

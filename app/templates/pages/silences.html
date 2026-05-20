@@ -2,7 +2,7 @@
 
 <div class="first-div-page-layout">
     <div class="summary-grid summary-grid-5">
-        <div class="summary-card summary-primary">
+        <div class="summary-card summary-primary clickable-summary-card" data-silences-summary-filter="" role="button" tabindex="0">
             <div class="summary-icon">#</div>
             <div>
                 <div class="summary-title">Silences</div>
@@ -11,7 +11,7 @@
             </div>
         </div>
 
-        <div class="summary-card summary-success">
+        <div class="summary-card summary-success clickable-summary-card" data-silences-summary-filter="active" role="button" tabindex="0">
             <div class="summary-icon">✓</div>
             <div>
                 <div class="summary-title">Active now</div>
@@ -20,7 +20,7 @@
             </div>
         </div>
 
-        <div class="summary-card summary-info">
+        <div class="summary-card summary-info clickable-summary-card" data-silences-summary-filter="scheduled" role="button" tabindex="0">
             <div class="summary-icon">⏱</div>
             <div>
                 <div class="summary-title">Scheduled</div>
@@ -29,7 +29,7 @@
             </div>
         </div>
 
-        <div class="summary-card summary-warning">
+        <div class="summary-card summary-warning clickable-summary-card" data-silences-summary-filter="expired" role="button" tabindex="0">
             <div class="summary-icon">⌛</div>
             <div>
                 <div class="summary-title">Expired</div>
@@ -38,7 +38,7 @@
             </div>
         </div>
 
-        <div class="summary-card summary-muted">
+        <div class="summary-card summary-muted clickable-summary-card" data-silences-summary-filter="disabled" role="button" tabindex="0">
             <div class="summary-icon">×</div>
             <div>
                 <div class="summary-title">Disabled</div>
@@ -89,6 +89,11 @@
                     <option value="expired">Expired</option>
                     <option value="disabled">Disabled</option>
                 </select>
+
+                <label class="checkbox">
+                    <input id="silences-include-expired-history" type="checkbox">
+                    Include expired older than 30 days
+                </label>
             </div>
 
             <div class="table-wrapper">

@@ -3,6 +3,7 @@ from typing import Any, Dict
 from pydantic import Field, model_validator
 
 from app.api.schemas.base import ApiModel
+from app.notifiers.types import CHANNEL_TYPE_PATTERN, WEBHOOK_STYLE_CHANNELS
 from app.services.email_templates import normalize_email_html_template
 from app.services.severity import normalize_severity_list
 
@@ -12,9 +13,7 @@ class ChannelBaseSchema(ApiModel):
 
     team_id: int | None = Field(default=None, ge=1)
     name: str = Field(min_length=2, max_length=120)
-    channel_type: str = Field(
-        pattern=r"^(telegram|slack|mattermost|webhook|discord|teams|email|voice_call)$"
-    )
+    channel_type: str = Field(pattern=CHANNEL_TYPE_PATTERN)
     config: Dict[str, Any] = Field(default_factory=dict)
     enabled: bool = True
 
@@ -52,7 +51,7 @@ class ChannelBaseSchema(ApiModel):
             config["bot_token"] = bot_token
             config["chat_id"] = chat_id
 
-        if self.channel_type in {"slack", "webhook", "discord", "teams"} and not config.get("webhook_url"):
+        if self.channel_type in WEBHOOK_STYLE_CHANNELS and not config.get("webhook_url"):
             raise ValueError(f"{self.channel_type} channel requires webhook_url")
 
         if self.channel_type == "mattermost":
@@ -64,7 +63,9 @@ class ChannelBaseSchema(ApiModel):
                     if not config.get(name)
                 ]
                 if missing:
-                    raise ValueError(f"mattermost Bot API mode requires: {', '.join(missing)}")
+                    raise ValueError(
+                        f"mattermost Bot API mode requires: {', '.join(missing)}"
+                    )
             if mode == "webhook" and not config.get("webhook_url"):
                 raise ValueError("mattermost webhook mode requires webhook_url")
 

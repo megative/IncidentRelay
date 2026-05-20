@@ -63,7 +63,21 @@ def get_rotation(rotation_id, include_deleted=False):
     return query.get()
 
 
-def create_rotation(team_id, name, description, start_at, duration_seconds, reminder_interval_seconds=300, rotation_type="daily", interval_value=1, interval_unit="days", handoff_time="09:00", handoff_weekday=None, timezone="UTC"):
+def create_rotation(
+        team_id,
+        name,
+        description,
+        start_at,
+        duration_seconds,
+        reminder_interval_seconds=300,
+        rotation_type="daily",
+        interval_value=1,
+        interval_unit="days",
+        handoff_time="09:00",
+        handoff_weekday=None,
+        timezone="UTC",
+        enabled=True,
+):
     """
     Create a rotation.
     """
@@ -81,6 +95,7 @@ def create_rotation(team_id, name, description, start_at, duration_seconds, remi
         handoff_time=handoff_time,
         handoff_weekday=handoff_weekday,
         timezone=timezone,
+        enabled=enabled,
     )
 
 
