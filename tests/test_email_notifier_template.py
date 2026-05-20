@@ -60,7 +60,11 @@ def test_email_notifier_uses_global_smtp_and_sends_html(monkeypatch):
         status="firing",
         source="alertmanager",
         team=SimpleNamespace(slug="infra"),
-        assignee=None,
+        assignee=SimpleNamespace(
+            email="assignee@example.test",
+            username="ivan",
+            display_name="Ivan",
+        ),
     )
 
     result = EmailNotifier().send(channel, alert, "plain text", event_type="notification")
