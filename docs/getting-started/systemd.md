@@ -10,7 +10,7 @@ This guide describes a classic Linux installation with systemd.
 It starts two services:
 
 ```text
-incidentrelay-web.service        # HTTP API, UI, webhooks
+incidentrelay.service        # HTTP API, UI, webhooks
 incidentrelay-scheduler.service  # reminders, escalations, periodic jobs
 ```
 
@@ -151,7 +151,7 @@ public_base_url = https://incidentrelay.example.com
 Copy service files:
 
 ```bash
-sudo cp /var/www/incidentrelay/systemd/incidentrelay-web.service /etc/systemd/system/
+sudo cp /var/www/incidentrelay/systemd/incidentrelay.service /etc/systemd/system/
 sudo cp /var/www/incidentrelay/systemd/incidentrelay-scheduler.service /etc/systemd/system/
 ```
 
@@ -185,17 +185,17 @@ sudo -u www-data \
 ## 9. Start services
 
 ```bash
-sudo systemctl enable incidentrelay-web
+sudo systemctl enable incidentrelay
 sudo systemctl enable incidentrelay-scheduler
 
-sudo systemctl start incidentrelay-web
+sudo systemctl start incidentrelay
 sudo systemctl start incidentrelay-scheduler
 ```
 
 Check status:
 
 ```bash
-sudo systemctl status incidentrelay-web
+sudo systemctl status incidentrelay
 sudo systemctl status incidentrelay-scheduler
 ```
 
@@ -210,7 +210,7 @@ http://SERVER_IP:8080/login
 Web logs:
 
 ```bash
-journalctl -u incidentrelay-web -f
+journalctl -u incidentrelay -f
 ```
 
 Scheduler logs:
@@ -385,7 +385,7 @@ For SQLite, keep `--workers 1`.
 ```bash
 cd /var/www/incidentrelay
 sudo systemctl stop incidentrelay-scheduler
-sudo systemctl stop incidentrelay-web
+sudo systemctl stop incidentrelay
 
 sudo git pull
 sudo /var/www/incidentrelay/venv/bin/pip install -r requirements.txt
@@ -394,7 +394,7 @@ sudo -u www-data \
   INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
   /var/www/incidentrelay/venv/bin/python app/migrate.py migrate
 
-sudo systemctl start incidentrelay-web
+sudo systemctl start incidentrelay
 sudo systemctl start incidentrelay-scheduler
 ```
 
@@ -405,7 +405,7 @@ sudo systemctl start incidentrelay-scheduler
 Check:
 
 ```bash
-systemctl show incidentrelay-web --property=Environment
+systemctl show incidentrelay --property=Environment
 systemctl show incidentrelay-scheduler --property=Environment
 ```
 
@@ -438,6 +438,6 @@ ps aux | grep scheduler
 Check logs:
 
 ```bash
-journalctl -u incidentrelay-web -n 100 --no-pager
+journalctl -u incidentrelay -n 100 --no-pager
 journalctl -u incidentrelay-scheduler -n 100 --no-pager
 ```

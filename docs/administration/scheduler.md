@@ -28,7 +28,7 @@ This may duplicate reminders and escalations.
 Recommended model:
 
 ```text
-incidentrelay-web        # HTTP API, UI, webhooks
+incidentrelay        # HTTP API, UI, webhooks
 incidentrelay-scheduler  # one scheduler process
 ```
 

@@ -135,21 +135,21 @@ Change the password and email before using this command in production.
 Enable and start the web service and scheduler:
 
 ```bash
-sudo systemctl enable --now incidentrelay-web
+sudo systemctl enable --now incidentrelay
 sudo systemctl enable --now incidentrelay-scheduler
 ```
 
 Check service status:
 
 ```bash
-sudo systemctl status incidentrelay-web
+sudo systemctl status incidentrelay
 sudo systemctl status incidentrelay-scheduler
 ```
 
 Follow logs:
 
 ```bash
-sudo journalctl -u incidentrelay-web -f
+sudo journalctl -u incidentrelay -f
 sudo journalctl -u incidentrelay-scheduler -f
 ```
 
@@ -191,7 +191,7 @@ sudo -u incidentrelay \
 Then restart services:
 
 ```bash
-sudo systemctl restart incidentrelay-web
+sudo systemctl restart incidentrelay
 sudo systemctl restart incidentrelay-scheduler
 sudo systemctl restart incidentrelay-telegram-worker
 ```

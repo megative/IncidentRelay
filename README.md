@@ -187,7 +187,7 @@ Common paths used by the RPM and systemd installation:
 Systemd services:
 
 ```text
-incidentrelay-web.service               # HTTP API, UI, webhooks
+incidentrelay.service               # HTTP API, UI, webhooks
 incidentrelay-scheduler.service         # reminders, escalations, periodic jobs
 incidentrelay-telegram-worker.service   # optional Telegram callbacks/polling
 ```
@@ -263,7 +263,7 @@ sudo -u incidentrelay \
 For Docker installations:
 
 ```bash
-docker compose exec incidentrelay-web \
+docker compose exec incidentrelay \
   python manage.py migrate
 ```
 
@@ -284,7 +284,7 @@ sudo -u incidentrelay \
 For Docker installations:
 
 ```bash
-docker compose exec incidentrelay-web \
+docker compose exec incidentrelay \
   python manage.py create-admin \
   --username admin \
   --password 'change-me-123' \

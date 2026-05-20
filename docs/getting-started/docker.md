@@ -10,7 +10,7 @@ The recommended self-hosted installation method is Docker Compose.
 The default Compose setup uses SQLite and starts two containers:
 
 ```text
-incidentrelay-web        # HTTP API, UI, webhooks
+incidentrelay        # HTTP API, UI, webhooks
 incidentrelay-scheduler  # reminders, escalations, periodic jobs
 ```
 
@@ -20,7 +20,7 @@ PostgreSQL is optional and can be enabled with a Compose override.
 
 ```text
 Docker Compose
-├── incidentrelay-web
+├── incidentrelay
 │   └── Gunicorn + Flask application
 ├── incidentrelay-scheduler
 │   └── standalone APScheduler worker
@@ -61,14 +61,14 @@ http://SERVER_IP:8080/login
 Show logs:
 
 ```bash
-docker compose logs -f incidentrelay-web
+docker compose logs -f incidentrelay
 docker compose logs -f incidentrelay-scheduler
 ```
 
 ## Create the first admin user
 
 ```bash
-docker compose exec incidentrelay-web \
+docker compose exec incidentrelay \
   python manage.py create-admin \
     --username admin \
     --password 'change-me-123' \
@@ -189,5 +189,5 @@ volumes:
 After changing provider files, restart containers:
 
 ```bash
-docker compose restart incidentrelay-web incidentrelay-scheduler
+docker compose restart incidentrelay incidentrelay-scheduler
 ```

@@ -1,5 +1,5 @@
 services:
-  incidentrelay-web:
+  incidentrelay:
     environment:
       INCIDENTRELAY_WEB_WORKERS: "4"
     volumes:
@@ -16,7 +16,7 @@ services:
       - incidentrelay-logs:/var/log/incidentrelay
       - ./custom_voice_providers:/usr/local/lib/incidentrelay/voice_providers:ro
     depends_on:
-      incidentrelay-web:
+      incidentrelay:
         condition: service_healthy
       postgres:
         condition: service_healthy
