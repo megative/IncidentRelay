@@ -1,6 +1,6 @@
 from app.api.openapi.common import ERROR_SCHEMA, json_body, path_param, query_param, response
 from app.notifiers.types import CHANNEL_TYPE_VALUES
-from app.services.email_templates import DEFAULT_EMAIL_HTML_TEMPLATE, EMAIL_HTML_TEMPLATE_MAX_LENGTH
+from app.notifiers.email.email_templates import DEFAULT_EMAIL_HTML_TEMPLATE, EMAIL_HTML_TEMPLATE_MAX_LENGTH
 
 SEVERITY_FILTER_SCHEMA = {
     "type": "array",

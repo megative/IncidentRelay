@@ -4,7 +4,7 @@ from pydantic import Field, model_validator
 
 from app.api.schemas.base import ApiModel
 from app.notifiers.types import CHANNEL_TYPE_PATTERN, WEBHOOK_STYLE_CHANNELS
-from app.services.email_templates import normalize_email_html_template
+from app.notifiers.email.email_templates import normalize_email_html_template
 from app.services.severity import normalize_severity_list
 
 
@@ -21,10 +21,6 @@ class ChannelBaseSchema(ApiModel):
     def validate_config(self):
         """Validate channel-specific config fields."""
         config = dict(self.config or {})
-
-        # Backward-compatible alias. Keep notify_on_severities as canonical key.
-        if "notify_on_severities" not in config and "severities" in config:
-            config["notify_on_severities"] = config.pop("severities")
 
         try:
             notify_on_severities = normalize_severity_list(
