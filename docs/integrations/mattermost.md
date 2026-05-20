@@ -1,82 +1,121 @@
 ---
-title: Mattermost Integration
-description: Mattermost notification modes and action buttons
+title: Mattermost notification channel
+description: Mattermost webhook and Bot API notifications with ACK/Resolve buttons
 ---
 
-# Mattermost Integration
+# Mattermost notification channel
 
-Mattermost has two modes.
+Mattermost is an outgoing notification channel. It does not receive alerts directly. Incoming alerts are received by an integration endpoint, matched to a route, and then delivered to the Mattermost channel attached to that route.
+
+## Modes
+
+Mattermost supports two modes.
+
+| Mode | Supports buttons | Supports message updates | Recommended for |
+|---|---:|---:|---|
+| Incoming webhook | No | No | Simple notifications |
+| Bot API | Yes | Yes | ACK/Resolve workflow |
+
+Bot API mode is recommended when you need interactive actions.
 
 ## Incoming webhook mode
 
-This mode sends plain messages only.
+Config:
 
-It cannot:
+```json
+{
+  "mode": "webhook",
+  "webhook_url": "https://mattermost.example.com/hooks/xxx"
+}
+```
 
-- show buttons;
-- update messages after acknowledge;
-- update messages after resolve.
+With severity filter:
+
+```json
+{
+  "mode": "webhook",
+  "webhook_url": "https://mattermost.example.com/hooks/xxx",
+  "notify_on_severities": ["critical", "high", "warning"]
+}
+```
 
 ## Bot API mode
 
-This mode is recommended.
+Config:
 
-It supports:
-
-- `Acknowledge` button;
-- `Resolve` button;
-- message updates;
-- colored attachment borders.
-
-Example channel settings:
-
-```text
-Type: mattermost
-Mode: Bot API with buttons and message updates
-Mattermost URL: https://mattermost.example.com
-Bot token: <bot-token>
-Channel ID: <mattermost-channel-id>
-Callback secret: optional
+```json
+{
+  "mode": "bot_api",
+  "api_url": "https://mattermost.example.com",
+  "bot_token": "mattermost-bot-token",
+  "channel_id": "mattermost-channel-id",
+  "callback_secret": "change-me"
+}
 ```
 
-## Colors
+With severity filter:
 
-```text
-critical/high/error -> red
-warning/acknowledged -> yellow
-info -> blue
-resolved -> green
+```json
+{
+  "mode": "bot_api",
+  "api_url": "https://mattermost.example.com",
+  "bot_token": "mattermost-bot-token",
+  "channel_id": "mattermost-channel-id",
+  "callback_secret": "change-me",
+  "notify_on_severities": ["critical", "high", "warning"]
+}
 ```
 
-After `Acknowledge`, the original Mattermost message is updated and keeps only the `Resolve` button.
+## ACK and Resolve actions
 
-After `Resolve`, the original Mattermost message is updated, the buttons are removed, and the border becomes green.
+In Bot API mode, Mattermost messages can include:
 
-## public_base_url vs Mattermost URL
+```text
+Acknowledge
+Resolve
+```
 
-`public_base_url` is the public URL of IncidentRelay itself.
+After ACK, the original post is updated and keeps only the Resolve button. After Resolve, the post is updated and buttons are removed.
 
-Mattermost uses this URL when a user clicks buttons such as `Acknowledge` or `Resolve`.
+## `public_base_url` vs Mattermost URL
 
-The button callback URL is built like this:
+`public_base_url` is the public URL of IncidentRelay. Mattermost calls this URL when a user clicks an action button.
+
+Example action callback URL:
 
 ```text
 https://incidentrelay.example.com/api/integrations/mattermost/actions
 ```
 
-The Mattermost URL in a Mattermost channel is the URL of the Mattermost server API.
-
-```text
-https://mattermost.example.com
-```
-
-IncidentRelay uses it to send and update Mattermost posts through the Bot API.
-
-In short:
+`api_url` is the Mattermost server URL. IncidentRelay uses it to send and update posts through the Mattermost Bot API.
 
 ```text
 public_base_url = where Mattermost calls IncidentRelay back
-Mattermost URL = where IncidentRelay sends messages to Mattermost
+api_url = where IncidentRelay sends messages to Mattermost
 ```
 
-For Mattermost buttons to work, `public_base_url` must be reachable from the Mattermost server.
+For buttons to work, `public_base_url` must be reachable from the Mattermost server.
+
+## Recommended setup
+
+```text
+Main Mattermost channel: critical, high, warning
+Low-priority Mattermost channel: low, info
+Voice or email channel: critical only
+```
+
+## Troubleshooting
+
+### Messages are sent, but buttons do not work
+
+Check:
+
+1. The channel uses Bot API mode.
+2. `api_url`, `bot_token`, and `channel_id` are set.
+3. `public_base_url` is configured and reachable from Mattermost.
+4. The callback secret matches the expected value.
+5. The user clicking the button has permission to ACK or Resolve the alert.
+
+### Messages are skipped
+
+Check `notify_on_severities` and the alert severity.

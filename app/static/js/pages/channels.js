@@ -209,14 +209,6 @@ function buildChannelConfig() {
     }
 
     if (type === "email") {
-        delete config.recipients;
-        delete config.smtp_host;
-        delete config.smtp_port;
-        delete config.smtp_user;
-        delete config.smtp_password;
-        delete config.smtp_use_tls;
-        delete config.from;
-
         const htmlTemplate = getEmailHtmlTemplateConfigValue();
         if (htmlTemplate) {
             config.html_template = htmlTemplate;
@@ -462,17 +454,6 @@ function stripVisibleChannelConfig(type, config) {
 
     if (["slack", "webhook", "discord", "teams"].includes(type)) {
         delete config.webhook_url;
-    }
-
-    if (type === "email") {
-        delete config.recipients;
-        delete config.html_template;
-        delete config.smtp_host;
-        delete config.smtp_port;
-        delete config.smtp_user;
-        delete config.smtp_password;
-        delete config.smtp_use_tls;
-        delete config.from;
     }
 
     return config;

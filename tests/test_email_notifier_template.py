@@ -49,10 +49,7 @@ def test_email_notifier_uses_global_smtp_and_sends_html(monkeypatch):
         name="email",
         channel_type="email",
         config={
-            "recipients": ["sre@example.test"],
             "html_template": "<h1>{title}</h1><p>{message}</p>",
-            "smtp_host": "ignored.local",
-            "smtp_port": 1025,
         },
     )
     alert = SimpleNamespace(

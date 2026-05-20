@@ -1,11 +1,13 @@
 ---
-title: Zabbix Integration
-description: Send Zabbix-style alerts to IncidentRelay
+title: Zabbix incoming integration
+description: Send Zabbix-style events to IncidentRelay
 ---
 
-# Zabbix Integration
+# Zabbix incoming integration
 
-Endpoint:
+Zabbix is an incoming alert source. It sends events to IncidentRelay, where they are matched by a route and delivered to notification channels.
+
+## Endpoint
 
 ```text
 POST /api/integrations/zabbix
@@ -14,24 +16,28 @@ POST /api/integrations/zabbix
 Required header:
 
 ```http
-Authorization: Bearer ZABBIX_ROUTE_TOKEN
+Authorization: Bearer ROUTE_INTAKE_TOKEN
 ```
 
-## Create a route
+## Route setup
+
+Create a route with source `zabbix`.
+
+Example:
 
 ```text
 Name: infra-zabbix
 Source: zabbix
 Team: infra
 Rotation: infra-primary
-Channels: infra-mattermost
+Channels: infra-mattermost, infra-email
 Matchers JSON: {}
 Group by JSON: ["host", "trigger"]
 ```
 
 Copy the route intake token after creating the route.
 
-## Send firing event
+## Firing event example
 
 ```bash
 curl -X POST http://127.0.0.1:8080/api/integrations/zabbix \
@@ -52,7 +58,7 @@ curl -X POST http://127.0.0.1:8080/api/integrations/zabbix \
   }'
 ```
 
-## Send resolved event
+## Resolved event example
 
 Use the same `event_id` for `firing` and `resolved`.
 
@@ -74,3 +80,9 @@ curl -X POST http://127.0.0.1:8080/api/integrations/zabbix \
     }
   }'
 ```
+
+## Notes
+
+- Use a stable `event_id` for firing/resolved lifecycle.
+- Keep labels consistent with route matchers and grouping.
+- Notification channels are configured separately and attached to the route.

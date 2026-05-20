@@ -1,31 +1,66 @@
 ---
 title: Integrations
-description: Alert intake and notification integrations
+description: Incoming alert sources and outgoing notification channels
 ---
 
 # Integrations
 
-IncidentRelay supports alert intake from:
+IncidentRelay has two different integration layers. Keep them separate when configuring or troubleshooting the system.
 
-- Alertmanager;
-- Zabbix;
-- generic webhooks.
+```text
+Monitoring system -> Incoming integration -> Route -> Notification channels -> User action
+```
 
-It can send notifications to:
+## Incoming alert integrations
 
-- Mattermost;
-- Slack;
-- Telegram;
-- Discord;
-- Teams;
-- email;
-- webhook;
-- voice call providers.
+Incoming integrations create or update alerts in IncidentRelay. They are selected by the route `source` field and require a route intake token.
 
-## Pages
+| Source | Endpoint | Documentation |
+|---|---|---|
+| Alertmanager | `POST /api/integrations/alertmanager` | [Alertmanager](alertmanager.md) |
+| Zabbix | `POST /api/integrations/zabbix` | [Zabbix](zabbix.md) |
+| Generic webhook | `POST /api/integrations/webhook` | [Generic webhook](generic-webhook.md) |
 
-- [Alertmanager](alertmanager.md)
-- [Generic webhook](generic-webhook.md)
-- [Zabbix](zabbix.md)
-- [Mattermost](mattermost.md)
-- [Telegram](telegram.md)
+Route intake tokens belong to routes, not to channels. Create a route first, copy its intake token, and use that token in the monitoring system.
+
+## Notification channels
+
+Notification channels deliver alerts after a route has matched an incoming alert.
+
+| Channel type | Purpose | Documentation |
+|---|---|---|
+| Mattermost | Chat notifications, optional ACK/Resolve buttons, message updates | [Mattermost channel](mattermost.md) |
+| Telegram | Telegram Bot API notifications, optional inline actions | [Telegram channel](telegram.md) |
+| Email | Sends email to the assigned user's profile email | [Email channel](email.md) |
+| Slack | Sends notifications to a Slack incoming webhook | [Webhook-based channels](webhook-channels.md) |
+| Discord | Sends notifications to a Discord webhook | [Webhook-based channels](webhook-channels.md) |
+| Microsoft Teams | Sends notifications to a Teams webhook | [Webhook-based channels](webhook-channels.md) |
+| Webhook | Sends notification payloads to a custom HTTP endpoint | [Webhook-based channels](webhook-channels.md) |
+| Voice call | Calls the assigned user's phone through the globally configured voice provider | [Voice call channel](voice-call.md) |
+
+Read the common channel behavior first: [Notification channels](channels.md).
+
+## Common setup order
+
+```text
+1. Create a group
+2. Create users and fill contact fields, such as email, phone, Telegram ID
+3. Create a team
+4. Create a rotation and assign on-call users
+5. Create notification channels
+6. Create a route and attach channels
+7. Copy the route intake token
+8. Configure Alertmanager, Zabbix, or webhook sender
+9. Send a test alert
+10. Verify notification delivery and ACK/Resolve flow
+```
+
+## Troubleshooting direction
+
+When an alert does not notify a user, check the chain in order:
+
+```text
+Incoming payload -> route match -> route channels -> channel severity filter -> notifier -> external provider
+```
+
+If a test channel notification works but real alerts do not, the issue is usually route matching, route-channel binding, severity filtering, missing assignee contact data, or a silence rule.

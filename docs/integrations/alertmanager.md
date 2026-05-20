@@ -1,11 +1,13 @@
 ---
-title: Alertmanager Integration
+title: Alertmanager incoming integration
 description: Send Alertmanager alerts to IncidentRelay
 ---
 
-# Alertmanager Integration
+# Alertmanager incoming integration
 
-Endpoint:
+Alertmanager is an incoming alert source. It sends alerts to IncidentRelay, where they are matched by a route and delivered to notification channels.
+
+## Endpoint
 
 ```text
 POST /api/integrations/alertmanager
@@ -17,23 +19,27 @@ Required header:
 Authorization: Bearer ROUTE_INTAKE_TOKEN
 ```
 
-## Create a route
+The token belongs to the IncidentRelay route that should receive the Alertmanager payload.
 
-Create a route:
+## Route setup
+
+Create a route with source `alertmanager`.
+
+Example:
 
 ```text
 Name: infra-alertmanager
 Source: alertmanager
 Team: infra
 Rotation: infra-primary
-Channels: infra-mattermost
+Channels: infra-mattermost, infra-email
 Matchers JSON: {"labels": {"team": "infra"}}
 Group by JSON: ["alertname", "instance"]
 ```
 
 Copy the route intake token after creating the route.
 
-## Send firing alert
+## Firing alert example
 
 ```bash
 curl -X POST http://127.0.0.1:8080/api/integrations/alertmanager \
@@ -78,11 +84,9 @@ Example response:
 ]
 ```
 
-If `route_id` is `null`, the alert did not match a route.
+If `route_id` is `null`, the alert did not match a route. Check `routing_error` for details.
 
-Check `routing_error` for details.
-
-## Send resolved alert
+## Resolved alert example
 
 Use the same `fingerprint` for `firing` and `resolved`.
 

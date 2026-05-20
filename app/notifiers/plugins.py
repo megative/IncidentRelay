@@ -388,7 +388,7 @@ class EmailNotifier(BaseNotifier):
         email = getattr(assignee, "email", None) if assignee else None
         email = str(email or "").strip()
         if not email:
-            raise RuntimeError("email recipient is missing: set email on the assigned user")
+            raise RuntimeError("email test recipient is missing: set email in your profile")
         return email
 
 
