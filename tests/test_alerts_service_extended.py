@@ -191,7 +191,7 @@ def test_reminder_interval_uses_rotation_before_global_config(db):
     group = create_group(slug="infra")
     team = create_team(group, slug="sre")
     rotation = create_rotation(team)
-    rotation.reminder_interval_seconds = 30
+    rotation.reminder_interval_seconds = 60
     rotation.save()
     route = create_route(team, rotation=rotation)
     alert = create_alert(route)
@@ -202,17 +202,18 @@ def test_reminder_interval_uses_rotation_before_global_config(db):
     alert.last_notification_at = None
     assert should_send_reminder(alert, now) is True
 
-    alert.last_notification_at = now - timedelta(seconds=31)
+    alert.last_notification_at = now - timedelta(seconds=61)
     assert should_send_reminder(alert, now) is True
 
-    alert.last_notification_at = now - timedelta(seconds=29)
+    alert.last_notification_at = now - timedelta(seconds=59)
     assert should_send_reminder(alert, now) is False
 
 
 def test_send_unacked_reminders_counts_only_successful_sends(monkeypatch, db):
     group = create_group(slug="infra")
     team = create_team(group, slug="sre")
-    route = create_route(team)
+    rotation = create_rotation(team)
+    route = create_route(team, rotation=rotation)
     alert = create_alert(route)
     alert.last_notification_at = None
     alert.save()
@@ -234,7 +235,8 @@ def test_send_unacked_reminders_counts_only_successful_sends(monkeypatch, db):
 def test_send_unacked_reminders_does_not_increment_when_no_notification_was_sent(monkeypatch, db):
     group = create_group(slug="infra")
     team = create_team(group, slug="sre")
-    route = create_route(team)
+    rotation = create_rotation(team)
+    route = create_route(team, rotation=rotation)
     alert = create_alert(route)
     alert.last_notification_at = None
     alert.save()
