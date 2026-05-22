@@ -197,7 +197,7 @@ def test_reminder_interval_uses_rotation_before_global_config(db):
     alert = create_alert(route)
     now = datetime.utcnow()
 
-    assert get_alert_reminder_interval(alert) == 30
+    assert get_alert_reminder_interval(alert) == 60
 
     alert.last_notification_at = None
     assert should_send_reminder(alert, now) is True
@@ -230,6 +230,21 @@ def test_send_unacked_reminders_counts_only_successful_sends(monkeypatch, db):
     assert AlertEvent.select().where(
         (AlertEvent.alert == alert.id) & (AlertEvent.event_type == "reminder_sent")
     ).exists()
+
+
+def test_zero_reminder_interval_disables_reminders(db):
+    group = create_group(slug="infra")
+    team = create_team(group, slug="sre")
+    rotation = create_rotation(team)
+    rotation.reminder_interval_seconds = 0
+    rotation.save()
+
+    route = create_route(team, rotation=rotation)
+    alert = create_alert(route)
+    alert.last_notification_at = None
+
+    assert get_alert_reminder_interval(alert) == 0
+    assert should_send_reminder(alert, datetime.utcnow()) is False
 
 
 def test_send_unacked_reminders_does_not_increment_when_no_notification_was_sent(monkeypatch, db):
