@@ -11,7 +11,7 @@ Open:
 /login
 ```
 
-Log in with the administrator user created by `manage.py create-admin`.
+Log in with the global admin user created by `manage.py create-admin`.
 
 ## Step 1. Create a group
 
@@ -28,6 +28,8 @@ Slug: production
 Name: Production
 ```
 
+A group is the access boundary for users and teams.
+
 ## Step 2. Create users
 
 Open:
@@ -36,13 +38,14 @@ Open:
 Administration -> Users
 ```
 
-Create users:
+Create users and fill contact fields that will be used by notification channels:
 
-```text
-ivan
-petr
-sergey
-```
+| Contact field | Used by |
+|---|---|
+| Email | Email channel |
+| Phone | Voice call channel |
+| Mattermost user ID | Mattermost action attribution |
+| Telegram user ID | Telegram actions |
 
 ## Step 3. Add users to the group
 
@@ -59,12 +62,18 @@ Example:
 ```text
 Group: Production
 User: ivan
-Role: rw
+Role: editor
 ```
 
-Repeat for all users.
+Group roles:
 
-You can view group members on the same page by clicking `Members` next to the group.
+| Role | UI label | Purpose |
+|---|---|---|
+| `viewer` | Group Viewer | Read access inside the group boundary |
+| `editor` | Group Editor | Can create group operational resources such as teams |
+| `user_admin` | Group Admin | Can create and manage users only inside this group boundary |
+
+Only a global admin can add an existing user to a group or assign `user_admin`.
 
 ## Step 4. Create a team
 
@@ -93,18 +102,24 @@ Open:
 Teams
 ```
 
-Click `Members` next to the team.
-
-Use `Add user to selected team`.
+Click `Members` next to the team and use `Add user to selected team`.
 
 Example:
 
 ```text
 User: ivan
-Role: rw
+Role: manager
 ```
 
-The team members table shows the current team composition.
+Team roles:
+
+| Role | UI label | Purpose |
+|---|---|---|
+| `viewer` | Team Viewer | Can view team resources and alerts |
+| `responder` | Team Responder | Can acknowledge and resolve alerts |
+| `manager` | Team Manager | Can manage team resources, channels, routes, rotations and silences |
+
+A user must already belong to the team group before being added to the team.
 
 ## Step 6. Create a rotation
 
@@ -124,6 +139,14 @@ Handoff time: 09:00
 Reminder interval: 300 seconds
 ```
 
+Reminder interval rules:
+
+```text
+0       disables reminders for this rotation
+>= 60   enables reminders with this interval
+1..59   invalid
+```
+
 ## Step 7. Add rotation members
 
 In `Rotations`, add users in order:
@@ -134,7 +157,7 @@ Position 1: petr
 Position 2: sergey
 ```
 
-## Step 8. Create a notification channel
+## Step 8. Create notification channels
 
 Open:
 
@@ -149,18 +172,20 @@ Group: Production
 Team: infra
 ```
 
-Create a channel, for example Mattermost Bot API mode:
+Create at least one channel. For example, Mattermost Bot API mode:
 
 ```text
 Type: mattermost
 Mode: Bot API with buttons and message updates
 Mattermost URL: https://mattermost.example.com
-Bot token: <bot-token>
-Channel ID: <mattermost-channel-id>
+Bot token: <token>
+Channel ID: <channel-id>
 Callback secret: optional
 ```
 
 Channels do not have alert intake tokens. They only define where notifications are sent.
+
+For email channels, configure SMTP globally and make sure assigned users have profile email addresses.
 
 ## Step 9. Create a route
 
@@ -181,6 +206,10 @@ Matchers JSON: {"labels": {"team": "infra"}}
 Group by JSON: ["alertname", "instance"]
 ```
 
-Copy the route intake token after creating the route.
+Copy the route intake token after creating the route. If a route token is lost, open Routes and click `Regenerate token` next to the route.
 
-If a route token is lost, open Routes and click `Regenerate token` next to the route.
+## Step 10. Send a test alert
+
+Use the matching incoming integration endpoint and the route intake token.
+
+The route must match the incoming payload and the route must have at least one enabled channel attached.

@@ -1,50 +1,75 @@
 ---
 title: Channels
-description: Notification channel types
+description: Notification channel concepts
 ---
 
 # Channels
 
-A channel is a notification destination.
+A channel is an outgoing notification destination.
 
 Supported channel types:
 
 ```text
-Mattermost
-Slack
-Telegram
-Webhook
-Discord
-Teams
-Email
-Voice call
+mattermost
+telegram
+slack
+webhook
+discord
+teams
+email
+voice_call
 ```
 
-Channels do not have alert intake tokens.
+Channels do not have alert intake tokens. A route receives alerts through its route intake token and then sends notifications to one or more channels.
 
-A route receives alerts through its route intake token and then sends notifications to one or more channels.
+```text
+Incoming alert -> Route -> Notification channels
+```
 
-## Mattermost
+## Channel severity filter
 
-Mattermost has two modes:
+A channel can limit which alert severities it receives using `notify_on_severities`:
 
-- Incoming webhook mode
-- Bot API mode
+```json
+{
+  "notify_on_severities": ["critical", "high"]
+}
+```
 
-Bot API mode is recommended because it supports buttons and message updates.
+If the key is missing or empty, the channel receives all severities attached to its route.
 
-## Voice call
+Use canonical severity names:
 
-Voice call channels can use built-in or custom providers.
+```text
+critical
+high
+medium
+warning
+low
+info
+```
 
-Custom providers can implement:
+## Channels that require user contact fields
 
-- text-to-speech calls;
-- call status callbacks;
-- DTMF button callbacks;
-- ACK / Resolve actions from phone keypad;
-- optional call status polling.
+Some channels send notifications directly to the assigned user.
 
-See [Custom Voice Providers](../voice-providers/index.md).
+| Channel | Required user profile field |
+|---|---|
+| `email` | `email` |
+| `voice_call` | `phone` |
 
-Read more about channels in the [Integrations](../integrations/index.md) section.
+For channel tests, IncidentRelay should use the current user's matching profile field.
+
+## Channels that support actions
+
+Some channels can support ACK/Resolve actions from the message itself.
+
+| Channel | Action support |
+|---|---|
+| Mattermost Bot API | ACK/Resolve buttons and message updates |
+| Telegram | Inline actions and message updates |
+| Voice call | DTMF actions if provider supports callbacks |
+| Email | No interactive actions |
+| Slack/Discord/Teams/webhook | Usually one-way notification only |
+
+Read more in [Notification channels](../integrations/channels.md).

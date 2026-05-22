@@ -815,7 +815,7 @@ $(document).on("change", "#status-filter", function () {
     loadAlerts();
 });
 
-$(document).on("change", "#severity-filter, #alerts-sort", function () {
+$(document).on("change", "#severity-filter", function () {
     resetAlertsPagination();
     writeAlertsQueryParams();
     loadAlerts();

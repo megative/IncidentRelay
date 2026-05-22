@@ -1,70 +1,49 @@
----
-title: Troubleshooting
-description: Common IncidentRelay troubleshooting steps
----
-
 # Troubleshooting
 
-## Alert is not visible
+## 500 on duplicate names or slugs
 
-If an alert is not visible:
+Duplicate resources should return `409 Conflict`, not `500`.
 
-1. Check that the correct route intake token was used.
-2. Check that the endpoint matches the route source.
-3. Check that route matchers match alert labels.
-4. Check that the group is active.
-5. Check that the team is active.
-6. Check that the top right active group is correct.
-7. Select `All my groups` and reload the Alerts page.
+Check API logs for `IntegrityError` and add explicit error handling in the corresponding view.
 
-The webhook response includes:
+Common examples:
 
-```text
-route_id
-rotation_id
-routing_error
-```
+- duplicate group slug;
+- duplicate team slug;
+- duplicate channel name inside the same team.
 
-## Route source mismatch
+## Empty body returns unclear validation error
 
-The endpoint must match the route `source`.
+POST/PUT endpoints should return a structured `400 validation_error` when body is missing or invalid JSON.
 
-```text
-route.source = alertmanager -> POST /api/integrations/alertmanager
-route.source = webhook      -> POST /api/integrations/webhook
-route.source = zabbix       -> POST /api/integrations/zabbix
-```
+## Calendar invalid date returns 500
 
-If the route token belongs to an `alertmanager` route and you send the request to `/api/integrations/webhook`, the service returns:
+Query parameters such as `start` and `end` should be validated before date parsing reaches business logic.
 
-```json
-{
-  "routing_error": "route source 'alertmanager' does not match alert source 'webhook'"
-}
-```
-
-## Mattermost buttons do not work
+## Email test works but real alert does not
 
 Check:
 
+1. Real alert has an assignee.
+2. Assigned user has email in profile.
+3. Channel is attached to the matched route.
+4. Severity filter allows the alert severity.
+5. SMTP relay accepted and delivered the message.
+
+## Voice call fails with missing phone
+
+Voice call sends to the assigned user's profile phone number. Set `phone` on the assigned user.
+
+## Telegram token error
+
+Telegram bot token must contain a colon:
+
 ```text
-- public_base_url is reachable from Mattermost.
-- Mattermost channel uses Bot API mode.
-- Mattermost bot token is valid.
-- Mattermost channel_id is correct.
-- action_secret / callback secret is correct.
+123456789:AA...
 ```
 
-## Voice callbacks do not work
+If the token is invalid, fix the channel config or disable the channel.
 
-Check:
+## Reminders are duplicated
 
-```text
-- public_base_url is reachable from the voice provider.
-- Callback URL contains the correct channel_id.
-- Callback URL contains the correct callback secret.
-- Channel type is voice_call.
-- Provider sends JSON or form data supported by parse_callback().
-```
-
-See [Voice Provider Troubleshooting](../voice-providers/troubleshooting.md).
+Check that only one scheduler process is running and that scheduler is not started inside every web worker.

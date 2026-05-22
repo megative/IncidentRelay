@@ -1,121 +1,62 @@
----
-title: Mattermost notification channel
-description: Mattermost webhook and Bot API notifications with ACK/Resolve buttons
----
+# Mattermost channel
 
-# Mattermost notification channel
+Mattermost is an outgoing notification channel.
 
-Mattermost is an outgoing notification channel. It does not receive alerts directly. Incoming alerts are received by an integration endpoint, matched to a route, and then delivered to the Mattermost channel attached to that route.
+IncidentRelay supports two Mattermost delivery styles:
 
-## Modes
+1. Incoming webhook mode.
+2. Bot API mode with interactive buttons and message updates.
 
-Mattermost supports two modes.
-
-| Mode | Supports buttons | Supports message updates | Recommended for |
-|---|---:|---:|---|
-| Incoming webhook | No | No | Simple notifications |
-| Bot API | Yes | Yes | ACK/Resolve workflow |
-
-Bot API mode is recommended when you need interactive actions.
+Bot API mode is recommended when you want ACK/Resolve buttons.
 
 ## Incoming webhook mode
 
-Config:
+Use this mode when you only need one-way notifications.
+
+Typical config:
 
 ```json
 {
-  "mode": "webhook",
-  "webhook_url": "https://mattermost.example.com/hooks/xxx"
-}
-```
-
-With severity filter:
-
-```json
-{
-  "mode": "webhook",
-  "webhook_url": "https://mattermost.example.com/hooks/xxx",
-  "notify_on_severities": ["critical", "high", "warning"]
+  "webhook_url": "https://mattermost.example.com/hooks/..."
 }
 ```
 
 ## Bot API mode
 
-Config:
+Use this mode for:
+
+- Acknowledge button;
+- Resolve button;
+- message updates after ACK/Resolve;
+- better user attribution.
+
+Typical config fields:
 
 ```json
 {
-  "mode": "bot_api",
-  "api_url": "https://mattermost.example.com",
-  "bot_token": "mattermost-bot-token",
-  "channel_id": "mattermost-channel-id",
+  "base_url": "https://mattermost.example.com",
+  "bot_token": "...",
+  "channel_id": "...",
   "callback_secret": "change-me"
 }
 ```
 
-With severity filter:
+Set `[server] public_base_url` correctly, because buttons need callback URLs that Mattermost can reach.
 
-```json
-{
-  "mode": "bot_api",
-  "api_url": "https://mattermost.example.com",
-  "bot_token": "mattermost-bot-token",
-  "channel_id": "mattermost-channel-id",
-  "callback_secret": "change-me",
-  "notify_on_severities": ["critical", "high", "warning"]
-}
-```
+## Mattermost user ID
 
-## ACK and Resolve actions
+A user can have a Mattermost user ID in their profile. This is useful for attribution when the user clicks ACK/Resolve buttons.
 
-In Bot API mode, Mattermost messages can include:
+## Test button
 
-```text
-Acknowledge
-Resolve
-```
-
-After ACK, the original post is updated and keeps only the Resolve button. After Resolve, the post is updated and buttons are removed.
-
-## `public_base_url` vs Mattermost URL
-
-`public_base_url` is the public URL of IncidentRelay. Mattermost calls this URL when a user clicks an action button.
-
-Example action callback URL:
-
-```text
-https://incidentrelay.example.com/api/integrations/mattermost/actions
-```
-
-`api_url` is the Mattermost server URL. IncidentRelay uses it to send and update posts through the Mattermost Bot API.
-
-```text
-public_base_url = where Mattermost calls IncidentRelay back
-api_url = where IncidentRelay sends messages to Mattermost
-```
-
-For buttons to work, `public_base_url` must be reachable from the Mattermost server.
-
-## Recommended setup
-
-```text
-Main Mattermost channel: critical, high, warning
-Low-priority Mattermost channel: low, info
-Voice or email channel: critical only
-```
+The channel test sends a test notification through the configured Mattermost channel. It does not prove that a real alert route will match or that severity filters will allow the alert.
 
 ## Troubleshooting
 
-### Messages are sent, but buttons do not work
-
 Check:
 
-1. The channel uses Bot API mode.
-2. `api_url`, `bot_token`, and `channel_id` are set.
-3. `public_base_url` is configured and reachable from Mattermost.
-4. The callback secret matches the expected value.
-5. The user clicking the button has permission to ACK or Resolve the alert.
-
-### Messages are skipped
-
-Check `notify_on_severities` and the alert severity.
+1. Channel is enabled.
+2. Channel is attached to the matched route.
+3. Severity filter allows the alert severity.
+4. Bot token or webhook URL is correct.
+5. `public_base_url` is reachable from Mattermost for buttons.

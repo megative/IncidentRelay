@@ -1,101 +1,73 @@
----
-title: Webhook-based notification channels
-description: Slack, Discord, Microsoft Teams, and generic outbound webhook channels
----
-
 # Webhook-based notification channels
 
-Several notification channels use an outbound webhook URL.
+Webhook-based notification channels send outgoing HTTP requests to external services.
 
-These are outgoing channels, not incoming alert integrations.
+This page covers:
 
 ```text
-Incoming integration -> Route -> Webhook-based notification channel -> External service
+slack
+discord
+teams
+webhook
 ```
+
+Do not confuse outgoing webhook channels with the incoming [Generic webhook integration](generic-webhook.md).
 
 ## Slack
 
-Slack channel config:
+Slack channel uses an incoming webhook URL.
+
+Typical config:
 
 ```json
 {
-  "webhook_url": "https://hooks.slack.com/services/xxx/yyy/zzz"
-}
-```
-
-With severity filter:
-
-```json
-{
-  "webhook_url": "https://hooks.slack.com/services/xxx/yyy/zzz",
-  "notify_on_severities": ["critical", "high"]
+  "webhook_url": "https://hooks.slack.com/services/..."
 }
 ```
 
 ## Discord
 
-Discord channel config:
+Discord channel uses a Discord webhook URL.
+
+Typical config:
 
 ```json
 {
-  "webhook_url": "https://discord.com/api/webhooks/xxx/yyy"
-}
-```
-
-With severity filter:
-
-```json
-{
-  "webhook_url": "https://discord.com/api/webhooks/xxx/yyy",
-  "notify_on_severities": ["critical", "high"]
+  "webhook_url": "https://discord.com/api/webhooks/..."
 }
 ```
 
 ## Microsoft Teams
 
-Microsoft Teams channel config:
+Microsoft Teams channel uses a Teams webhook URL.
+
+Typical config:
 
 ```json
 {
-  "webhook_url": "https://outlook.office.com/webhook/xxx"
+  "webhook_url": "https://..."
 }
 ```
 
-With severity filter:
+## Generic outgoing webhook
+
+Generic outgoing webhook sends IncidentRelay notification payloads to a custom HTTP endpoint.
+
+Typical config:
 
 ```json
 {
-  "webhook_url": "https://outlook.office.com/webhook/xxx",
-  "notify_on_severities": ["critical", "high", "warning"]
+  "webhook_url": "https://example.com/incidentrelay/notifications"
 }
 ```
 
-## Generic outbound webhook
+## Severity filter
 
-Generic webhook notification channel config:
+All webhook-based channels support `notify_on_severities`:
 
 ```json
 {
-  "webhook_url": "https://alerts.example.com/incidentrelay"
+  "webhook_url": "https://example.com/hook",
+  "notify_on_severities": ["critical", "high"]
 }
 ```
-
-With severity filter:
-
-```json
-{
-  "webhook_url": "https://alerts.example.com/incidentrelay",
-  "notify_on_severities": ["critical", "high", "medium"]
-}
-```
-
-Use outbound webhook channels for internal automation, custom incident systems, or notification fan-out.
-
-## Do not confuse with incoming generic webhook
-
-| Direction | Documentation | Endpoint/config |
-|---|---|---|
-| Incoming alert source | [Generic webhook integration](generic-webhook.md) | `POST /api/integrations/webhook` |
-| Outgoing notification channel | This page | `config.webhook_url` |
-
-The incoming generic webhook creates alerts. The outgoing webhook channel sends notifications after a route has matched an alert.

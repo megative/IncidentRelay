@@ -194,28 +194,23 @@ def maybe_escalate_alert(alert):
 
 
 def get_alert_reminder_interval(alert):
-    """
-    Return the reminder interval for an alert.
+    """Return the reminder interval for an alert."""
+    if not alert.rotation:
+        return 0
 
-    Rotation settings have priority. The global setting is only a fallback
-    for alerts without a rotation or for old database records.
-    """
-
-    if alert.rotation and getattr(alert.rotation, "reminder_interval_seconds", None):
-        return alert.rotation.reminder_interval_seconds
-
-    return Config.REMINDER_AFTER_SECONDS
+    return alert.rotation.reminder_interval_seconds
 
 
 def should_send_reminder(alert, now):
-    """
-    Check whether a reminder should be sent now.
-    """
+    """Check whether a reminder should be sent now."""
+    reminder_interval = get_alert_reminder_interval(alert)
+
+    if reminder_interval == 0:
+        return False
 
     if not alert.last_notification_at:
         return True
 
-    reminder_interval = get_alert_reminder_interval(alert)
     return alert.last_notification_at <= now - timedelta(seconds=reminder_interval)
 
 
@@ -229,6 +224,21 @@ def send_unacked_reminders():
     count = 0
 
     for alert in alerts_repo.list_firing_alerts():
+        interval = get_alert_reminder_interval(alert)
+
+        if interval == 0:
+            logger.debug(
+                "reminder skipped because reminder interval is disabled",
+                extra={
+                    "extra": {
+                        "alert_id": alert.id,
+                        "team_id": alert.team.id if alert.team else None,
+                        "rotation_id": alert.rotation.id if alert.rotation else None,
+                    }
+                },
+            )
+            continue
+
         if not has_matching_notification_channel(alert):
             logger.debug(
                 "reminder skipped because no channel matches alert severity",

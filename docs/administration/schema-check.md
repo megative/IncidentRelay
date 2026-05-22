@@ -1,20 +1,18 @@
----
-title: Schema Check
-description: Validate database schema after migrations
----
-
 # Schema Check
 
-After running migrations, you can check that all Peewee model tables and columns exist in the configured database:
+Keep request schemas, OpenAPI documentation and UI forms aligned.
+
+Common checks:
+
+- if a field exists in Swagger request body, it should exist in the matching request schema;
+- if a schema rejects a field because `extra="forbid"`, Swagger should not advertise that field;
+- enum values should use the same constants as backend validation;
+- old role values such as `read_only` and `rw` should not appear in request schemas after migration;
+- email channels should not document channel-level recipients or SMTP transport fields.
+
+Recommended local checks:
 
 ```bash
-python app/check_schema.py
+pytest tests
+python3 -m compileall -q app tests
 ```
-
-Expected output:
-
-```text
-Schema check OK: all model tables and columns exist.
-```
-
-Fresh initialization creates all application tables from the initial schema migration.

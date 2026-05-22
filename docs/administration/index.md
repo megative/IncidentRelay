@@ -1,13 +1,11 @@
----
-title: Administration
-description: Administrative tasks and diagnostics
----
-
 # Administration
 
-## Pages
+Administration topics:
 
-- [Demo data](demo-data.md)
-- [Schema check](schema-check.md)
+- [Scheduler](scheduler.md)
 - [Logging](logging.md)
+- [Demo Data](demo-data.md)
+- [Schema Check](schema-check.md)
 - [Troubleshooting](troubleshooting.md)
+
+Production installations should keep web, scheduler and optional workers as separate services.

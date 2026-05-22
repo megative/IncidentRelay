@@ -132,8 +132,6 @@ function reminderValueToSeconds() {
 
 function setReminderFields(seconds) {
     /* Fill reminder fields from seconds. */
-    if (!seconds) { seconds = 300; }
-
     if (seconds % 86400 === 0) {
         $("#rotation-reminder-value").val(seconds / 86400);
         $("#rotation-reminder-unit").val("days");

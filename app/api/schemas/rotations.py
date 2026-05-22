@@ -30,7 +30,7 @@ class RotationCreateSchema(ApiModel):
     handoff_weekday: int | None = Field(default=None, ge=0, le=6)
     timezone: str = Field(default="UTC", min_length=1, max_length=64)
     duration_seconds: int | None = Field(default=None, ge=60)
-    reminder_interval_seconds: int = Field(default=300, ge=60, le=2592000)
+    reminder_interval_seconds: int = Field(default=300, ge=0, le=2592000)
     add_team_members: bool = True
     enabled: bool = True
 
@@ -39,6 +39,9 @@ class RotationCreateSchema(ApiModel):
         """
         Calculate duration from interval fields.
         """
+
+        if self.reminder_interval_seconds != 0 and self.reminder_interval_seconds < 60:
+            raise ValueError("reminder_interval_seconds must be 0 or at least 1 minute")
 
         if self.rotation_type == "daily":
             self.interval_value = 1

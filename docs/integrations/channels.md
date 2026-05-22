@@ -21,7 +21,7 @@ For each channel IncidentRelay checks:
 1. Is the channel enabled?
 2. Is the channel attached to the matched route?
 3. Does notify_on_severities allow this alert severity?
-4. Does the notifier have all required channel/global settings?
+4. Does the notifier have all required channel or global settings?
 5. Does the assigned user have the required contact field, if the channel needs one?
 ```
 
@@ -63,7 +63,7 @@ low
 info
 ```
 
-IncidentRelay normalizes common aliases before comparing them with the filter.
+IncidentRelay normalizes common incoming severity aliases before comparing them with the filter.
 
 | Incoming value | Normalized value |
 |---|---|
@@ -72,7 +72,7 @@ IncidentRelay normalizes common aliases before comparing them with the filter.
 | `warn` | `warning` |
 | `information`, `informational`, `not_classified`, `not classified` | `info` |
 
-Do not use channel-specific severity fields such as `call_on_severities`. Use `notify_on_severities` for every channel type.
+Do not use old or channel-specific severity fields such as `severities` or `call_on_severities`. Use `notify_on_severities` for every channel type.
 
 ## Notification updates
 
@@ -88,12 +88,12 @@ Some channels can update an existing notification after ACK or Resolve.
 
 ## Channel-specific pages
 
-- [Mattermost channel](mattermost.md)
-- [Telegram channel](telegram.md)
-- [Email channel](email.md)
+- [Mattermost](mattermost.md)
+- [Telegram](telegram.md)
+- [Email](email.md)
 - [Email templates](email-channel-templates.md)
 - [Webhook-based channels](webhook-channels.md)
-- [Voice call channel](voice-call.md)
+- [Voice call](voice-call.md)
 
 ## Troubleshooting
 
@@ -118,4 +118,4 @@ route match -> route channel binding -> allowed severity -> assignee contact dat
 
 ### Logs show `notification sent`, but the user did not receive it
 
-`notification sent` means IncidentRelay handed the message to the external provider or SMTP relay without an exception. It does not guarantee final mailbox/chat delivery. Check the downstream provider logs as well.
+`notification sent` means IncidentRelay handed the message to the external provider or SMTP relay without an exception. It does not guarantee final mailbox, chat or phone delivery. Check the downstream provider logs as well.

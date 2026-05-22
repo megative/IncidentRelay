@@ -110,7 +110,6 @@ class Config:
     JWT_COOKIE_NAME = settings.get("auth", "jwt_cookie_name", "incidentrelay_jwt")
     JWT_COOKIE_SECURE = settings.get_bool("auth", "jwt_cookie_secure", False)
 
-    REMINDER_AFTER_SECONDS = settings.get_int("alerts", "reminder_after_seconds", 300)
     REMINDER_INTERVAL_SECONDS = settings.get_int("alerts", "reminder_interval_seconds", 60)
     ALERT_GROUP_WINDOW_SECONDS = settings.get_int("alerts", "alert_group_window_seconds", 3600)
 

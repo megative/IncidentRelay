@@ -36,7 +36,7 @@ def channel_name_conflict_response(name):
 
 def build_test_assignee(channel):
     """Return a fake assignee for channel tests that require profile contacts."""
-    if channel.channel_type != "email":
+    if channel.channel_type not in ("email", "voice_call"):
         return None
 
     current_user = request.current_user

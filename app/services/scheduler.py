@@ -96,7 +96,6 @@ def start_scheduler():
             "extra": {
                 "event_type": "scheduler",
                 "reminder_interval_seconds": Config.REMINDER_INTERVAL_SECONDS,
-                "reminder_after_seconds": Config.REMINDER_AFTER_SECONDS,
                 "lock_ttl_seconds": Config.SCHEDULER_LOCK_TTL_SECONDS,
             }
         },

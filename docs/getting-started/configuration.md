@@ -1,13 +1,11 @@
 ---
 title: Configuration
-description: IncidentRelay configuration
+description: IncidentRelay configuration file reference
 ---
 
 # Configuration
 
-## Configuration file
-
-IncidentRelay reads the config path from:
+IncidentRelay reads the config file path from:
 
 ```text
 INCEDENTRELAY_CONFIG_FILE
@@ -32,7 +30,7 @@ environment:
   INCEDENTRELAY_CONFIG_FILE: /etc/incidentrelay/incidentrelay.conf
 ```
 
-The old `ONCALL_CONFIG_FILE` name should not be used for IncidentRelay.
+The old `ONCALL_CONFIG_FILE` name should not be used.
 
 ## Server section
 
@@ -41,13 +39,19 @@ The old `ONCALL_CONFIG_FILE` name should not be used for IncidentRelay.
 host = 0.0.0.0
 port = 8080
 public_base_url = https://incidentrelay.example.com
+secret_key = change-me
 ```
 
-`host` and `port` define where the service listens.
+| Option | Description |
+|---|---|
+| `host` | Address to bind the web service to |
+| `port` | HTTP port |
+| `public_base_url` | External URL used in alert links, buttons and callbacks |
+| `secret_key` | Application secret; change it in production |
 
-`public_base_url` is used for generated links and external callbacks. In production, set it to the real external URL.
+In production, `public_base_url` must be the real external HTTPS URL.
 
-## SQLite section
+## Database: SQLite
 
 ```ini
 [database]
@@ -59,21 +63,57 @@ wal = true
 busy_timeout = 5000
 ```
 
-SQLite is the default database for small self-hosted installations.
+SQLite is suitable for small self-hosted installations. Keep one web worker when using SQLite.
 
-## PostgreSQL section
+## Database: PostgreSQL
 
 ```ini
 [database]
 type = postgresql
-host = postgres
+host = 127.0.0.1
 port = 5432
 name = incidentrelay
 user = incidentrelay
-password = incidentrelay-change-me
+password = change-me
 ```
 
-Use PostgreSQL for larger installations, higher alert volume, or multiple web workers.
+Use PostgreSQL for larger installations, higher alert volume, multiple web workers, or long-term production deployments.
+
+## SMTP section
+
+Email notification channels use global SMTP settings. SMTP transport is not configured per channel.
+
+```ini
+[smtp]
+host = 127.0.0.1
+port = 25
+from = incidentrelay@example.com
+use_tls = false
+user =
+password =
+```
+
+For an unauthenticated local relay, leave `user` and `password` empty.
+
+For an authenticated SMTP server:
+
+```ini
+[smtp]
+host = smtp.example.com
+port = 587
+from = incidentrelay@example.com
+use_tls = true
+user = incidentrelay@example.com
+password = change-me
+```
+
+Email notifications are sent to the assigned user's profile email address.
+
+## Telegram proxy
+
+If the environment requires a proxy for Telegram Bot API calls, configure it globally. Keep token values in channel configuration, not in the global config.
+
+Example option names depend on the current service config implementation. Use the same config file for web and Telegram worker processes.
 
 ## Voice section
 
@@ -83,3 +123,37 @@ provider = stub
 providers_dir = /usr/local/lib/incidentrelay/voice_providers
 callback_secret = change-me
 ```
+
+| Option | Description |
+|---|---|
+| `provider` | Voice provider name |
+| `providers_dir` | Directory with custom provider modules |
+| `callback_secret` | Secret used for callback validation |
+
+Voice call notifications are sent to the assigned user's profile phone number.
+
+## Scheduler settings
+
+The scheduler process checks reminders, escalations and periodic jobs.
+
+The scheduler wake-up interval is separate from rotation reminder intervals. Rotation reminder intervals are configured per rotation:
+
+```text
+0       disables reminders for that rotation
+>= 60   sends reminders at that interval in seconds
+1..59   invalid
+```
+
+Do not use a global reminder-after setting as a runtime fallback when rotations require an explicit interval.
+
+## Logging
+
+If file logging is enabled, use a writable path:
+
+```ini
+[main]
+log_level = INFO
+log_file = /var/log/incidentrelay/incidentrelay.log
+```
+
+For systemd and containers, also check journal or container logs.

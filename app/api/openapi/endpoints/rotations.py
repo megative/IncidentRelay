@@ -79,7 +79,7 @@ ROTATION_SCHEMA = {
         "handoff_weekday": {"type": "integer", "nullable": True, "description": "Weekday for weekly handoff. Monday is 0.", "example": 0},
         "timezone": {"type": "string", "example": "UTC"},
         "duration_seconds": {"type": "integer", "nullable": True, "description": "Calculated or custom slot duration."},
-        "reminder_interval_seconds": {"type": "integer", "minimum": 60, "default": 300, "description": "How often reminders are sent for unacknowledged alerts assigned to this rotation."},
+        "reminder_interval_seconds": {"type": "integer", "minimum": 0, "default": 300, "description": "How often reminders are sent for unacknowledged alerts assigned to this rotation. 0 disables reminders. Otherwise, use 1 minute or more."},
         "enabled": {"type": "boolean", "default": True},
         "add_team_members": {
             "type": "boolean",

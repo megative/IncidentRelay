@@ -13,18 +13,19 @@ theme:
 
 markdown_extensions:
   - admonition
+  - attr_list
+  - fenced_code
+  - tables
   - toc:
       permalink: true
-  - tables
-  - fenced_code
-  - attr_list
 
 nav:
   - Home: index.md
-  - Project README: project-readme.md
   - Getting Started:
       - Overview: getting-started/index.md
-      - Installation: getting-started/installation.md
+      - Docker Installation: getting-started/docker.md
+      - RPM Installation: getting-started/rpm-installation.md
+      - Manual systemd Installation: getting-started/systemd.md
       - Configuration: getting-started/configuration.md
       - First Login and Setup: getting-started/first-login.md
       - Quickstart Checklist: getting-started/quickstart.md
@@ -34,12 +35,21 @@ nav:
       - Teams, Rotations and Routes: concepts/teams-rotations-routes.md
       - Channels: concepts/channels.md
       - Route Intake Tokens: concepts/route-intake-tokens.md
+      - Reminders and Escalations: concepts/reminders-and-escalations.md
   - Integrations:
       - Overview: integrations/index.md
-      - Alertmanager: integrations/alertmanager.md
-      - Generic Webhook: integrations/generic-webhook.md
-      - Zabbix: integrations/zabbix.md
-      - Mattermost: integrations/mattermost.md
+      - Incoming alert sources:
+          - Alertmanager: integrations/alertmanager.md
+          - Zabbix: integrations/zabbix.md
+          - Generic Webhook: integrations/generic-webhook.md
+      - Notification channels:
+          - Common Behavior: integrations/channels.md
+          - Mattermost: integrations/mattermost.md
+          - Telegram: integrations/telegram.md
+          - Email: integrations/email.md
+          - Email Templates: integrations/email-channel-templates.md
+          - Webhook-based Channels: integrations/webhook-channels.md
+          - Voice Call: integrations/voice-call.md
   - Usage:
       - Overview: usage/index.md
       - Alerts: usage/alerts.md
@@ -59,7 +69,8 @@ nav:
       - Voice Call OpenAPI Notes: api/voice-call-openapi.md
   - Administration:
       - Overview: administration/index.md
+      - Scheduler: administration/scheduler.md
+      - Logging: administration/logging.md
       - Demo Data: administration/demo-data.md
       - Schema Check: administration/schema-check.md
-      - Logging: administration/logging.md
       - Troubleshooting: administration/troubleshooting.md

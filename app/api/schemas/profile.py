@@ -55,7 +55,7 @@ class ProfileTokenCreateSchema(ApiModel):
     )
     group_id: Optional[int] = Field(default=None, ge=1)
     scopes: List[str] = Field(default_factory=lambda: ["alerts:read"])
-    days: int = Field(default=0, ge=0)
+    days: int = Field(default=0, ge=0, le=365)
 
 
 class ActiveGroupSchema(ApiModel):

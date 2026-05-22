@@ -1,86 +1,63 @@
----
-title: Generic webhook incoming integration
-description: Send custom webhook alerts to IncidentRelay
----
+# Generic webhook integration
 
-# Generic webhook incoming integration
+Generic webhook is an incoming alert source for custom systems.
 
-The generic webhook endpoint is an incoming alert source for internal tools or monitoring systems that do not use Alertmanager or Zabbix formats.
-
-## Endpoint
+Endpoint:
 
 ```text
 POST /api/integrations/webhook
 ```
 
-Required header:
+Authentication uses a route intake token:
 
-```http
-Authorization: Bearer ROUTE_INTAKE_TOKEN
+```text
+Authorization: Bearer ROUTE_TOKEN
 ```
 
 ## Route setup
 
-Create a route with source `webhook`.
-
-Example:
+Create a route with:
 
 ```text
-Name: infra-webhook
 Source: webhook
-Team: infra
-Rotation: infra-primary
-Channels: infra-mattermost, infra-email
-Matchers JSON: {}
-Group by JSON: ["alertname", "instance"]
 ```
 
-Copy the route intake token after creating the route.
+Attach at least one notification channel and copy the route intake token into the sender.
 
-## Firing alert example
+## Payload example
 
-```bash
-curl -X POST http://127.0.0.1:8080/api/integrations/webhook \
-  -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer WEBHOOK_ROUTE_TOKEN' \
-  -d '{
-    "title": "Disk is full",
-    "message": "/var is 95% full",
-    "severity": "critical",
-    "status": "firing",
-    "fingerprint": "disk-full-host1-var",
-    "labels": {
-      "team": "infra",
-      "instance": "host1",
-      "alertname": "DiskFull"
-    }
-  }'
+```json
+{
+  "status": "firing",
+  "external_id": "deploy-incident-42",
+  "fingerprint": "deploy-api-prod-42",
+  "title": "API deploy failed",
+  "message": "Deployment failed on api-prod-1",
+  "severity": "critical",
+  "team": "infra",
+  "labels": {
+    "service": "api",
+    "environment": "prod",
+    "host": "api-prod-1"
+  },
+  "details": {
+    "deploy_id": "42",
+    "region": "eu-1"
+  }
+}
 ```
 
-## Resolved alert example
+## Normalized fields
 
-Use the same `fingerprint` for `firing` and `resolved`.
-
-```bash
-curl -X POST http://127.0.0.1:8080/api/integrations/webhook \
-  -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer WEBHOOK_ROUTE_TOKEN' \
-  -d '{
-    "title": "Disk is full",
-    "message": "/var is OK",
-    "severity": "critical",
-    "status": "resolved",
-    "fingerprint": "disk-full-host1-var",
-    "labels": {
-      "team": "infra",
-      "instance": "host1",
-      "alertname": "DiskFull"
-    }
-  }'
-```
-
-## Notes
-
-- Use a stable `fingerprint` to deduplicate firing/resolved events.
-- Use labels for route matchers and grouping.
-- Outgoing webhook notification channels are documented separately: [Webhook-based channels](webhook-channels.md).
+| IncidentRelay field | Source |
+|---|---|
+| `source` | `webhook` |
+| `team_slug` | `team`, `labels.team`, or `labels.oncall_team` |
+| `external_id` | `external_id` |
+| `dedup_key` | `fingerprint`, or generated from source, external ID, title and labels |
+| `title` | `title`, default `Webhook alert` |
+| `message` | `message` |
+| `severity` | `severity` |
+| `labels` | `labels` |
+| `payload` | original payload |
+| `status` | `status`, default `firing` |

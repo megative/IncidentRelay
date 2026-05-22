@@ -1,20 +1,20 @@
 ---
 title: Docker Installation
-description: Run IncidentRelay with Docker Compose, SQLite by default, and optional PostgreSQL
+description: Run IncidentRelay with Docker Compose
 ---
 
 # Docker Installation
 
-The recommended self-hosted installation method is Docker Compose.
+Docker Compose is the fastest way to run IncidentRelay for testing, demos and simple self-hosted deployments.
 
-The default Compose setup uses SQLite and starts two containers:
+The default Compose setup starts:
 
 ```text
-incidentrelay        # HTTP API, UI, webhooks
-incidentrelay-scheduler  # reminders, escalations, periodic jobs
+incidentrelay             # HTTP API, UI, incoming webhooks
+incidentrelay-scheduler   # reminders, escalations, periodic jobs
 ```
 
-PostgreSQL is optional and can be enabled with a Compose override.
+PostgreSQL is optional. SQLite is suitable for small installations and quick starts.
 
 ## Default architecture
 
@@ -23,12 +23,12 @@ Docker Compose
 ├── incidentrelay
 │   └── Gunicorn + Flask application
 ├── incidentrelay-scheduler
-│   └── standalone APScheduler worker
+│   └── standalone scheduler worker
 └── incidentrelay-data
     └── SQLite database volume
 ```
 
-SQLite database path inside the container:
+Default SQLite path inside the container:
 
 ```text
 /var/lib/incidentrelay/incidentrelay.db
@@ -65,6 +65,14 @@ docker compose logs -f incidentrelay
 docker compose logs -f incidentrelay-scheduler
 ```
 
+## Run migrations
+
+If migrations are not run automatically by your container entrypoint, run:
+
+```bash
+docker compose exec incidentrelay python manage.py migrate
+```
+
 ## Create the first admin user
 
 ```bash
@@ -75,6 +83,8 @@ docker compose exec incidentrelay \
     --email admin@example.com
 ```
 
+Change the password and email before production use.
+
 ## Default SQLite config
 
 File:
@@ -82,6 +92,8 @@ File:
 ```text
 docker/incidentrelay.docker.conf
 ```
+
+Example:
 
 ```ini
 [main]
@@ -107,27 +119,34 @@ providers_dir = /usr/local/lib/incidentrelay/voice_providers
 callback_secret = change-me
 ```
 
-## Optional PostgreSQL
-
-SQLite is the default database and is suitable for small self-hosted installations.
+## PostgreSQL variant
 
 Use PostgreSQL for:
 
-```text
 - larger teams;
-- high alert volume;
+- higher alert volume;
 - multiple web workers;
-- long-term production installations;
-- future HA deployments.
-```
+- longer-term production installations.
 
-Start with PostgreSQL:
+Start with PostgreSQL if the repository provides a PostgreSQL Compose override:
 
 ```bash
 docker compose \
   -f docker-compose.yml \
   -f docker-compose.postgres.yml \
   up -d
+```
+
+PostgreSQL config example:
+
+```ini
+[database]
+type = postgresql
+host = postgres
+port = 5432
+name = incidentrelay
+user = incidentrelay
+password = incidentrelay-change-me
 ```
 
 ## External access
@@ -139,7 +158,7 @@ ports:
   - "8080:8080"
 ```
 
-IncidentRelay is available externally on:
+IncidentRelay is available on:
 
 ```text
 http://SERVER_IP:8080
@@ -147,17 +166,10 @@ http://SERVER_IP:8080
 
 if the firewall allows port `8080`.
 
-To expose IncidentRelay only on localhost and put Nginx or HAProxy in front of it:
-
-```yaml
-ports:
-  - "127.0.0.1:8080:8080"
-```
-
-Production example:
+For production, it is better to expose IncidentRelay through Nginx or HAProxy with HTTPS:
 
 ```text
-Internet -> Nginx/HAProxy :443 -> 127.0.0.1:8080 -> IncidentRelay
+Internet -> Nginx/HAProxy :443 -> IncidentRelay :8080
 ```
 
 Set the public URL correctly:
@@ -169,8 +181,6 @@ public_base_url = https://incidentrelay.example.com
 
 `public_base_url` is used for generated links and callbacks.
 
-Do not leave it as `http://localhost:8080` in production.
-
 ## Custom voice providers
 
 Custom voice providers can be mounted into:
@@ -179,14 +189,14 @@ Custom voice providers can be mounted into:
 /usr/local/lib/incidentrelay/voice_providers
 ```
 
-Compose mount:
+Example Compose mount:
 
 ```yaml
 volumes:
   - ./custom_voice_providers:/usr/local/lib/incidentrelay/voice_providers:ro
 ```
 
-After changing provider files, restart containers:
+After changing provider files, restart the containers:
 
 ```bash
 docker compose restart incidentrelay incidentrelay-scheduler

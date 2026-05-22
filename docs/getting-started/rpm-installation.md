@@ -1,6 +1,11 @@
-# Install IncidentRelay on RedHat-like distributions from RPM repository
+---
+title: RPM Installation
+description: Install IncidentRelay on RedHat-like distributions from the RPM repository
+---
 
-IncidentRelay provides an RPM repository for RedHat-like distributions such as RHEL, Rocky Linux, AlmaLinux and CentOS Stream.
+# RPM Installation
+
+Use this guide for RHEL, Rocky Linux, AlmaLinux and CentOS Stream installations.
 
 Repository file:
 
@@ -10,14 +15,13 @@ https://repo.incidentrelay.io/incidentrelay.repo
 
 ## 1. Install the repository file
 
-For RHEL 9 / Rocky Linux 9 / AlmaLinux 9 / CentOS Stream 9 and newer:
+For DNF-based systems:
 
 ```bash
 sudo dnf install -y curl
 sudo curl -fsSL \
   https://repo.incidentrelay.io/incidentrelay.repo \
   -o /etc/yum.repos.d/incidentrelay.repo
-
 sudo dnf makecache
 ```
 
@@ -28,7 +32,6 @@ sudo yum install -y curl
 sudo curl -fsSL \
   https://repo.incidentrelay.io/incidentrelay.repo \
   -o /etc/yum.repos.d/incidentrelay.repo
-
 sudo yum makecache
 ```
 
@@ -44,31 +47,17 @@ Or with `yum`:
 sudo yum install -y incidentrelay
 ```
 
-The RPM package installs IncidentRelay into:
+The RPM package installs the application and service files using these paths:
 
 ```text
-/var/www/incidentrelay
+/var/www/incidentrelay                    # application directory
+/etc/incidentrelay/incidentrelay.conf     # main configuration file
+/var/lib/incidentrelay                    # runtime data, SQLite database by default
+/var/log/incidentrelay                    # application logs
+/usr/local/lib/incidentrelay/voice_providers # custom voice providers
 ```
 
-Main configuration file:
-
-```text
-/etc/incidentrelay/incidentrelay.conf
-```
-
-Runtime data directory:
-
-```text
-/var/lib/incidentrelay
-```
-
-Log directory:
-
-```text
-/var/log/incidentrelay
-```
-
-System user:
+The package should run under the dedicated system user:
 
 ```text
 incidentrelay
@@ -76,7 +65,7 @@ incidentrelay
 
 ## 3. Configure IncidentRelay
 
-Edit the configuration file:
+Edit:
 
 ```bash
 sudo vi /etc/incidentrelay/incidentrelay.conf
@@ -87,10 +76,11 @@ At minimum, review:
 ```ini
 [server]
 secret_key = change-me
+public_base_url = https://incidentrelay.example.com
 
 [database]
 type = sqlite
-name = /var/lib/incidentrelay/incidentrelay.db
+path = /var/lib/incidentrelay/incidentrelay.db
 ```
 
 For PostgreSQL, use:
@@ -107,7 +97,7 @@ password = change-me
 
 ## 4. Run database migrations
 
-The RPM package tries to run migrations during installation. If the database was not ready during install, run migrations manually after editing the config:
+The RPM package may run migrations during installation. If the database was not ready during install, run migrations manually after editing the config:
 
 ```bash
 sudo -u incidentrelay \
@@ -123,12 +113,12 @@ sudo -u incidentrelay \
   INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
   /var/www/incidentrelay/venv/bin/python \
   /var/www/incidentrelay/manage.py create-admin \
-  --username admin \
-  --password 'change-me-123' \
-  --email admin@example.com
+    --username admin \
+    --password 'change-me-123' \
+    --email admin@example.com
 ```
 
-Change the password and email before using this command in production.
+Change the password and email before production use.
 
 ## 6. Start services
 
@@ -153,9 +143,15 @@ sudo journalctl -u incidentrelay -f
 sudo journalctl -u incidentrelay-scheduler -f
 ```
 
-## 7. Optional: start Telegram worker
+Open:
 
-Start this service only if Telegram bot polling/callback processing is used:
+```text
+http://SERVER_IP:8080/login
+```
+
+## 7. Optional Telegram worker
+
+Start this service only if Telegram polling or callback processing is used:
 
 ```bash
 sudo systemctl enable --now incidentrelay-telegram-worker
@@ -193,10 +189,13 @@ Then restart services:
 ```bash
 sudo systemctl restart incidentrelay
 sudo systemctl restart incidentrelay-scheduler
-sudo systemctl restart incidentrelay-telegram-worker
 ```
 
-If Telegram worker is not used, skip the last command.
+If Telegram worker is used:
+
+```bash
+sudo systemctl restart incidentrelay-telegram-worker
+```
 
 ## 9. Remove IncidentRelay
 
@@ -210,7 +209,7 @@ Or with `yum`:
 sudo yum remove -y incidentrelay
 ```
 
-Configuration and runtime data may remain on disk depending on RPM removal policy. Check and remove manually if required:
+Configuration and runtime data may remain on disk depending on package removal policy. Remove them manually only when you are sure the data is no longer needed:
 
 ```bash
 sudo rm -rf /etc/incidentrelay

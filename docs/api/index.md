@@ -1,24 +1,15 @@
----
-title: API Documentation
-description: IncidentRelay API documentation entry point
----
+# API
 
-# API Documentation
-
-Swagger UI:
+Swagger UI is available at:
 
 ```text
 /docs
 ```
 
-OpenAPI JSON:
+OpenAPI JSON is available at:
 
 ```text
 /api/openapi.json
 ```
 
-## Topics
-
-- [Voice Call OpenAPI Notes](voice-call-openapi.md)
-- [Personal API Tokens](../usage/profile-and-tokens.md)
-- [Route Intake Tokens](../concepts/route-intake-tokens.md)
+Use route intake tokens for incoming integration endpoints and personal API tokens for user-scoped automation.

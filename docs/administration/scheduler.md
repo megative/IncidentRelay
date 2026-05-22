@@ -5,13 +5,13 @@ description: Run IncidentRelay reminder and escalation scheduler separately from
 
 # Scheduler
 
-IncidentRelay uses scheduler jobs for reminder, escalation and periodic maintenance logic.
+IncidentRelay uses scheduler jobs for reminders, escalations and periodic maintenance logic.
 
 The scheduler must run as a separate process and must not be started inside every web worker.
 
 ## Why separate scheduler process?
 
-Do not run APScheduler inside multiple Gunicorn workers.
+Do not run scheduler jobs inside multiple Gunicorn workers.
 
 Bad model:
 
@@ -28,9 +28,28 @@ This may duplicate reminders and escalations.
 Recommended model:
 
 ```text
-incidentrelay        # HTTP API, UI, webhooks
-incidentrelay-scheduler  # one scheduler process
+incidentrelay             # HTTP API, UI, incoming webhooks
+incidentrelay-scheduler   # one scheduler process
 ```
+
+## Scheduler interval and reminder interval
+
+There are two different intervals:
+
+| Setting | Meaning |
+|---|---|
+| Scheduler wake-up interval | How often the scheduler checks for work |
+| Rotation reminder interval | How often a specific alert should receive reminder notifications |
+
+Rotation reminder interval rules:
+
+```text
+0       disables reminders for that rotation
+>= 60   sends reminders at that interval in seconds
+1..59   invalid
+```
+
+Do not use a global runtime fallback for reminder-after when rotations require an explicit reminder interval.
 
 ## Environment variables
 
@@ -52,104 +71,21 @@ PYTHONUNBUFFERED=1
 
 ## Standalone scheduler worker
 
-File:
+Entrypoint:
 
 ```text
-app/scheduler_worker.py
-```
-
-```python
-import logging
-import signal
-import time
-
-from app import create_app
-
-logger = logging.getLogger("oncall.scheduler")
-
-_shutdown = False
-
-
-def _handle_shutdown(signum, frame):
-    """Handle container or systemd shutdown signals."""
-
-    global _shutdown
-    _shutdown = True
-
-    logger.info(
-        "scheduler shutdown requested",
-        extra={"extra": {"signal": signum}},
-    )
-
-    try:
-        from app.services.scheduler import stop_scheduler
-
-        stop_scheduler()
-    except Exception:
-        logger.exception("failed to stop scheduler cleanly")
-
-
-def main():
-    """Start IncidentRelay scheduler as a standalone process."""
-
-    signal.signal(signal.SIGTERM, _handle_shutdown)
-    signal.signal(signal.SIGINT, _handle_shutdown)
-
-    app = create_app()
-
-    with app.app_context():
-        from app.services.scheduler import start_scheduler
-
-        start_scheduler()
-
-        logger.info("scheduler started")
-
-        while not _shutdown:
-            time.sleep(1)
-
-    logger.info("scheduler stopped")
-
-
-if __name__ == "__main__":
-    main()
-```
-
-## Important application change
-
-The scheduler should not autostart from `create_app()` in the web process.
-
-If scheduler startup currently happens inside `create_app()`, guard it:
-
-```python
-import os
-
-if os.getenv("INCIDENTRELAY_SERVICE") == "scheduler":
-    start_scheduler()
-```
-
-If `app.scheduler_worker` starts the scheduler explicitly, it is usually better to remove automatic scheduler startup from `create_app()` completely.
-
-Correct model:
-
-```text
-web process:
-  create_app()
-  no scheduler autostart
-
-scheduler process:
-  create_app()
-  start_scheduler()
+python -m app.scheduler_worker
 ```
 
 ## systemd service
 
-For classic installations without Docker, create:
+RPM packages should install this service automatically. For manual installations, create:
 
 ```text
 /etc/systemd/system/incidentrelay-scheduler.service
 ```
 
-### Without virtualenv
+Example with virtualenv:
 
 ```ini
 [Unit]
@@ -159,53 +95,15 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-
 User=www-data
 Group=www-data
-
 WorkingDirectory=/var/www/incidentrelay
-
 Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 Environment=INCIDENTRELAY_SERVICE=scheduler
 Environment=PYTHONUNBUFFERED=1
-
-ExecStart=/usr/bin/python3 -m app.scheduler_worker
-
-Restart=always
-RestartSec=5
-
-KillSignal=SIGTERM
-TimeoutStopSec=30
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### With virtualenv
-
-```ini
-[Unit]
-Description=IncidentRelay Scheduler service
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-
-User=www-data
-Group=www-data
-
-WorkingDirectory=/var/www/incidentrelay
-
-Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
-Environment=INCIDENTRELAY_SERVICE=scheduler
-Environment=PYTHONUNBUFFERED=1
-
 ExecStart=/var/www/incidentrelay/venv/bin/python -m app.scheduler_worker
-
 Restart=always
 RestartSec=5
-
 KillSignal=SIGTERM
 TimeoutStopSec=30
 
@@ -213,29 +111,7 @@ TimeoutStopSec=30
 WantedBy=multi-user.target
 ```
 
-If your real config path is:
-
-```text
-/etc/incidentrelay/incidentrelay.conf
-```
-
-use:
-
-```ini
-Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
-```
-
-The important part is to use the same path consistently across web and scheduler services.
-
-## Web systemd service
-
-The web service should explicitly identify itself as `web`:
-
-```ini
-Environment=INCIDENTRELAY_SERVICE=web
-```
-
-## Apply systemd changes
+Apply changes:
 
 ```bash
 sudo systemctl daemon-reload
@@ -254,29 +130,38 @@ journalctl -u incidentrelay-scheduler -f
 
 ### Reminders are duplicated
 
-Check that scheduler is not running inside web workers.
+Check that only one scheduler process is running:
 
-There should be one scheduler process.
+```bash
+systemctl status incidentrelay-scheduler
+ps aux | grep scheduler
+```
+
+Also check that scheduler startup is not triggered automatically inside every web worker.
+
+### Reminders keep arriving after setting interval to 0
+
+Check:
+
+1. The alert uses the expected rotation.
+2. The rotation has `reminder_interval_seconds = 0`.
+3. The scheduler service was restarted after code/config changes.
+4. Runtime code does not fall back to a global reminder-after value when the rotation interval is `0`.
 
 ### Scheduler cannot read config
 
-Check `INCEDENTRELAY_CONFIG_FILE`:
+Check:
 
 ```bash
 systemctl show incidentrelay-scheduler --property=Environment
-```
-
-Check file permissions:
-
-```bash
 sudo -u www-data test -r /etc/incidentrelay/incidentrelay.conf
 ```
 
+For RPM installations, use the `incidentrelay` user instead of `www-data` if that is the packaged service user.
+
 ### SQLite database is locked
 
-SQLite is suitable for small installations, but it has one writer lock.
-
-Recommended SQLite config:
+SQLite is suitable for small installations, but it has one writer lock. Recommended SQLite config:
 
 ```ini
 [sqlite]

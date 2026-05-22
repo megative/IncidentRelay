@@ -1,79 +1,59 @@
----
-title: Email channel templates
-description: HTML template syntax for IncidentRelay email channels
----
+# Email templates
 
-# Email channel templates
+Email channels can define an optional HTML template.
 
-Email channels can override the default HTML body with `config.html_template`.
+If no custom template is configured, IncidentRelay uses the built-in default email layout.
 
-Email delivery uses the global SMTP transport. Recipients are not configured in the channel. Real alert emails are sent to the assigned user's profile email.
+## Placeholder format
 
-## Minimal config
+Use Python-style placeholders:
 
-Use the built-in default template:
-
-```json
-{}
+```html
+<h1>{event_type}: {title}</h1>
+<p>{message}</p>
 ```
 
-Use the built-in default template only for critical and high alerts:
+Do not use mustache-style placeholders such as `{{ title }}`.
 
-```json
-{
-  "notify_on_severities": ["critical", "high"]
-}
-```
-
-## Custom template example
-
-```json
-{
-  "html_template": "<h1>{event_type}: {title}</h1><p>{message}</p><table><tr><td>Severity</td><td>{severity}</td></tr><tr><td>Team</td><td>{team}</td></tr></table><p><a href=\"{alert_url}\">Open alert</a></p>"
-}
-```
-
-## Placeholder syntax
-
-Use Python format-style placeholders:
-
-```text
-{title}
-{message}
-{severity}
-```
-
-Do not use mustache-style placeholders unless the renderer is explicitly changed to support them:
-
-```text
-{{ title }}
-```
-
-## Supported placeholders
+## Available placeholders
 
 | Placeholder | Description |
 |---|---|
-| `{alert_id}` | IncidentRelay alert ID |
-| `{event_type}` | Notification event |
+| `{event_type}` | Notification event, for example `NOTIFICATION`, `ACKNOWLEDGED`, `RESOLVED` |
 | `{title}` | Alert title |
 | `{message}` | Alert message |
-| `{severity}` | Alert severity |
+| `{alert_id}` | IncidentRelay alert ID |
+| `{team}` | Team slug or name |
 | `{status}` | Alert status |
-| `{team}` | Team slug |
+| `{severity}` | Normalized alert severity |
 | `{assignee}` | Assigned user display name or username |
-| `{source}` | Alert source |
-| `{alert_url}` | Link to the alert in the IncidentRelay UI |
+| `{source}` | Alert source, for example `alertmanager`, `zabbix`, `webhook` |
+| `{alert_url}` | Link to the alert in IncidentRelay |
+| `{text}` | Plain-text formatted alert message |
 
-## Safety
+Values inserted into the HTML template should be escaped by the renderer.
 
-Alert values are HTML-escaped before insertion into the template. This lets users customize layout without turning alert labels or annotations into raw HTML.
+## Example
 
-## Troubleshooting
+```html
+<!doctype html>
+<html>
+  <body>
+    <h1>{event_type}: {title}</h1>
+    <p>{message}</p>
+    <table>
+      <tr><td>Alert ID</td><td>{alert_id}</td></tr>
+      <tr><td>Team</td><td>{team}</td></tr>
+      <tr><td>Status</td><td>{status}</td></tr>
+      <tr><td>Severity</td><td>{severity}</td></tr>
+      <tr><td>Assignee</td><td>{assignee}</td></tr>
+      <tr><td>Source</td><td>{source}</td></tr>
+    </table>
+    <p><a href="{alert_url}">Open alert</a></p>
+  </body>
+</html>
+```
 
-### The email contains only `resolved` or `notification`
+## Reset to default
 
-The channel probably has a broken `html_template` saved in its config. Reset the template in the Channels UI or remove the `html_template` key from the channel config.
-
-### The email shows `{title}` instead of the real title
-
-The renderer and template placeholder syntax are out of sync. The default template uses `{title}` style placeholders, so rendering must use Python format-style replacement.
+To use the built-in default layout, leave the template empty or reset it in the UI.

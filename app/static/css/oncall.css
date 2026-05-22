@@ -67,7 +67,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: Arial,
 .row-disabled {
     opacity: 0.65;
 }
-.status-firing { color: var(--danger); font-weight: 700; }
+.status-firing { color: var(--danger) !important; font-weight: 700; }
 .status-acknowledged { color: var(--warning); font-weight: 700; }
 .status-resolved { color: var(--success); font-weight: 700; }
 .status-silenced { color: var(--muted); font-weight: 700; }

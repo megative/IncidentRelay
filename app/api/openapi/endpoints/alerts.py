@@ -102,7 +102,12 @@ def alert_schema(include_payload=False, include_details=False):
         "route_source": {"type": "string", "nullable": True},
         "rotation_id": {"type": "integer", "nullable": True},
         "rotation_name": {"type": "string", "nullable": True},
-        "rotation_reminder_interval_seconds": {"type": "integer", "nullable": True},
+        "rotation_reminder_interval_seconds": {
+            "type": "integer",
+            "nullable": True,
+            "minimum": 0,
+            "description": "Reminder interval in seconds. 0 disables reminders. Otherwise, use 1 minute or more."
+        },
         "source": {"type": "string"},
         "external_id": {"type": "string", "nullable": True},
         "dedup_key": {"type": "string"},

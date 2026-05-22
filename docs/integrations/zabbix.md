@@ -1,88 +1,72 @@
----
-title: Zabbix incoming integration
-description: Send Zabbix-style events to IncidentRelay
----
+# Zabbix integration
 
-# Zabbix incoming integration
+Zabbix is an incoming alert source.
 
-Zabbix is an incoming alert source. It sends events to IncidentRelay, where they are matched by a route and delivered to notification channels.
-
-## Endpoint
+Endpoint:
 
 ```text
 POST /api/integrations/zabbix
 ```
 
-Required header:
+Authentication uses a route intake token:
 
-```http
-Authorization: Bearer ROUTE_INTAKE_TOKEN
+```text
+Authorization: Bearer ROUTE_TOKEN
 ```
 
 ## Route setup
 
-Create a route with source `zabbix`.
-
-Example:
+Create a route with:
 
 ```text
-Name: infra-zabbix
 Source: zabbix
-Team: infra
-Rotation: infra-primary
-Channels: infra-mattermost, infra-email
-Matchers JSON: {}
-Group by JSON: ["host", "trigger"]
 ```
 
-Copy the route intake token after creating the route.
+Attach at least one notification channel and copy the route intake token into the Zabbix media type or webhook configuration.
 
-## Firing event example
+## Payload example
 
-```bash
-curl -X POST http://127.0.0.1:8080/api/integrations/zabbix \
-  -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer ZABBIX_ROUTE_TOKEN' \
-  -d '{
-    "event_id": "100500",
-    "status": "firing",
-    "severity": "high",
+```json
+{
+  "status": "firing",
+  "event_id": "123456",
+  "trigger_id": "98765",
+  "title": "High CPU load on host1",
+  "message": "CPU load is above 90%",
+  "severity": "high",
+  "team": "infra",
+  "labels": {
     "host": "host1",
-    "trigger": "Disk space is low",
-    "message": "/var is 95% full",
-    "labels": {
-      "team": "infra",
-      "host": "host1",
-      "trigger": "DiskSpaceLow"
-    }
-  }'
+    "service": "cpu",
+    "environment": "prod"
+  }
+}
 ```
 
-## Resolved event example
+## Required payload content
 
-Use the same `event_id` for `firing` and `resolved`.
+A Zabbix payload should contain enough data to identify and describe an alert. Empty JSON objects should be rejected by validation.
 
-```bash
-curl -X POST http://127.0.0.1:8080/api/integrations/zabbix \
-  -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer ZABBIX_ROUTE_TOKEN' \
-  -d '{
-    "event_id": "100500",
-    "status": "resolved",
-    "severity": "high",
-    "host": "host1",
-    "trigger": "Disk space is low",
-    "message": "/var is OK",
-    "labels": {
-      "team": "infra",
-      "host": "host1",
-      "trigger": "DiskSpaceLow"
-    }
-  }'
+Useful fields:
+
+```text
+event_id
+trigger_id
+title
+subject
+message
+fingerprint
 ```
 
-## Notes
+## Normalized fields
 
-- Use a stable `event_id` for firing/resolved lifecycle.
-- Keep labels consistent with route matchers and grouping.
-- Notification channels are configured separately and attached to the route.
+| IncidentRelay field | Source |
+|---|---|
+| `source` | `zabbix` |
+| `team_slug` | `team`, `labels.team`, or `labels.oncall_team` |
+| `external_id` | `event_id` or `trigger_id` |
+| `title` | `title`, then `subject`, then default title |
+| `message` | `message` |
+| `severity` | `severity` |
+| `labels` | `labels` |
+| `status` | `status`, default `firing` |

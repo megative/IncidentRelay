@@ -1,94 +1,68 @@
----
-title: Logging
-description: IncidentRelay JSON logs and diagnostics
----
-
 # Logging
 
-Logs are configured here:
+IncidentRelay writes structured JSON-style logs for alert intake, notifications, scheduler activity and errors.
 
-```ini
-[logging]
-log_file = ./logs/incidentrelay.log
-json = true
-requests = false
-```
+## Where to look
 
-View logs:
+Systemd installations:
 
 ```bash
-tail -f ./logs/incidentrelay.log
+journalctl -u incidentrelay -f
+journalctl -u incidentrelay-scheduler -f
 ```
 
-## JSON error logs
-
-Unhandled server errors return JSON with `error_id`:
-
-```json
-{
-  "error": "Internal Server Error",
-  "error_id": "uuid",
-  "message": "Unexpected server error. Check JSON log by error_id."
-}
-```
-
-Use the `error_id` to find the real traceback in the log file:
+RPM installations use the same service names:
 
 ```bash
-grep 'ERROR_ID_HERE' ./logs/incidentrelay.log
+journalctl -u incidentrelay -f
+journalctl -u incidentrelay-scheduler -f
+journalctl -u incidentrelay-telegram-worker -f
 ```
 
-## Logging policy
+Docker installations:
 
-The service writes only these JSON log records:
+```bash
+docker compose logs -f incidentrelay
+docker compose logs -f incidentrelay-scheduler
+```
+
+If file logging is configured:
+
+```bash
+tail -f /var/log/incidentrelay/incidentrelay.log
+```
+
+## Useful fields
+
+Common fields:
 
 ```text
-user_action
-alert_intake
+timestamp
+level
+logger
+message
+module
+function
+line
+```
+
+Alert and notification fields:
+
+```text
+alert_id
+team
+route_id
+routing_error
+channel_id
+channel_name
+channel_type
+event_type
+provider
 error
 ```
 
-Regular HTTP request logging is disabled by default:
+## Notification logs
 
-```ini
-[logging]
-requests = false
-```
+`notification sent` means IncidentRelay handed the message to the downstream provider or SMTP relay without an exception. It does not guarantee final delivery.
 
-User actions are logged through the audit layer.
-
-Incoming alerts are logged when Alertmanager, Zabbix, or generic webhooks submit alerts.
-
-Unhandled server errors are logged with `error_id`.
-
-## Logging diagnostics
-
-Request logging is hard-disabled in application code.
-
-The service JSON log file accepts only these logger names:
-
-```text
-incidentrelay.audit
-incidentrelay.alerts
-incidentrelay.error
-```
-
-Check active logging settings:
-
-```bash
-curl -H 'Authorization: Bearer JWT_TOKEN' \
-  http://127.0.0.1:8080/api/version/logging
-```
-
-Expected response:
-
-```json
-{
-  "request_logging_registered": false,
-  "allowed_loggers": [
-    "incidentrelay.audit",
-    "incidentrelay.alerts",
-    "incidentrelay.error"
-  ]
-}
-```
+If a user did not receive a message, check the downstream service logs as well.

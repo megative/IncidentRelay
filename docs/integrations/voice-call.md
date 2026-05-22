@@ -1,43 +1,35 @@
----
-title: Voice call notification channel
-description: Voice call channel configuration and global voice provider settings
----
+# Voice call channel
 
-# Voice call notification channel
+Voice call is an outgoing notification channel. It calls the assigned user's profile phone number through the globally configured voice provider.
 
-Voice call is an outgoing notification channel. It places calls through the globally configured voice provider.
-
-A user who creates a voice call channel does not choose the provider and does not configure provider credentials. Provider settings belong to the service configuration file.
-
-## Recipient model
-
-Calls are sent to the assigned user's profile phone number.
+## Delivery model
 
 ```text
-Route -> Rotation -> Current assignee -> assignee.phone -> Voice provider
+Alert assignee -> assignee.phone -> configured voice provider
 ```
 
-Required user field:
+Required data:
 
-```text
-User profile -> phone
+| Location | Required value |
+|---|---|
+| User profile | `phone` |
+| Global config | `[voice]` provider settings |
+| Voice channel config | optional channel policy and severity filter |
+
+## Global voice config
+
+```ini
+[voice]
+provider = stub
+providers_dir = /usr/local/lib/incidentrelay/voice_providers
+callback_secret = change-me
 ```
 
-If the assigned user has no phone number, IncidentRelay cannot place the call and returns an error similar to:
+Custom providers are documented in [Voice Providers](../voice-providers/index.md).
 
-```text
-voice_call phone is missing: set phone on the assigned user
-```
+## Severity filter
 
-## Channel config
-
-Minimal voice call channel config:
-
-```json
-{}
-```
-
-Voice calls are usually limited to high urgency alerts:
+Use the common channel severity filter:
 
 ```json
 {
@@ -45,85 +37,18 @@ Voice calls are usually limited to high urgency alerts:
 }
 ```
 
-You can also allow multiple severities:
-
-```json
-{
-  "notify_on_severities": ["critical", "high"]
-}
-```
-
-Do not put phone numbers, provider names, API tokens, or provider-specific config into channel config.
-
-## Global voice configuration
-
-Example service config:
-
-```ini
-[voice]
-provider = stub
-providers_dir = /usr/local/lib/incidentrelay/voice_providers
-callback_secret = change-me
-text_template = IncidentRelay alert {alert_id}. {title}. Severity {severity}. {message}. Press 1 to acknowledge. Press 2 to resolve.
-dtmf_actions = {"1": "acknowledge", "2": "resolve"}
-
-[voice_provider]
-api_url = https://voice.example.com/api
-api_token = ${VOICE_API_TOKEN}
-timeout = 10
-```
-
-The `[voice_provider]` section is provider-specific and is passed to the selected provider.
+Do not use channel-specific severity keys.
 
 ## DTMF actions
 
-DTMF actions define what happens when a user presses a digit during the call.
+A custom provider can support DTMF actions for ACK/Resolve flows. See:
 
-```ini
-dtmf_actions = {"1": "acknowledge", "2": "resolve"}
-```
+- [Provider API](../voice-providers/provider-api.md)
+- [Callbacks and DTMF](../voice-providers/callbacks.md)
+- [Security](../voice-providers/security.md)
 
-Meaning:
+## Test button
 
-```text
-1 -> acknowledge alert
-2 -> resolve alert
-```
+The channel test uses the current user's profile phone number.
 
-## Voice text template
-
-The global voice text template can use placeholders:
-
-| Placeholder | Description |
-|---|---|
-| `{alert_id}` | IncidentRelay alert ID |
-| `{event_type}` | Notification event type |
-| `{title}` | Alert title |
-| `{message}` | Alert message |
-| `{severity}` | Alert severity |
-| `{status}` | Alert status |
-| `{team}` | Alert team |
-| `{assignee}` | Current assignee |
-| `{source}` | Alert source |
-
-## Troubleshooting
-
-### Voice calls are not placed
-
-Check:
-
-1. The voice call channel is enabled.
-2. The voice call channel is attached to the matched route.
-3. The alert severity is allowed by `notify_on_severities`.
-4. The alert has an assignee.
-5. The assigned user has `phone` configured.
-6. The global `[voice]` provider is configured.
-7. The provider credentials in `[voice_provider]` are valid.
-
-### `voice_call channel requires provider`
-
-That is old behavior. The provider should be configured globally, not in channel config.
-
-### `phone` or `test_phone` does not work in channel config
-
-Phone numbers are not read from channel config. Set the phone number on the assigned user profile.
+Real alert delivery uses the assigned user's profile phone number.
