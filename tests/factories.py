@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 
 from app.login import hash_password
+from app.modules.db import rotations_repo
 from app.modules.db.models import (
     Alert,
     AlertRoute,
@@ -8,7 +9,6 @@ from app.modules.db.models import (
     Group,
     NotificationChannel,
     Rotation,
-    RotationMember,
     RotationOverride,
     Silence,
     Team,
@@ -75,8 +75,8 @@ def create_rotation(
     start_at: datetime | None = None,
     duration_seconds: int = 86400,
 ) -> Rotation:
-    rotation = Rotation.create(
-        team=team,
+    rotation = rotations_repo.create_rotation(
+        team_id=team.id,
         name=name or unique("Rotation"),
         description=None,
         start_at=start_at or datetime.utcnow().replace(microsecond=0),
@@ -89,8 +89,16 @@ def create_rotation(
         timezone="UTC",
         enabled=True,
     )
+
+    layer = rotations_repo.get_or_create_default_layer(rotation.id)
+
     for index, user in enumerate(users or []):
-        RotationMember.create(rotation=rotation, user=user, position=index, active=True)
+        rotations_repo.add_rotation_layer_member(
+            layer_id=layer.id,
+            user_id=user.id,
+            position=index,
+        )
+
     return rotation
 
 

@@ -90,5 +90,6 @@ def test_build_rotation_calendar_returns_slots(db):
     )
 
     assert [event["username"] for event in events] == ["alice", "bob"]
-    assert events[0]["type"] == "rotation"
+    assert events[0]["type"] == "layer"
+    assert events[0]["layer_name"] == "Default layer"
     assert events[0]["team_slug"] == "sre"

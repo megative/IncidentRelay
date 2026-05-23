@@ -56,6 +56,9 @@ CLEANUP_MODELS = [
     Alert,
     AlertRoute,
     NotificationChannel,
+    RotationLayerRestriction,
+    RotationLayerMember,
+    RotationLayer,
     RotationOverride,
     RotationMember,
     Rotation,
@@ -69,12 +72,6 @@ CLEANUP_MODELS = [
     User,
     Team,
     Group,
-    RotationLayerRestriction,
-    RotationLayerMember,
-    RotationLayer,
-    RotationOverride,
-    RotationMember,
-    Rotation,
 ]
 
 
