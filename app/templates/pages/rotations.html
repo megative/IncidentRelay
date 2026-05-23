@@ -85,8 +85,8 @@
                     <thead>
                     <tr>
                         <th>Rotation</th>
-                        <th>Group</th>
                         <th>Team</th>
+                        <th>Name</th>
                         <th>Cadence</th>
                         <th>Current on call</th>
                         <th>Handoff</th>
@@ -117,7 +117,7 @@
     </div>
 
     <div id="rotation-form-modal" class="app-modal" style="display: none;">
-    <div class="app-modal-dialog">
+        <div class="app-modal-dialog">
         <div class="app-modal-header">
             <div>
                 <h2 id="rotation-form-title">Create rotation</h2>
@@ -216,7 +216,8 @@
 
                 <div>
                     <label>Timezone</label>
-                    <input id="rotation-timezone" class="input" value="UTC">
+                    <select id="rotation-timezone" class="input timezone-select"></select>
+                    <div class="help-text">Used for handoff time and layer restrictions.</div>
                 </div>
 
                 <label class="checkbox">
@@ -237,80 +238,44 @@
         </div>
     </div>
     </div>
-    <div id="rotation-members-modal" class="app-modal" style="display: none;">
-    <div class="app-modal-dialog app-modal-dialog-wide">
-        <div class="app-modal-header">
-            <div>
-                <h2 id="rotation-members-title">Rotation members</h2>
-                <div class="card-subtitle">Manage users and order for selected rotation</div>
+    <div id="rotation-layers-modal" class="app-modal" style="display: none;">
+        <div class="app-modal-dialog app-modal-dialog-xwide">
+            <div class="app-modal-header">
+                <div>
+                    <h2 id="rotation-layers-title">Rotation layers</h2>
+                    <div class="app-modal-subtitle">
+                      Layers are checked from top to bottom. Lower layers have higher priority.
+                    </div>
+                </div>
+                <button id="close-rotation-layers-modal" type="button" class="app-modal-close">×</button>
             </div>
 
-            <button id="close-rotation-members-modal" type="button" class="app-modal-close">
-                ×
-            </button>
-        </div>
-
-        <div class="app-modal-body">
-            <div class="form-body rotations-inline-form">
-                <input id="rotation-member-id" type="hidden">
-
+            <div class="app-modal-body">
+                <div class="layers-toolbar">
                 <div>
-                    <label>Rotation</label>
-                    <select id="member-rotation" class="input"></select>
+                  <strong>Schedule layers</strong>
+                  <div class="help-text">
+                    Each layer has its own users, rotation cadence and active time windows.
+                  </div>
                 </div>
 
-                <div>
-                    <label>User</label>
-                    <select id="member-user" class="input"></select>
-                </div>
-
-                <div>
-                    <label>Position</label>
-                    <input id="member-position" class="input" value="0" type="number">
-                </div>
-
-                <label class="checkbox">
-                    <input id="member-active" type="checkbox" checked>
-                    <span>Active</span>
-                </label>
-
-                <div class="actions">
-                    <button id="save-rotation-member" type="button" class="btn btn-primary btn-small">
-                        Save member
-                    </button>
-
-                    <button id="reset-rotation-member-form" type="button" class="btn btn-small">
-                        Reset
-                    </button>
-                </div>
+                <button id="add-layer-card" type="button" class="btn btn-primary">
+                  + Add layer
+                </button>
+              </div>
+                <div id="rotation-layer-cards" class="rotation-layer-cards">
+                <div class="empty-cell">No rotation selected</div>
+              </div>
             </div>
 
-            <div class="table-wrapper rotations-modal-table-wrapper">
-                <table class="data-table">
-                    <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>User</th>
-                        <th>Name</th>
-                        <th>Position</th>
-                        <th>Active</th>
-                        <th>Actions</th>
-                    </tr>
-                    </thead>
-                    <tbody id="rotation-members-table">
-                    <tr>
-                        <td colspan="6">No rotation selected</td>
-                    </tr>
-                    </tbody>
-                </table>
+            <div class="app-modal-footer">
+                <span class="help-text">
+                Overrides still replace the final calculated result.
+              </span>
+                <button id="close-rotation-layers-modal-footer" type="button" class="btn">
+                    Close
+                </button>
             </div>
-        </div>
-
-        <div class="app-modal-footer">
-            <button id="close-rotation-members-modal-footer" type="button" class="btn">
-                Close
-            </button>
         </div>
     </div>
-</div>
 </div>

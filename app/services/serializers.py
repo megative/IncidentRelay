@@ -334,3 +334,46 @@ def serialize_profile_group(item):
         return item
 
     return serialize_user_group(item)
+
+
+def serialize_rotation_layer(layer):
+    return {
+        "id": layer.id,
+        "rotation_id": layer.rotation.id,
+        "team_id": layer.rotation.team.id,
+        "name": layer.name,
+        "description": layer.description,
+        "priority": layer.priority,
+        "start_at": layer.start_at.isoformat() if layer.start_at else None,
+        "duration_seconds": layer.duration_seconds,
+        "rotation_type": layer.rotation_type,
+        "interval_value": layer.interval_value,
+        "interval_unit": layer.interval_unit,
+        "handoff_time": layer.handoff_time,
+        "handoff_weekday": layer.handoff_weekday,
+        "timezone": layer.timezone,
+        "enabled": layer.enabled,
+        "deleted": layer.deleted,
+    }
+
+
+def serialize_rotation_layer_member(member):
+    return {
+        "id": member.id,
+        "layer_id": member.layer.id,
+        "user_id": member.user.id,
+        "username": member.user.username,
+        "display_name": member.user.display_name,
+        "position": member.position,
+        "active": member.active,
+    }
+
+
+def serialize_rotation_layer_restriction(item):
+    return {
+        "id": item.id,
+        "layer_id": item.layer.id,
+        "weekday": item.weekday,
+        "start_time": item.start_time,
+        "end_time": item.end_time,
+    }

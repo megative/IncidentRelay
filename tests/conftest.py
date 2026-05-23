@@ -41,6 +41,9 @@ from app.modules.db.models import (  # noqa: E402
     User,
     UserGroup,
     UserRole,
+    RotationLayerRestriction,
+    RotationLayerMember,
+    RotationLayer,
 )
 
 
@@ -66,6 +69,12 @@ CLEANUP_MODELS = [
     User,
     Team,
     Group,
+    RotationLayerRestriction,
+    RotationLayerMember,
+    RotationLayer,
+    RotationOverride,
+    RotationMember,
+    Rotation,
 ]
 
 

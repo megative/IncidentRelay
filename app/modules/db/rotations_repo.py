@@ -1,6 +1,20 @@
 from datetime import datetime
 
-from app.modules.db.models import Group, Rotation, RotationMember, RotationOverride, Team, TeamUser
+from peewee import IntegrityError
+
+from app.db import database_proxy
+from app.modules.db.models import (
+    AlertRoute,
+    Group,
+    Rotation,
+    RotationMember,
+    RotationOverride,
+    RotationLayer,
+    RotationLayerMember,
+    RotationLayerRestriction,
+    Team,
+    TeamUser
+)
 
 
 def list_rotations(
@@ -81,22 +95,43 @@ def create_rotation(
     """
     Create a rotation.
     """
-
-    return Rotation.create(
-        team=team_id,
-        name=name,
-        description=description,
-        start_at=start_at,
-        duration_seconds=duration_seconds,
-        reminder_interval_seconds=reminder_interval_seconds,
-        rotation_type=rotation_type,
-        interval_value=interval_value,
-        interval_unit=interval_unit,
-        handoff_time=handoff_time,
-        handoff_weekday=handoff_weekday,
-        timezone=timezone,
-        enabled=enabled,
+    existing = (
+        Rotation.select()
+        .where(
+            (Rotation.team == team_id)
+            & (Rotation.name == name)
+            & (Rotation.deleted == False)
+        )
+        .first()
     )
+
+    if existing:
+        raise ValueError("rotation with this name already exists in this team")
+
+    try:
+        with database_proxy.atomic():
+            rotation = Rotation.create(
+                team=team_id,
+                name=name,
+                description=description,
+                start_at=start_at,
+                duration_seconds=duration_seconds,
+                reminder_interval_seconds=reminder_interval_seconds,
+                rotation_type=rotation_type,
+                interval_value=interval_value,
+                interval_unit=interval_unit,
+                handoff_time=handoff_time,
+                handoff_weekday=handoff_weekday,
+                timezone=timezone,
+                enabled=enabled,
+            )
+
+            get_or_create_default_layer(rotation.id)
+
+            return rotation
+
+    except IntegrityError:
+        raise ValueError("rotation with this name already exists in this team")
 
 
 def create_rotation_if_missing(team_id, name, description, start_at, duration_seconds, reminder_interval_seconds=300, rotation_type="daily", interval_value=1, interval_unit="days", handoff_time="09:00", handoff_weekday=None, timezone="UTC"):
@@ -249,16 +284,62 @@ def disable_rotation(rotation_id):
 
 
 def soft_delete_rotation(rotation_id):
-    """
-    Soft-delete a rotation.
-    """
+    """Soft-delete rotation and remove schedule data owned by it."""
 
-    rotation = get_rotation(rotation_id)
-    rotation.enabled = False
-    rotation.deleted = True
-    rotation.deleted_at = datetime.utcnow()
-    rotation.save()
-    return rotation
+    db = Rotation._meta.database
+
+    with db.atomic():
+        rotation = get_rotation(rotation_id)
+
+        layer_ids = [
+            layer.id
+            for layer in (
+                RotationLayer
+                .select(RotationLayer.id)
+                .where(RotationLayer.rotation == rotation)
+            )
+        ]
+
+        if layer_ids:
+            RotationLayerRestriction.delete().where(
+                RotationLayerRestriction.layer.in_(layer_ids)
+            ).execute()
+
+            RotationLayerMember.delete().where(
+                RotationLayerMember.layer.in_(layer_ids)
+            ).execute()
+
+            RotationLayer.update(
+                enabled=False,
+                deleted=True,
+                deleted_at=datetime.utcnow(),
+            ).where(
+                RotationLayer.id.in_(layer_ids)
+            ).execute()
+
+        # Legacy cleanup, если старая таблица rotation_member еще существует.
+        RotationMember.delete().where(
+            RotationMember.rotation == rotation
+        ).execute()
+
+        # Overrides принадлежат rotation, поэтому удаляем их.
+        RotationOverride.delete().where(
+            RotationOverride.rotation == rotation
+        ).execute()
+
+        # Чтобы alert routes не ссылались на удаленную rotation.
+        AlertRoute.update(
+            rotation=None,
+        ).where(
+            AlertRoute.rotation == rotation
+        ).execute()
+
+        rotation.enabled = False
+        rotation.deleted = True
+        rotation.deleted_at = datetime.utcnow()
+        rotation.save()
+
+        return rotation
 
 
 def get_rotation_override(override_id):
@@ -372,3 +453,236 @@ def ensure_user_in_rotation_team(rotation_id: int, user_id: int):
         raise ValueError("User is not an active member of the rotation team")
 
     return membership
+
+
+def list_rotation_layers(rotation_id, enabled_only=False, include_deleted=False):
+    """Return layers for a rotation ordered by priority.
+
+    Higher priority wins. For same priority, newer layer wins.
+    """
+
+    query = RotationLayer.select().where(RotationLayer.rotation == rotation_id)
+
+    if not include_deleted:
+        query = query.where(RotationLayer.deleted == False)
+
+    if enabled_only:
+        query = query.where(RotationLayer.enabled == True)
+
+    return list(query.order_by(RotationLayer.priority.desc(), RotationLayer.id.desc()))
+
+
+def get_rotation_layer(layer_id, include_deleted=False):
+    """Return a rotation layer by id."""
+
+    query = RotationLayer.select().where(RotationLayer.id == layer_id)
+
+    if not include_deleted:
+        query = query.where(RotationLayer.deleted == False)
+
+    return query.get()
+
+
+def get_or_create_default_layer(rotation_id):
+    """Return the default layer for a rotation, creating it from rotation settings."""
+
+    rotation = get_rotation(rotation_id)
+
+    layer = (
+        RotationLayer.select()
+        .where(
+            (RotationLayer.rotation == rotation_id)
+            & (RotationLayer.name == "Default layer")
+            & (RotationLayer.deleted == False)
+        )
+        .first()
+    )
+
+    if layer:
+        return layer
+
+    return RotationLayer.create(
+        rotation=rotation,
+        name="Default layer",
+        description="Default layer created from rotation settings",
+        priority=0,
+        start_at=rotation.start_at,
+        duration_seconds=rotation.duration_seconds,
+        rotation_type=rotation.rotation_type,
+        interval_value=rotation.interval_value,
+        interval_unit=rotation.interval_unit,
+        handoff_time=rotation.handoff_time,
+        handoff_weekday=rotation.handoff_weekday,
+        timezone=rotation.timezone,
+        enabled=rotation.enabled,
+    )
+
+
+def create_rotation_layer(
+    rotation_id,
+    name,
+    description=None,
+    priority=0,
+    start_at=None,
+    duration_seconds=None,
+    rotation_type=None,
+    interval_value=None,
+    interval_unit=None,
+    handoff_time=None,
+    handoff_weekday=None,
+    timezone=None,
+    enabled=True,
+):
+    """Create a layer inside a rotation."""
+
+    rotation = get_rotation(rotation_id)
+
+    return RotationLayer.create(
+        rotation=rotation,
+        name=name,
+        description=description,
+        priority=priority,
+        start_at=start_at or rotation.start_at,
+        duration_seconds=duration_seconds or rotation.duration_seconds,
+        rotation_type=rotation_type or rotation.rotation_type,
+        interval_value=interval_value or rotation.interval_value,
+        interval_unit=interval_unit or rotation.interval_unit,
+        handoff_time=handoff_time or rotation.handoff_time,
+        handoff_weekday=handoff_weekday if handoff_weekday is not None else rotation.handoff_weekday,
+        timezone=timezone or rotation.timezone,
+        enabled=enabled,
+    )
+
+
+def update_rotation_layer(layer_id, data):
+    """Update a rotation layer."""
+
+    layer = get_rotation_layer(layer_id)
+
+    for field in [
+        "name",
+        "description",
+        "priority",
+        "start_at",
+        "duration_seconds",
+        "rotation_type",
+        "interval_value",
+        "interval_unit",
+        "handoff_time",
+        "handoff_weekday",
+        "timezone",
+        "enabled",
+    ]:
+        if field in data:
+            setattr(layer, field, data[field])
+
+    layer.save()
+    return layer
+
+
+def soft_delete_rotation_layer(layer_id):
+    """Soft-delete a rotation layer."""
+
+    layer = get_rotation_layer(layer_id)
+    layer.enabled = False
+    layer.deleted = True
+    layer.deleted_at = datetime.utcnow()
+    layer.save()
+    return layer
+
+
+def list_rotation_layer_members(layer_id, active_only=False):
+    """Return members of a rotation layer."""
+
+    query = RotationLayerMember.select().where(RotationLayerMember.layer == layer_id)
+
+    if active_only:
+        query = query.where(RotationLayerMember.active == True)
+
+    return list(query.order_by(RotationLayerMember.position.asc(), RotationLayerMember.id.asc()))
+
+
+def add_rotation_layer_member(layer_id, user_id, position):
+    """Add or reactivate a user inside a rotation layer."""
+
+    member, created = RotationLayerMember.get_or_create(
+        layer=layer_id,
+        user=user_id,
+        defaults={
+            "position": position,
+            "active": True,
+        },
+    )
+
+    if not created:
+        member.position = position
+        member.active = True
+        member.save()
+
+    return member
+
+
+def get_rotation_layer_member(member_id):
+    """Return one layer member."""
+
+    return RotationLayerMember.get_by_id(member_id)
+
+
+def update_rotation_layer_member(member_id, position, active=True):
+    """Update layer member position/active flag."""
+
+    member = get_rotation_layer_member(member_id)
+    member.position = position
+    member.active = active
+    member.save()
+    return member
+
+
+def delete_rotation_layer_member(member_id):
+    """Delete a member from a rotation layer."""
+
+    member = get_rotation_layer_member(member_id)
+    data = {
+        "id": member.id,
+        "layer_id": member.layer.id,
+        "rotation_id": member.layer.rotation.id,
+        "team_id": member.layer.rotation.team.id,
+        "user_id": member.user.id,
+    }
+    member.delete_instance()
+    return data
+
+
+def list_rotation_layer_restrictions(layer_id):
+    """Return restrictions for a layer."""
+
+    return list(
+        RotationLayerRestriction.select()
+        .where(RotationLayerRestriction.layer == layer_id)
+        .order_by(
+            RotationLayerRestriction.weekday.asc(nulls="FIRST"),
+            RotationLayerRestriction.start_time.asc(),
+            RotationLayerRestriction.id.asc(),
+        )
+    )
+
+
+def replace_rotation_layer_restrictions(layer_id, restrictions):
+    """Replace all restrictions for a layer."""
+
+    RotationLayerRestriction.delete().where(
+        RotationLayerRestriction.layer == layer_id
+    ).execute()
+
+    result = []
+    for item in restrictions:
+        result.append(
+            RotationLayerRestriction.create(
+                layer=layer_id,
+                weekday=item.get("weekday"),
+                start_time=item["start_time"],
+                end_time=item["end_time"],
+            )
+        )
+
+    return result

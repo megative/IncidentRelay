@@ -110,6 +110,133 @@ ROTATION_MEMBER_UPDATE_SCHEMA = {
     },
 }
 
+ROTATION_LAYER_SCHEMA = {
+    "type": "object",
+    "required": ["name"],
+    "properties": {
+        "id": {"type": "integer", "readOnly": True},
+        "rotation_id": {"type": "integer", "readOnly": True},
+        "team_id": {"type": "integer", "readOnly": True},
+        "name": {"type": "string", "example": "Business hours"},
+        "description": {"type": "string", "nullable": True},
+        "priority": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Higher priority active layer wins.",
+        },
+        "start_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": True,
+            "example": "2026-05-22T09:00:00",
+        },
+        "rotation_type": {
+            "type": "string",
+            "enum": ["daily", "weekly", "custom"],
+            "nullable": True,
+            "example": "daily",
+        },
+        "interval_value": {"type": "integer", "minimum": 1, "nullable": True},
+        "interval_unit": {
+            "type": "string",
+            "enum": ["minutes", "hours", "days", "weeks"],
+            "nullable": True,
+        },
+        "handoff_time": {
+            "type": "string",
+            "nullable": True,
+            "example": "09:00",
+        },
+        "handoff_weekday": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 6,
+            "nullable": True,
+            "description": "Monday is 0, Sunday is 6.",
+        },
+        "timezone": {
+            "type": "string",
+            "nullable": True,
+            "example": "Europe/Berlin",
+        },
+        "duration_seconds": {
+            "type": "integer",
+            "minimum": 60,
+            "nullable": True,
+        },
+        "enabled": {"type": "boolean", "default": True},
+        "deleted": {"type": "boolean", "readOnly": True},
+    },
+}
+
+ROTATION_LAYER_MEMBER_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "integer", "readOnly": True},
+        "layer_id": {"type": "integer", "readOnly": True},
+        "user_id": {"type": "integer", "minimum": 1},
+        "username": {"type": "string", "readOnly": True},
+        "display_name": {"type": "string", "nullable": True, "readOnly": True},
+        "position": {"type": "integer", "minimum": 0},
+        "active": {"type": "boolean", "default": True},
+    },
+}
+
+ROTATION_LAYER_MEMBER_CREATE_SCHEMA = {
+    "type": "object",
+    "required": ["user_id", "position"],
+    "properties": {
+        "user_id": {"type": "integer", "minimum": 1},
+        "position": {"type": "integer", "minimum": 0},
+    },
+}
+
+ROTATION_LAYER_MEMBER_UPDATE_SCHEMA = {
+    "type": "object",
+    "required": ["position", "active"],
+    "properties": {
+        "position": {"type": "integer", "minimum": 0},
+        "active": {"type": "boolean", "default": True},
+    },
+}
+
+ROTATION_LAYER_RESTRICTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "integer", "readOnly": True},
+        "layer_id": {"type": "integer", "readOnly": True},
+        "weekday": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 6,
+            "nullable": True,
+            "description": "Monday is 0. Null means every day.",
+        },
+        "start_time": {
+            "type": "string",
+            "example": "09:00",
+            "description": "Local layer time in HH:MM.",
+        },
+        "end_time": {
+            "type": "string",
+            "example": "18:00",
+            "description": "Local layer time in HH:MM. Same as start_time means full day.",
+        },
+    },
+}
+
+ROTATION_LAYER_RESTRICTIONS_REPLACE_SCHEMA = {
+    "type": "object",
+    "required": ["restrictions"],
+    "properties": {
+        "restrictions": {
+            "type": "array",
+            "items": ROTATION_LAYER_RESTRICTION_SCHEMA,
+        },
+    },
+}
+
 
 def tags():
     """
@@ -181,38 +308,6 @@ def paths():
                 "responses": {"200": response("Rotation disabled.")},
             },
         },
-        "/api/rotations/{rotation_id}/members": {
-            "get": {
-                "tags": ["rotations"],
-                "summary": "List rotation members",
-                "description": "Returns ordered rotation members. The position controls the duty order.",
-                "operationId": "listRotationMembers",
-                "parameters": [path_param("rotation_id", "Rotation id.")],
-                "responses": {"200": response("List of rotation members.")},
-            },
-            "post": {
-                "tags": ["rotations"],
-                "summary": "Add rotation member",
-                "description": (
-                    "Adds or reactivates a user in a rotation at a specific position. "
-                    "The user must be an active member of the rotation's team."
-                ),
-                "operationId": "addRotationMember",
-                "parameters": [path_param("rotation_id", "Rotation id.")],
-                "requestBody": json_body(
-                    "Rotation member properties.",
-                    {
-                        "type": "object",
-                        "required": ["user_id", "position"],
-                        "properties": {
-                            "user_id": {"type": "integer", "minimum": 1},
-                            "position": {"type": "integer", "minimum": 0},
-                        },
-                    },
-                ),
-                "responses": {"201": response("Member added.")},
-            },
-        },
         "/api/rotations/{rotation_id}/overrides": {
             "post": {
                 "tags": ["rotations"],
@@ -248,36 +343,65 @@ def paths():
                 "responses": {"200": response("Override deleted.")},
             },
         },
-        "/api/rotations/members/{member_id}": {
-            "put": {
+        "/api/rotations/{rotation_id}/layers": {
+            "get": {
                 "tags": ["rotations"],
-                "summary": "Update rotation member",
-                "description": (
-                    "Updates rotation member position and active flag. "
-                    "Use active=true to enable a disabled rotation member."
-                ),
-                "operationId": "updateRotationMember",
-                "parameters": [path_param("member_id", "Rotation member id.")],
-                "requestBody": json_body(
-                    "Updated rotation member.",
-                    ROTATION_MEMBER_UPDATE_SCHEMA,
-                ),
+                "summary": "List rotation layers",
+                "description": "Returns schedule layers for a rotation ordered by priority.",
+                "operationId": "listRotationLayers",
+                "parameters": [path_param("rotation_id", "Rotation id.")],
                 "responses": {
-                    "200": response("Rotation member updated.", ROTATION_MEMBER_SCHEMA),
+                    "200": response(
+                        "List of rotation layers.",
+                        {"type": "array", "items": ROTATION_LAYER_SCHEMA},
+                    ),
+                    "403": response("Access denied."),
+                    "404": response("Rotation not found."),
+                },
+            },
+            "post": {
+                "tags": ["rotations"],
+                "summary": "Create rotation layer",
+                "description": (
+                    "Creates a schedule layer inside a rotation. "
+                    "Layer restrictions decide when the layer is active."
+                ),
+                "operationId": "createRotationLayer",
+                "parameters": [path_param("rotation_id", "Rotation id.")],
+                "requestBody": json_body("Rotation layer properties.", ROTATION_LAYER_SCHEMA),
+                "responses": {
+                    "201": response("Rotation layer created.", ROTATION_LAYER_SCHEMA),
                     "400": response("Validation error."),
                     "403": response("Access denied."),
-                    "404": response("Rotation member not found."),
+                    "404": response("Rotation not found."),
+                },
+            },
+        },
+
+        "/api/rotations/layers/{layer_id}": {
+            "put": {
+                "tags": ["rotations"],
+                "summary": "Update rotation layer",
+                "description": "Updates layer cadence, priority, timezone and enabled flag.",
+                "operationId": "updateRotationLayer",
+                "parameters": [path_param("layer_id", "Rotation layer id.")],
+                "requestBody": json_body("Updated rotation layer.", ROTATION_LAYER_SCHEMA),
+                "responses": {
+                    "200": response("Rotation layer updated.", ROTATION_LAYER_SCHEMA),
+                    "400": response("Validation error."),
+                    "403": response("Access denied."),
+                    "404": response("Layer not found."),
                 },
             },
             "delete": {
                 "tags": ["rotations"],
-                "summary": "Remove rotation member",
-                "description": "Permanently removes user from this rotation.",
-                "operationId": "removeRotationMember",
-                "parameters": [path_param("member_id", "Rotation member id.")],
+                "summary": "Delete rotation layer",
+                "description": "Soft-deletes a rotation layer.",
+                "operationId": "deleteRotationLayer",
+                "parameters": [path_param("layer_id", "Rotation layer id.")],
                 "responses": {
                     "200": response(
-                        "Rotation member removed.",
+                        "Rotation layer deleted.",
                         {
                             "type": "object",
                             "properties": {
@@ -287,7 +411,130 @@ def paths():
                         },
                     ),
                     "403": response("Access denied."),
-                    "404": response("Rotation member not found."),
+                    "404": response("Layer not found."),
+                },
+            },
+        },
+
+        "/api/rotations/layers/{layer_id}/members": {
+            "get": {
+                "tags": ["rotations"],
+                "summary": "List rotation layer members",
+                "description": "Returns ordered members for one layer.",
+                "operationId": "listRotationLayerMembers",
+                "parameters": [path_param("layer_id", "Rotation layer id.")],
+                "responses": {
+                    "200": response(
+                        "List of layer members.",
+                        {"type": "array", "items": ROTATION_LAYER_MEMBER_SCHEMA},
+                    ),
+                    "403": response("Access denied."),
+                    "404": response("Layer not found."),
+                },
+            },
+            "post": {
+                "tags": ["rotations"],
+                "summary": "Add rotation layer member",
+                "description": (
+                    "Adds or reactivates a user in a layer. "
+                    "The user must be an active member of the rotation team."
+                ),
+                "operationId": "addRotationLayerMember",
+                "parameters": [path_param("layer_id", "Rotation layer id.")],
+                "requestBody": json_body(
+                    "Layer member properties.",
+                    ROTATION_LAYER_MEMBER_CREATE_SCHEMA,
+                ),
+                "responses": {
+                    "201": response("Layer member added.", ROTATION_LAYER_MEMBER_SCHEMA),
+                    "400": response("Validation error."),
+                    "403": response("Access denied."),
+                    "404": response("Layer not found."),
+                },
+            },
+        },
+
+        "/api/rotations/layers/members/{member_id}": {
+            "put": {
+                "tags": ["rotations"],
+                "summary": "Update rotation layer member",
+                "description": "Updates layer member position and active flag.",
+                "operationId": "updateRotationLayerMember",
+                "parameters": [path_param("member_id", "Rotation layer member id.")],
+                "requestBody": json_body(
+                    "Updated layer member.",
+                    ROTATION_LAYER_MEMBER_UPDATE_SCHEMA,
+                ),
+                "responses": {
+                    "200": response("Layer member updated.", ROTATION_LAYER_MEMBER_SCHEMA),
+                    "400": response("Validation error."),
+                    "403": response("Access denied."),
+                    "404": response("Layer member not found."),
+                },
+            },
+            "delete": {
+                "tags": ["rotations"],
+                "summary": "Remove rotation layer member",
+                "description": "Permanently removes user from this layer.",
+                "operationId": "removeRotationLayerMember",
+                "parameters": [path_param("member_id", "Rotation layer member id.")],
+                "responses": {
+                    "200": response(
+                        "Layer member removed.",
+                        {
+                            "type": "object",
+                            "properties": {
+                                "deleted": {"type": "boolean"},
+                                "id": {"type": "integer"},
+                            },
+                        },
+                    ),
+                    "403": response("Access denied."),
+                    "404": response("Layer member not found."),
+                },
+            },
+        },
+
+        "/api/rotations/layers/{layer_id}/restrictions": {
+            "get": {
+                "tags": ["rotations"],
+                "summary": "List rotation layer restrictions",
+                "description": (
+                    "Returns active windows for a layer. "
+                    "When no restrictions exist, the layer is active 24/7."
+                ),
+                "operationId": "listRotationLayerRestrictions",
+                "parameters": [path_param("layer_id", "Rotation layer id.")],
+                "responses": {
+                    "200": response(
+                        "List of layer restrictions.",
+                        {"type": "array", "items": ROTATION_LAYER_RESTRICTION_SCHEMA},
+                    ),
+                    "403": response("Access denied."),
+                    "404": response("Layer not found."),
+                },
+            },
+            "put": {
+                "tags": ["rotations"],
+                "summary": "Replace rotation layer restrictions",
+                "description": (
+                    "Replaces all active windows for a layer. "
+                    "Times are interpreted in the layer timezone."
+                ),
+                "operationId": "replaceRotationLayerRestrictions",
+                "parameters": [path_param("layer_id", "Rotation layer id.")],
+                "requestBody": json_body(
+                    "Restriction list.",
+                    ROTATION_LAYER_RESTRICTIONS_REPLACE_SCHEMA,
+                ),
+                "responses": {
+                    "200": response(
+                        "Layer restrictions replaced.",
+                        {"type": "array", "items": ROTATION_LAYER_RESTRICTION_SCHEMA},
+                    ),
+                    "400": response("Validation error."),
+                    "403": response("Access denied."),
+                    "404": response("Layer not found."),
                 },
             },
         },

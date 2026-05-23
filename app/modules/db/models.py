@@ -201,9 +201,7 @@ class Rotation(SoftDeleteModel):
     created_at = DateTimeField(default=datetime.utcnow)
 
     class Meta:
-        indexes = (
-            (("team", "name"), True),
-        )
+        table_name = "rotation"
 
 
 class RotationMember(BaseModel):
@@ -438,3 +436,76 @@ class AppLock(BaseModel):
     owner = CharField()
     expires_at = DateTimeField()
     updated_at = DateTimeField(default=datetime.utcnow)
+
+
+class RotationLayer(SoftDeleteModel):
+    """Schedule layer inside a rotation.
+
+    Rotation stays the route-facing object.
+    Layers define competing/overriding schedules inside it.
+    Higher priority wins.
+    """
+
+    id = AutoField()
+    rotation = ForeignKeyField(Rotation, backref="layers", on_delete="CASCADE")
+    name = CharField()
+    description = TextField(null=True)
+
+    priority = IntegerField(default=0, index=True)
+
+    start_at = DateTimeField(null=True)
+    duration_seconds = IntegerField(null=True)
+
+    rotation_type = CharField(null=True)
+    interval_value = IntegerField(null=True)
+    interval_unit = CharField(null=True)
+    handoff_time = CharField(null=True)
+    handoff_weekday = IntegerField(null=True)
+    timezone = CharField(null=True)
+
+    enabled = BooleanField(default=True)
+    created_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "rotation_layer"
+        indexes = (
+            (("rotation", "priority"), False),
+        )
+
+
+class RotationLayerMember(BaseModel):
+    """User position inside a rotation layer."""
+
+    id = AutoField()
+    layer = ForeignKeyField(RotationLayer, backref="members", on_delete="CASCADE")
+    user = ForeignKeyField(User, backref="rotation_layer_memberships", on_delete="CASCADE")
+    position = IntegerField()
+    active = BooleanField(default=True)
+
+    class Meta:
+        table_name = "rotation_layer_member"
+        indexes = (
+            (("layer", "position"), True),
+            (("layer", "user"), True),
+        )
+
+
+class RotationLayerRestriction(BaseModel):
+    """Local-time active window for a rotation layer.
+
+    weekday: 0=Monday ... 6=Sunday, null means every day.
+    start_time/end_time are local to the layer timezone or rotation timezone.
+    """
+
+    id = AutoField()
+    layer = ForeignKeyField(RotationLayer, backref="restrictions", on_delete="CASCADE")
+    weekday = IntegerField(null=True)
+    start_time = CharField()
+    end_time = CharField()
+    created_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "rotation_layer_restriction"
+        indexes = (
+            (("layer", "weekday"), False),
+        )

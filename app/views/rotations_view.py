@@ -2,12 +2,23 @@ from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 
-from app.api.schemas.rotations import RotationCreateSchema, RotationMemberAddSchema, RotationMemberUpdateSchema, RotationOverrideCreateSchema, RotationUpdateSchema
+from app.api.schemas.rotations import (
+    RotationCreateSchema,
+    RotationMemberAddSchema,
+    RotationMemberUpdateSchema,
+    RotationOverrideCreateSchema,
+    RotationUpdateSchema,
+    RotationLayerCreateSchema,
+    RotationLayerUpdateSchema,
+    RotationLayerMemberAddSchema,
+    RotationLayerMemberUpdateSchema,
+    RotationLayerRestrictionsReplaceSchema,
+)
 from app.modules.db import rotations_repo, teams_repo
 from app.services.audit import write_audit
 from app.services.rbac import get_allowed_team_ids, require_team_read, require_team_write
 from app.services.oncall import get_current_oncall_user
-from app.services.serializers import serialize_rotation
+from app.services.serializers import serialize_rotation, serialize_rotation_layer, serialize_rotation_layer_member, serialize_rotation_layer_restriction
 from app.services.validation import validate_body
 
 
@@ -58,34 +69,40 @@ def create_rotation():
     if error:
         return error
 
-    rotation = rotations_repo.create_rotation(
-        team_id=payload.team_id,
-        name=payload.name,
-        description=payload.description,
-        start_at=payload.start_at,
-        duration_seconds=payload.duration_seconds,
-        reminder_interval_seconds=payload.reminder_interval_seconds,
-        rotation_type=payload.rotation_type,
-        interval_value=payload.interval_value,
-        interval_unit=payload.interval_unit,
-        handoff_time=payload.handoff_time,
-        handoff_weekday=payload.handoff_weekday,
-        timezone=payload.timezone,
-        enabled=payload.enabled,
-    )
+    try:
+        rotation = rotations_repo.create_rotation(
+            team_id=payload.team_id,
+            name=payload.name,
+            description=payload.description,
+            start_at=payload.start_at,
+            duration_seconds=payload.duration_seconds,
+            reminder_interval_seconds=payload.reminder_interval_seconds,
+            rotation_type=payload.rotation_type,
+            interval_value=payload.interval_value,
+            interval_unit=payload.interval_unit,
+            handoff_time=payload.handoff_time,
+            handoff_weekday=payload.handoff_weekday,
+            timezone=payload.timezone,
+            enabled=payload.enabled,
+        )
+    except ValueError as exc:
+        return jsonify({
+            "error": "rotation_conflict",
+            "message": str(exc),
+        }), 400
     write_audit("rotation.create", object_type="rotation", object_id=rotation.id, team_id=rotation.team.id, data=payload.model_dump(mode="json"))
 
     if payload.add_team_members:
+        default_layer = rotations_repo.get_or_create_default_layer(rotation.id)
         team_members = teams_repo.list_team_users(payload.team_id)
 
         position = 0
-
         for membership in team_members:
             if not membership.active:
                 continue
 
-            rotations_repo.add_rotation_member(
-                rotation_id=rotation.id,
+            rotations_repo.add_rotation_layer_member(
+                layer_id=default_layer.id,
                 user_id=membership.user.id,
                 position=position,
             )
@@ -372,3 +389,251 @@ def delete_rotation_override(override_id):
     write_audit("rotation.override.delete", object_type="rotation", object_id=rotation_id, team_id=team_id, data={"override_id": override_id})
 
     return jsonify({"deleted": True})
+
+
+@rotations_bp.route("/<int:rotation_id>/layers", methods=["GET"])
+def list_rotation_layers(rotation_id):
+    rotation = rotations_repo.get_rotation(rotation_id)
+    error = require_team_read(rotation.team_id)
+    if error:
+        return error
+
+    return jsonify([
+        serialize_rotation_layer(layer)
+        for layer in rotations_repo.list_rotation_layers(rotation_id)
+    ])
+
+
+@rotations_bp.route("/<int:rotation_id>/layers", methods=["POST"])
+def create_rotation_layer(rotation_id):
+    rotation = rotations_repo.get_rotation(rotation_id)
+    error = require_team_write(rotation.team_id)
+    if error:
+        return error
+
+    payload, error = validate_body(RotationLayerCreateSchema)
+    if error:
+        return error
+
+    layer = rotations_repo.create_rotation_layer(
+        rotation_id=rotation_id,
+        name=payload.name,
+        description=payload.description,
+        priority=payload.priority,
+        start_at=payload.start_at,
+        duration_seconds=payload.duration_seconds,
+        rotation_type=payload.rotation_type,
+        interval_value=payload.interval_value,
+        interval_unit=payload.interval_unit,
+        handoff_time=payload.handoff_time,
+        handoff_weekday=payload.handoff_weekday,
+        timezone=payload.timezone,
+        enabled=payload.enabled,
+    )
+
+    write_audit(
+        "rotation.layer.create",
+        object_type="rotation",
+        object_id=rotation_id,
+        team_id=rotation.team.id,
+        data=payload.model_dump(mode="json"),
+    )
+
+    return jsonify(serialize_rotation_layer(layer)), 201
+
+
+@rotations_bp.route("/layers/<int:layer_id>", methods=["PUT"])
+def update_rotation_layer(layer_id):
+    layer_before = rotations_repo.get_rotation_layer(layer_id)
+    error = require_team_write(layer_before.rotation.team_id)
+    if error:
+        return error
+
+    payload, error = validate_body(RotationLayerUpdateSchema)
+    if error:
+        return error
+
+    layer = rotations_repo.update_rotation_layer(
+        layer_id,
+        {
+            "name": payload.name,
+            "description": payload.description,
+            "priority": payload.priority,
+            "start_at": payload.start_at,
+            "duration_seconds": payload.duration_seconds,
+            "rotation_type": payload.rotation_type,
+            "interval_value": payload.interval_value,
+            "interval_unit": payload.interval_unit,
+            "handoff_time": payload.handoff_time,
+            "handoff_weekday": payload.handoff_weekday,
+            "timezone": payload.timezone,
+            "enabled": payload.enabled,
+        },
+    )
+
+    write_audit(
+        "rotation.layer.update",
+        object_type="rotation",
+        object_id=layer.rotation.id,
+        team_id=layer.rotation.team.id,
+        data=payload.model_dump(mode="json"),
+    )
+
+    return jsonify(serialize_rotation_layer(layer))
+
+
+@rotations_bp.route("/layers/<int:layer_id>", methods=["DELETE"])
+def delete_rotation_layer(layer_id):
+    layer_before = rotations_repo.get_rotation_layer(layer_id)
+    error = require_team_write(layer_before.rotation.team_id)
+    if error:
+        return error
+
+    layer = rotations_repo.soft_delete_rotation_layer(layer_id)
+
+    write_audit(
+        "rotation.layer.delete",
+        object_type="rotation",
+        object_id=layer.rotation.id,
+        team_id=layer.rotation.team.id,
+        data={"layer_id": layer.id},
+    )
+
+    return jsonify({"deleted": True, "id": layer.id})
+
+
+@rotations_bp.route("/layers/<int:layer_id>/members", methods=["GET"])
+def list_rotation_layer_members(layer_id):
+    layer = rotations_repo.get_rotation_layer(layer_id)
+    error = require_team_read(layer.rotation.team_id)
+    if error:
+        return error
+
+    return jsonify([
+        serialize_rotation_layer_member(member)
+        for member in rotations_repo.list_rotation_layer_members(layer_id)
+    ])
+
+
+@rotations_bp.route("/layers/<int:layer_id>/members", methods=["POST"])
+def add_rotation_layer_member(layer_id):
+    layer = rotations_repo.get_rotation_layer(layer_id)
+    error = require_team_write(layer.rotation.team_id)
+    if error:
+        return error
+
+    payload, error = validate_body(RotationLayerMemberAddSchema)
+    if error:
+        return error
+
+    try:
+        rotations_repo.ensure_user_in_rotation_team(layer.rotation.id, payload.user_id)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    member = rotations_repo.add_rotation_layer_member(
+        layer_id=layer_id,
+        user_id=payload.user_id,
+        position=payload.position,
+    )
+
+    write_audit(
+        "rotation.layer.member.add",
+        object_type="rotation",
+        object_id=layer.rotation.id,
+        team_id=layer.rotation.team.id,
+        data=payload.model_dump(),
+    )
+
+    return jsonify(serialize_rotation_layer_member(member)), 201
+
+
+@rotations_bp.route("/layers/members/<int:member_id>", methods=["PUT"])
+def update_rotation_layer_member(member_id):
+    member_before = rotations_repo.get_rotation_layer_member(member_id)
+    error = require_team_write(member_before.layer.rotation.team_id)
+    if error:
+        return error
+
+    payload, error = validate_body(RotationLayerMemberUpdateSchema)
+    if error:
+        return error
+
+    member = rotations_repo.update_rotation_layer_member(
+        member_id=member_id,
+        position=payload.position,
+        active=payload.active,
+    )
+
+    write_audit(
+        "rotation.layer.member.update",
+        object_type="rotation",
+        object_id=member.layer.rotation.id,
+        team_id=member.layer.rotation.team.id,
+        data={"member_id": member.id, **payload.model_dump()},
+    )
+
+    return jsonify(serialize_rotation_layer_member(member))
+
+
+@rotations_bp.route("/layers/members/<int:member_id>", methods=["DELETE"])
+def delete_rotation_layer_member(member_id):
+    member = rotations_repo.get_rotation_layer_member(member_id)
+    error = require_team_write(member.layer.rotation.team_id)
+    if error:
+        return error
+
+    data = rotations_repo.delete_rotation_layer_member(member_id)
+
+    write_audit(
+        "rotation.layer.member.remove",
+        object_type="rotation",
+        object_id=data["rotation_id"],
+        team_id=data["team_id"],
+        data=data,
+    )
+
+    return jsonify({"deleted": True, "id": member_id})
+
+
+@rotations_bp.route("/layers/<int:layer_id>/restrictions", methods=["GET"])
+def list_rotation_layer_restrictions(layer_id):
+    layer = rotations_repo.get_rotation_layer(layer_id)
+    error = require_team_read(layer.rotation.team_id)
+    if error:
+        return error
+
+    return jsonify([
+        serialize_rotation_layer_restriction(item)
+        for item in rotations_repo.list_rotation_layer_restrictions(layer_id)
+    ])
+
+
+@rotations_bp.route("/layers/<int:layer_id>/restrictions", methods=["PUT"])
+def replace_rotation_layer_restrictions(layer_id):
+    layer = rotations_repo.get_rotation_layer(layer_id)
+    error = require_team_write(layer.rotation.team_id)
+    if error:
+        return error
+
+    payload, error = validate_body(RotationLayerRestrictionsReplaceSchema)
+    if error:
+        return error
+
+    restrictions = rotations_repo.replace_rotation_layer_restrictions(
+        layer_id,
+        [item.model_dump() for item in payload.restrictions],
+    )
+
+    write_audit(
+        "rotation.layer.restrictions.replace",
+        object_type="rotation",
+        object_id=layer.rotation.id,
+        team_id=layer.rotation.team.id,
+        data=payload.model_dump(),
+    )
+
+    return jsonify([
+        serialize_rotation_layer_restriction(item)
+        for item in restrictions
+    ])

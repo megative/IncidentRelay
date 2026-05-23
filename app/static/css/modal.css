@@ -403,59 +403,77 @@ textarea.app-code-textarea {
    ========================================================= */
 
 .app-switch {
-    display: inline-flex;
-    align-items: center;
-    gap: 12px;
-    cursor: pointer;
-}
-
-.app-switch input {
-    display: none;
-}
-
-.app-switch-ui {
     position: relative;
-    width: 50px;
-    height: 28px;
-    flex: 0 0 auto;
-    background: #cbd5e1;
-    border-radius: 999px;
-    transition: background 0.15s ease;
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 12px;
+    min-height: 28px;
+    cursor: pointer;
+    user-select: none;
+    color: var(--text, #101828);
 }
 
-.app-switch-ui::after {
+.app-switch > input[type="checkbox"] {
+    display: none !important;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.app-switch > .app-switch-ui {
+    display: inline-block;
+    position: relative;
+    box-sizing: border-box;
+    flex: 0 0 44px;
+    width: 44px;
+    min-width: 44px;
+    height: 24px;
+    margin-top: 1px;
+    border-radius: 999px;
+    background: #d0d5dd;
+    border: 1px solid #d0d5dd;
+    transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.app-switch > .app-switch-ui::before {
     content: "";
     position: absolute;
-    top: 4px;
-    left: 4px;
-    width: 20px;
-    height: 20px;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
     background: #ffffff;
-    border-radius: 999px;
-    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.22);
-    transition: transform 0.15s ease;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.22);
+    transition: transform 0.18s ease;
 }
 
-.app-switch input:checked + .app-switch-ui {
-    background: var(--primary, #2374ef);
+.app-switch > input[type="checkbox"]:checked + .app-switch-ui {
+    background: var(--primary, #2563eb);
+    border-color: var(--primary, #2563eb);
 }
 
-.app-switch input:checked + .app-switch-ui::after {
-    transform: translateX(22px);
+.app-switch > input[type="checkbox"]:checked + .app-switch-ui::before {
+    transform: translateX(20px);
+}
+
+.app-switch > span:last-child {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    line-height: 1.25;
 }
 
 .app-switch strong {
-    display: block;
-    color: #344054;
     font-size: 14px;
+    font-weight: 700;
+    color: var(--text, #101828);
 }
 
 .app-switch small {
-    display: block;
-    color: var(--muted, #667085);
     font-size: 12px;
+    line-height: 1.35;
+    color: var(--muted, #667085);
 }
-
 
 /* =========================================================
    Global modal buttons extension

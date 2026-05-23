@@ -852,6 +852,7 @@ summary {
 .table-actions,
 .details-actions {
     gap: 6px;
+    margin-top: 10px;
 }
 
 .sr-only {
