@@ -86,6 +86,7 @@ def create_rotation(
         interval_value=1,
         interval_unit="days",
         handoff_time="09:00",
+        handoff_weekday=None,
         timezone="UTC",
         enabled=True,
     )

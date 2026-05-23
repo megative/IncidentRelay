@@ -1,4 +1,5 @@
-from app.modules.db.models import Alert, AlertRouteChannel, RotationMember
+from app.modules.db import rotations_repo
+from app.modules.db.models import Alert, AlertRouteChannel
 from tests.factories import (
     add_user_to_team,
     attach_channel,
@@ -12,7 +13,7 @@ from tests.factories import (
 )
 
 
-def test_rotation_members_are_ordered_by_position(db):
+def test_rotation_layer_members_are_ordered_by_position(db):
     group = create_group(slug="infra")
     team = create_team(group, slug="sre")
     first = create_user("alice", group)
@@ -21,12 +22,9 @@ def test_rotation_members_are_ordered_by_position(db):
     add_user_to_team(team, first)
     add_user_to_team(team, second)
     rotation = create_rotation(team, users=[first, second])
+    layer = rotations_repo.get_or_create_default_layer(rotation.id)
 
-    members = list(
-        RotationMember.select()
-        .where(RotationMember.rotation == rotation)
-        .order_by(RotationMember.position.asc())
-    )
+    members = rotations_repo.list_rotation_layer_members(layer.id)
 
     assert [member.user.username for member in members] == ["alice", "bob"]
 

@@ -142,37 +142,17 @@ def get_active_rotation_layer(rotation, now=None):
 
 
 def get_scheduled_oncall_user(rotation, now=None):
-    """Return scheduled user without applying overrides.
-
-    Layers are used first. If rotation has no layers, fallback to legacy
-    RotationMember behavior.
-    """
+    """Return scheduled user from active rotation layer."""
     if not rotation:
         return None
 
     now = _as_utc_naive(now or datetime.utcnow())
 
     layer = get_active_rotation_layer(rotation, now)
-    if layer:
-        return get_scheduled_oncall_user_for_layer(layer, now)
-
-    # Legacy fallback for tests/old databases/manual model usage.
-    members = rotations_repo.list_rotation_members(
-        rotation.id,
-        active_only=True,
-    )
-
-    if not members:
+    if not layer:
         return None
 
-    elapsed = int((now - rotation.start_at).total_seconds())
-
-    if elapsed < 0:
-        return members[0].user
-
-    slot = elapsed // rotation.duration_seconds
-
-    return members[slot % len(members)].user
+    return get_scheduled_oncall_user_for_layer(layer, now)
 
 
 def get_current_oncall_user(rotation, now=None):
@@ -194,10 +174,7 @@ def get_current_oncall_user(rotation, now=None):
 
 
 def get_next_rotation_user(rotation, current_user=None, now=None):
-    """Return next user in the active layer.
-
-    Used by escalation. Falls back to legacy rotation members.
-    """
+    """Return next user in the active layer."""
 
     if not rotation:
         return None
@@ -205,16 +182,13 @@ def get_next_rotation_user(rotation, current_user=None, now=None):
     now = _as_utc_naive(now or datetime.utcnow())
 
     layer = get_active_rotation_layer(rotation, now)
-    if layer:
-        members = rotations_repo.list_rotation_layer_members(
-            layer.id,
-            active_only=True,
-        )
-    else:
-        members = rotations_repo.list_rotation_members(
-            rotation.id,
-            active_only=True,
-        )
+    if not layer:
+        return None
+
+    members = rotations_repo.list_rotation_layer_members(
+        layer.id,
+        active_only=True,
+    )
 
     if not members:
         return None
