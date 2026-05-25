@@ -461,11 +461,6 @@
     color: #98a2b3;
     font-weight: 700;
 }
-.calendar-day-timeline-month {
-    height: 46px;
-    margin-top: 6px;
-}
-
 .calendar-day-timeline-month .calendar-no-duty-timeline {
     inset: 4px 6px;
     font-size: 11px;

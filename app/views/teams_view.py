@@ -37,9 +37,13 @@ def list_teams():
     if user and user.is_admin:
         teams = teams_repo.list_teams(active_only=active_only)
     else:
-        team_ids = get_allowed_team_ids(use_active_group=True)
+        team_ids = get_allowed_team_ids(
+            use_active_group=True,
+            active_only=active_only,
+        )
         teams = [
-            team for team in teams_repo.list_teams(active_only=active_only)
+            team
+            for team in teams_repo.list_teams(active_only=active_only)
             if team.id in team_ids
         ]
     return jsonify([serialize_team(team) for team in teams])
@@ -73,6 +77,7 @@ def create_team():
             description=payload.description,
             escalation_enabled=payload.escalation_enabled,
             escalation_after_reminders=payload.escalation_after_reminders,
+            active=payload.active,
         )
     except IntegrityError as exc:
         error_text = str(exc).lower()

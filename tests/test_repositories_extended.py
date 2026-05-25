@@ -22,6 +22,7 @@ from tests.factories import (
     create_silence,
     create_team,
     create_user,
+    unique,
 )
 
 
@@ -221,3 +222,17 @@ def test_locks_repo_acquires_rejects_busy_steals_expired_and_releases(db):
     assert locks_repo.acquire_lock("job", "owner-2", ttl_seconds=60) is True
     assert locks_repo.release_lock("job", "owner-1") == 0
     assert locks_repo.release_lock("job", "owner-2") == 1
+
+
+def test_create_team_respects_active_flag(db):
+    group = create_group(slug="infra")
+
+    team = teams_repo.create_team(
+        group_id=group.id,
+        slug=unique("team"),
+        name="Inactive team",
+        active=False,
+    )
+
+    assert team.active is False
+    assert teams_repo.get_team(team.id).active is False

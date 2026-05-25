@@ -769,7 +769,7 @@ function renderRotationCalendars(monthMode) {
         grid.append(renderRotationCalendarBlock(calendar, days, monthMode, start, end));
     });
 
-    renderCalendarLegend();
+    // renderCalendarLegend();
 }
 
 
@@ -1103,47 +1103,47 @@ function getCalendarTimelinePosition(clippedStart, clippedEnd, dayStart, dayEnd)
 }
 
 
-function renderCalendarLegend() {
-    /*
-     * Render user color legend for visible events.
-     */
-
-    const legend = $("#calendar-legend");
-    const users = {};
-
-    legend.empty();
-
-    calendarEventsCache.forEach(function (event) {
-        if (!event.user_id) {
-            return;
-        }
-
-        users[event.user_id] = {
-            id: event.user_id,
-            label: getCalendarUserLabel(event),
-            color: getCalendarUserColor(event.user_id)
-        };
-    });
-
-    Object.keys(users)
-        .sort(function (a, b) {
-            return Number(a) - Number(b);
-        })
-        .forEach(function (userId) {
-            const user = users[userId];
-
-            legend.append(
-                $("<div>")
-                    .addClass("calendar-legend-item")
-                    .append(
-                        $("<span>")
-                            .addClass("calendar-legend-color")
-                            .attr("style", "background-color: " + user.color)
-                    )
-                    .append($("<span>").addClass("calendar-legend-name").text(user.label))
-            );
-        });
-}
+// function renderCalendarLegend() {
+//     /*
+//      * Render user color legend for visible events.
+//      */
+//
+//     const legend = $("#calendar-legend");
+//     const users = {};
+//
+//     legend.empty();
+//
+//     calendarEventsCache.forEach(function (event) {
+//         if (!event.user_id) {
+//             return;
+//         }
+//
+//         users[event.user_id] = {
+//             id: event.user_id,
+//             label: getCalendarUserLabel(event),
+//             color: getCalendarUserColor(event.user_id)
+//         };
+//     });
+//
+//     Object.keys(users)
+//         .sort(function (a, b) {
+//             return Number(a) - Number(b);
+//         })
+//         .forEach(function (userId) {
+//             const user = users[userId];
+//
+//             legend.append(
+//                 $("<div>")
+//                     .addClass("calendar-legend-item")
+//                     .append(
+//                         $("<span>")
+//                             .addClass("calendar-legend-color")
+//                             .attr("style", "background-color: " + user.color)
+//                     )
+//                     .append($("<span>").addClass("calendar-legend-name").text(user.label))
+//             );
+//         });
+// }
 
 
 function shiftCalendarRange(direction) {

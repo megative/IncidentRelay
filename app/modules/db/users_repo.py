@@ -2,6 +2,7 @@ from datetime import datetime
 
 from app.modules.db.models import (
     ApiToken,
+    RotationLayerMember,
     RotationMember,
     RotationOverride,
     TeamUser,
@@ -127,17 +128,6 @@ def update_user(user_id, data):
     return user
 
 
-def disable_user(user_id):
-    """
-    Disable a user.
-    """
-
-    user = get_user(user_id)
-    user.active = False
-    user.save()
-    return user
-
-
 def get_user_or_none(user_id, include_deleted=False):
     """
     Return one user or None.
@@ -175,6 +165,8 @@ def soft_delete_user(user_id):
     with database.atomic():
         UserGroup.delete().where(UserGroup.user == user.id).execute()
         TeamUser.delete().where(TeamUser.user == user.id).execute()
+        RotationLayerMember.delete().where(RotationLayerMember.user == user.id).execute()
+        RotationOverride.delete().where(RotationOverride.user == user.id).execute()
         RotationMember.delete().where(RotationMember.user == user.id).execute()
         RotationOverride.delete().where(RotationOverride.user == user.id).execute()
         UserRole.delete().where(UserRole.user == user.id).execute()

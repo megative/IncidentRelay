@@ -23,6 +23,9 @@ from app.modules.db.models import (
     TeamUser,
     User,
     UserRole,
+    SsoProvider,
+    SsoIdentity,
+    SsoGroupMapping,
 )
 
 db = init_database()
@@ -49,6 +52,9 @@ MODELS = [
     AlertNotificationEvent,
     Silence,
     ApiToken,
+    SsoProvider,
+    SsoIdentity,
+    SsoGroupMapping,
     AuditLog,
     AppLock,
 ]

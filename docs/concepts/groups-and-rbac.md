@@ -72,15 +72,3 @@ When a non-admin group `editor` creates a new team, IncidentRelay should add tha
 | Acknowledge or resolve alert | Team `responder`, `manager` or global admin |
 | Manage team resources | Team `manager` or global admin |
 | Add user to team | Team `manager` or global admin; target user must already be in the team group |
-
-## Old role names
-
-Old role values should not be accepted by request schemas after the RBAC migration.
-
-| Old location | Old value | New value |
-|---|---|---|
-| Group membership | `read_only` | `viewer` |
-| Group membership | `rw` | `editor` |
-| Team membership | `read_only` | `viewer` |
-| Team membership | `member` | `responder` |
-| Team membership | `rw` | `manager` |

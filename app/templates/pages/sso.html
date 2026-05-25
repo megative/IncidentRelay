@@ -1,0 +1,494 @@
+<div class="page-stack">
+    <div class="summary-grid">
+      <div class="summary-card summary-primary">
+        <div class="summary-icon"><i class="fa-solid fa-right-to-bracket"></i></div>
+        <div>
+          <div class="summary-title">Providers</div>
+          <div id="sso-summary-total" class="summary-value">0</div>
+          <div class="summary-hint">Login sources</div>
+        </div>
+      </div>
+
+      <div class="summary-card summary-success">
+        <div class="summary-icon"><i class="fa-solid fa-circle-check"></i></div>
+        <div>
+          <div class="summary-title">Enabled</div>
+          <div id="sso-summary-enabled" class="summary-value">0</div>
+          <div class="summary-hint">Shown on login</div>
+        </div>
+      </div>
+
+      <div class="summary-card summary-muted">
+        <div class="summary-icon"><i class="fa-solid fa-circle-xmark"></i></div>
+        <div>
+          <div class="summary-title">Disabled</div>
+          <div id="sso-summary-disabled" class="summary-value">0</div>
+          <div class="summary-hint">Hidden from login</div>
+        </div>
+      </div>
+
+      <div class="summary-card summary-info">
+        <div class="summary-icon"><i class="fa-solid fa-shield-halved"></i></div>
+        <div>
+          <div class="summary-title">OIDC</div>
+          <div id="sso-summary-oidc" class="summary-value">0</div>
+          <div class="summary-hint">OpenID Connect</div>
+        </div>
+      </div>
+
+        <div class="summary-card summary-warning">
+            <div class="summary-icon"><i class="fa-solid fa-id-card"></i></div>
+            <div>
+              <div class="summary-title">SAML</div>
+              <div id="sso-summary-saml" class="summary-value">0</div>
+              <div class="summary-hint">SAML 2.0</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+          <div>
+            <h2>SSO providers</h2>
+            <p>
+              <span id="sso-filtered-count">0</span> of
+              <span id="sso-total-count">0</span> providers
+            </p>
+          </div>
+          <div class="card-header-actions">
+            <button id="open-sso-provider-create-modal" type="button" class="btn btn-primary btn-small">
+              Add provider
+            </button>
+            <button id="reload-sso-providers" type="button" class="btn btn-secondary btn-small">
+              Reload
+            </button>
+          </div>
+        </div>
+
+        <div class="page-toolbar is-flush-top">
+          <input id="sso-search" class="page-toolbar-search" type="search" placeholder="Search provider">
+          <select id="sso-protocol-filter" class="page-toolbar-filter">
+            <option value="">All protocols</option>
+            <option value="oidc">OIDC</option>
+            <option value="saml">SAML</option>
+          </select>
+          <select id="sso-status-filter" class="page-toolbar-filter">
+            <option value="">All statuses</option>
+            <option value="enabled">Enabled</option>
+            <option value="disabled">Disabled</option>
+          </select>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Provider</th>
+                <th>Protocol</th>
+                <th>Status</th>
+                <th>Auto create</th>
+                <th>Sync groups</th>
+                <th class="actions-th">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="sso-providers-table"></tbody>
+          </table>
+        </div>
+      </div>
+</div>
+
+  <div id="sso-provider-modal" class="app-modal is-hidden">
+    <div class="app-modal-dialog app-modal-dialog-wide">
+      <div class="app-modal-header">
+        <div>
+          <h3 id="sso-provider-modal-title">New SSO provider</h3>
+          <p id="sso-provider-modal-subtitle">Configure OIDC or SAML login.</p>
+        </div>
+        <button id="close-sso-provider-modal" type="button" class="app-modal-close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="app-modal-body">
+        <input id="sso-provider-id" type="hidden">
+
+        <div class="form-body">
+          <div class="grid-two">
+            <label>
+              <span>Slug</span>
+              <input id="sso-provider-slug" type="text" placeholder="keycloak">
+            </label>
+
+            <label>
+              <span>Label</span>
+              <input id="sso-provider-label" type="text" placeholder="Keycloak">
+            </label>
+
+            <label>
+              <span>Protocol</span>
+              <select id="sso-provider-protocol">
+                <option value="oidc">OIDC</option>
+                <option value="saml">SAML</option>
+              </select>
+            </label>
+
+            <label class="form-check-row">
+              <input id="sso-provider-enabled" type="checkbox" checked>
+              <span>Enabled</span>
+            </label>
+          </div>
+
+          <div class="form-section">
+            <h4>Claims</h4>
+            <div class="grid-two">
+              <label>
+                <span>Subject claim</span>
+                <input id="sso-subject-claim" type="text" value="sub">
+              </label>
+
+              <label>
+                <span>Email claim</span>
+                <input id="sso-email-claim" type="text" value="email">
+              </label>
+
+              <label>
+                <span>Username claim</span>
+                <input id="sso-username-claim" type="text" value="preferred_username">
+              </label>
+
+              <label>
+                <span>Display name claim</span>
+                <input id="sso-display-name-claim" type="text" value="name">
+              </label>
+
+                <label class="field">
+                  <span>Phone claim</span>
+                  <input id="sso-phone-claim" type="text" placeholder="mobile">
+                </label>
+
+              <label>
+                <span>Groups claim</span>
+                <input id="sso-groups-claim" type="text" value="groups">
+              </label>
+
+              <label>
+                <span>Allowed domains</span>
+                <input id="sso-allowed-domains" type="text" placeholder="example.com, company.local">
+              </label>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h4>Login policy</h4>
+            <div class="checkbox-grid">
+              <label class="md-checkbox">
+                <input id="sso-auto-create-users" type="checkbox">
+                <span>Auto-create users</span>
+              </label>
+
+              <label class="md-checkbox">
+                <input id="sso-auto-link-by-email" type="checkbox" checked>
+                <span>Auto-link by email</span>
+              </label>
+
+              <label class="md-checkbox">
+                <input id="sso-require-verified-email" type="checkbox">
+                <span>Require verified email</span>
+              </label>
+
+              <label class="md-checkbox">
+                <input id="sso-sync-group-memberships" type="checkbox" checked>
+                <span>Sync group memberships</span>
+              </label>
+
+              <label class="md-checkbox">
+                <input id="sso-remove-missing-group-memberships" type="checkbox">
+                <span>Remove missing memberships</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="sso-oidc-settings" class="form-section" style="display: none;">
+            <h4>OIDC settings</h4>
+            <div class="grid-two">
+              <label>
+                <span>Client ID</span>
+                <input id="sso-client-id" type="text">
+              </label>
+
+              <label>
+                <span>Client Secret</span>
+                <input id="sso-client-secret" type="password" placeholder="Leave empty to keep existing">
+              </label>
+
+                <label>
+                    <span>Issuer URL</span>
+                    <input id="sso-oidc-issuer" type="url" placeholder="https://idp.example.com">
+                </label>
+
+              <label class="grid-span-2">
+                <span>Metadata URL</span>
+                <input id="sso-oidc-metadata-url" type="url" placeholder="https://idp.example.com/.well-known/openid-configuration">
+              </label>
+
+              <label class="grid-span-2">
+                <span>Scope</span>
+                <input id="sso-oidc-scope" type="text" value="openid email profile">
+              </label>
+            </div>
+              <div class="form-divider"></div>
+              <h4>OIDC advanced endpoints</h4>
+                <div class="grid-two">
+                  <label class="field">
+                    <span>Authorization endpoint</span>
+                    <input id="sso-oidc-authorization-endpoint" type="url" placeholder="https://idp.example.com/oauth2/authorize">
+                  </label>
+
+                  <label class="field">
+                    <span>Token endpoint</span>
+                    <input id="sso-oidc-token-endpoint" type="url" placeholder="https://idp.example.com/oauth2/token">
+                  </label>
+                </div>
+
+                <div class="grid-two">
+                  <label class="field">
+                    <span>UserInfo endpoint</span>
+                    <input id="sso-oidc-userinfo-endpoint" type="url" placeholder="https://idp.example.com/oauth2/userinfo">
+                  </label>
+
+                  <label class="field">
+                    <span>JWKS URI</span>
+                    <input id="sso-oidc-jwks-uri" type="url" placeholder="https://idp.example.com/oauth2/jwks">
+                  </label>
+                </div>
+          </div>
+
+          <div id="sso-saml-settings" class="form-section" style="display: none;">
+            <h4>SAML settings</h4>
+            <div class="grid-two">
+                <label>
+                  <span>IdP metadata URL</span>
+                  <input
+                    id="sso-saml-idp-metadata-url"
+                    type="url"
+                    placeholder="https://sso.example.com/FederationMetadata/2007-06/FederationMetadata.xml"
+                  >
+                </label>
+
+                <div class="form-actions-inline">
+                  <button id="fetch-saml-metadata" type="button" class="btn btn-secondary btn-small">
+                    Fetch metadata
+                  </button>
+                  <span id="sso-saml-metadata-status" class="empty-muted"></span>
+                </div>
+              <label class="grid-span-2">
+                <span>IdP Entity ID</span>
+                <input id="sso-saml-idp-entity-id" type="text">
+              </label>
+
+              <label class="grid-span-2">
+                <span>IdP SSO URL</span>
+                <input id="sso-saml-idp-sso-url" type="url">
+              </label>
+
+              <label class="grid-span-2">
+                <span>IdP SLO URL</span>
+                <input id="sso-saml-idp-slo-url" type="url">
+              </label>
+
+              <label class="grid-span-2">
+                <span>IdP x509 certificate</span>
+                <textarea id="sso-saml-idp-x509-cert" class="code-textarea" rows="5"></textarea>
+              </label>
+
+              <label class="grid-span-2">
+                <span>SP Entity ID</span>
+                <input id="sso-saml-sp-entity-id" type="text" placeholder="Leave empty to use metadata URL">
+              </label>
+
+              <label class="grid-span-2">
+                <span>SP ACS URL</span>
+                <input id="sso-saml-sp-acs-url" type="url" placeholder="Leave empty to use callback URL">
+              </label>
+                <label class="grid-span-2">
+                  <span>SP SLS URL</span>
+                  <input id="sso-saml-sp-sls-url" type="url" placeholder="Optional single logout URL">
+                </label>
+
+                <label class="grid-span-2">
+                  <span>SP x509 certificate</span>
+                  <textarea id="sso-saml-sp-x509-cert" class="code-textarea" rows="5" placeholder="Required when signing AuthnRequest, logout or metadata"></textarea>
+                </label>
+
+                <label class="grid-span-2">
+                  <span>SP private key</span>
+                  <textarea id="sso-saml-sp-private-key" class="code-textarea" rows="5" placeholder="Leave empty to keep existing"></textarea>
+                </label>
+
+                <label class="grid-span-2">
+                  <span>NameID format</span>
+                  <input id="sso-saml-name-id-format" type="text" value="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">
+                </label>
+                <div class="grid-span-2 section-box">
+                  <h4>SAML security</h4>
+
+                  <div class="checkbox-grid">
+                    <label class="md-checkbox">
+                      <input id="sso-saml-authn-requests-signed" type="checkbox">
+                      <span>Sign AuthnRequest</span>
+                    </label>
+
+                    <label class="md-checkbox">
+                      <input id="sso-saml-logout-request-signed" type="checkbox">
+                      <span>Sign LogoutRequest</span>
+                    </label>
+
+                    <label class="md-checkbox">
+                      <input id="sso-saml-logout-response-signed" type="checkbox">
+                      <span>Sign LogoutResponse</span>
+                    </label>
+
+                    <label class="md-checkbox">
+                      <input id="sso-saml-sign-metadata" type="checkbox">
+                      <span>Sign SP metadata</span>
+                    </label>
+
+                    <label class="md-checkbox">
+                      <input id="sso-saml-want-messages-signed" type="checkbox">
+                      <span>Require signed responses</span>
+                    </label>
+
+                    <label class="md-checkbox">
+                      <input id="sso-saml-want-assertions-signed" type="checkbox">
+                      <span>Require signed assertions</span>
+                    </label>
+
+                    <label class="md-checkbox">
+                      <input id="sso-saml-want-name-id-encrypted" type="checkbox">
+                      <span>Require encrypted NameID</span>
+                    </label>
+
+                    <label class="md-checkbox">
+                      <input id="sso-saml-want-assertions-encrypted" type="checkbox">
+                      <span>Require encrypted assertions</span>
+                    </label>
+
+                    <label class="md-checkbox">
+                      <input id="sso-saml-want-attribute-statement" type="checkbox">
+                      <span>Require AttributeStatement</span>
+                    </label>
+                  </div>
+                </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="app-modal-footer">
+        <button id="reset-sso-provider-form" type="button" class="btn btn-secondary">
+          Reset
+        </button>
+        <button id="save-sso-provider" type="button" class="btn btn-primary">
+          Save provider
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="sso-mapping-modal" class="app-modal is-hidden">
+    <div class="app-modal-dialog">
+      <div class="app-modal-header">
+        <div>
+          <h3 id="sso-mapping-modal-title">New group mapping</h3>
+          <p id="sso-mapping-modal-subtitle">Map SSO group to IncidentRelay group.</p>
+        </div>
+        <button id="close-sso-mapping-modal" type="button" class="app-modal-close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="app-modal-body">
+        <input id="sso-mapping-id" type="hidden">
+
+        <div class="form-body">
+          <label>
+            <span>External SSO group</span>
+            <input id="sso-mapping-external-group" type="text" placeholder="infra">
+          </label>
+
+          <label id="sso-mapping-group-field">
+              <span>IncidentRelay group</span>
+              <select id="sso-mapping-group"></select>
+          </label>
+
+          <label>
+            <span>Group role</span>
+            <select id="sso-mapping-role">
+                <option value="viewer">Group Viewer</option>
+                <option value="editor">Group Editor</option>
+                <option value="user_admin">Group Admin</option>
+                <option value="global_admin">Global admin</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Priority</span>
+            <input id="sso-mapping-priority" type="number" value="100" min="0">
+          </label>
+
+          <label class="form-check-row">
+            <input id="sso-mapping-active" type="checkbox" checked>
+            <span>Enabled</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="app-modal-footer">
+        <button id="reset-sso-mapping-form" type="button" class="btn btn-secondary">
+          Reset
+        </button>
+        <button id="save-sso-mapping" type="button" class="btn btn-primary">
+          Save mapping
+        </button>
+      </div>
+    </div>
+  </div>
+<div id="sso-mappings-modal" class="app-modal is-hidden" style="display: none;">
+  <div class="app-modal-dialog app-modal-dialog-wide">
+    <div class="app-modal-header">
+      <div>
+        <h3 id="sso-mappings-modal-title">Group mappings</h3>
+        <p id="sso-mappings-modal-subtitle">Map external SSO groups to IncidentRelay groups.</p>
+      </div>
+
+      <button id="close-sso-mappings-modal" type="button" class="app-modal-close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <div class="app-modal-body">
+      <div class="details-actions">
+        <button id="add-sso-mapping" type="button" class="btn btn-primary btn-small">
+          Add mapping
+        </button>
+
+        <button id="reload-sso-mappings" type="button" class="btn btn-secondary btn-small">
+          Reload
+        </button>
+      </div>
+
+      <div id="sso-mappings-body" class="stack-list">
+        <div class="details-empty">
+          Select an SSO provider first.
+        </div>
+      </div>
+    </div>
+
+    <div class="app-modal-footer">
+      <button type="button" class="btn btn-secondary" data-modal-close="#sso-mappings-modal">
+        Close
+      </button>
+    </div>
+  </div>
+</div>

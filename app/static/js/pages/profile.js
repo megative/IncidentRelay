@@ -1,35 +1,5 @@
 let lastGeneratedProfileToken = "";
 
-const PROFILE_GROUP_ROLE_LABELS = {
-    viewer: "Group Viewer",
-    editor: "Group Editor",
-    user_admin: "Group Admin",
-    read_only: "Group Viewer",
-    rw: "Group Editor",
-};
-
-function normalizeProfileGroupRole(role) {
-    /*
-     * Normalize legacy group role values for old sessions/data that may still be
-     * present before or during RBAC migration.
-     */
-    if (role === "read_only") {
-        return "viewer";
-    }
-    if (role === "rw") {
-        return "editor";
-    }
-    return role || "viewer";
-}
-
-function formatProfileGroupRole(role) {
-    /*
-     * Render group role labels with the new RBAC names.
-     */
-    const normalizedRole = normalizeProfileGroupRole(role);
-    return PROFILE_GROUP_ROLE_LABELS[normalizedRole] || normalizedRole;
-}
-
 function getProfileInitials(profile) {
     /*
      * Build short initials for the profile avatar.
@@ -108,41 +78,8 @@ function renderProfileGroupsSummary(groups) {
             $("<span>")
                 .addClass("badge")
                 .addClass("badge-info")
-                .text(groupName + " · " + formatProfileGroupRole(membership.role))
+                .text(groupName + " · " + RbacRoles.groupLabel(membership.role))
         );
-    });
-}
-
-function renderProfileGroupsList(groups) {
-    /*
-     * Render group membership list for the Access context card.
-     */
-    const container = $("#profile-groups-list");
-    container.empty();
-
-    if (!groups.length) {
-        container.text("No groups assigned.");
-        return;
-    }
-
-    groups.forEach(function (membership) {
-        const item = $("<div>").addClass("profile-group-item");
-        const groupName = membership.group_name || membership.group_slug || ("Group #" + membership.group_id);
-
-        item.append(
-            $("<div>")
-                .addClass("profile-group-name")
-                .text(groupName)
-        );
-        item.append(
-            $("<span>")
-                .addClass("badge")
-                .addClass("badge-info")
-                .addClass("profile-group-role")
-                .text(formatProfileGroupRole(membership.role))
-        );
-
-        container.append(item);
     });
 }
 
@@ -161,7 +98,7 @@ function fillProfileGroupSelects(profile) {
 
     (profile.groups || []).forEach(function (membership) {
         const groupName = membership.group_name || membership.group_slug || ("Group #" + membership.group_id);
-        const label = groupName + " (" + formatProfileGroupRole(membership.role) + ")";
+        const label = groupName + " (" + RbacRoles.groupLabel(membership.role) + ")";
 
         tokenGroupSelect.append(
             $("<option>")
@@ -198,7 +135,6 @@ function loadProfile() {
         }
 
         renderProfileHeader(profile);
-        renderProfileGroupsList(profile.groups || []);
         fillProfileGroupSelects(profile);
     });
 }
@@ -224,29 +160,6 @@ function saveProfile() {
             loadProfile();
         }
     );
-}
-
-function profileModal(selector) {
-    /*
-     * Return profile modal element by selector.
-     */
-    return $(selector);
-}
-
-function openProfileModal(selector) {
-    /*
-     * Open a profile modal.
-     */
-    profileModal(selector).css("display", "flex").addClass("is-open");
-    $("body").addClass("modal-open");
-}
-
-function closeProfileModal(selector) {
-    /*
-     * Close a profile modal.
-     */
-    profileModal(selector).css("display", "none").removeClass("is-open");
-    $("body").removeClass("modal-open");
 }
 
 function loadProfileTokens() {
@@ -415,7 +328,7 @@ function changeProfilePassword() {
             $("#profile-new-password").val("");
             setProfileInlineStatus("#profile-password-modal-status", "Password changed", false);
             setProfileInlineStatus("#profile-password-status", "Password changed", false);
-            closeProfileModal("#profile-password-modal");
+            closeAppModal("#profile-password-modal");
         }
     );
 }
@@ -436,7 +349,6 @@ function saveActiveGroup() {
             currentUser = user;
             updateAuthUi();
             renderProfileHeader(user);
-            renderProfileGroupsList(user.groups || []);
             fillTeamSelect("#global-team-filter", true, function () {
                 navigate(window.location.pathname, false);
             });
@@ -447,27 +359,27 @@ function saveActiveGroup() {
 
 $(document).on("click", "#open-profile-token-modal", function () {
     resetProfileTokenModal();
-    openProfileModal("#profile-token-modal");
+    openAppModal("#profile-token-modal");
 });
 
-$(document).on("click", "#close-profile-token-modal", function () {
-    closeProfileModal("#profile-token-modal");
+$(document).on("click", "#close-profile-token-modal, #close-profile-token-modal-footer", function () {
+    closeAppModal("#profile-token-modal");
 });
 
 $(document).on("click", "#open-profile-password-modal", function () {
     setProfileInlineStatus("#profile-password-modal-status", "", false);
     $("#profile-old-password").val("");
     $("#profile-new-password").val("");
-    openProfileModal("#profile-password-modal");
+    openAppModal("#profile-password-modal");
 });
 
-$(document).on("click", "#close-profile-password-modal", function () {
-    closeProfileModal("#profile-password-modal");
+$(document).on("click", "#close-profile-password-modal, #close-profile-password-modal-footer", function () {
+    closeAppModal("#profile-password-modal");
 });
 
 $(document).on("click", "#profile-token-modal, #profile-password-modal", function (event) {
-    if (event.target === this || $(event.target).hasClass("app-modal-backdrop")) {
-        closeProfileModal("#" + $(this).attr("id"));
+    if (event.target === this || $(event.target).hasClass("app-modal")) {
+        closeAppModal("#" + $(this).attr("id"));
     }
 });
 
@@ -477,10 +389,10 @@ $(document).on("keydown", function (event) {
     }
 
     if ($("#profile-token-modal").hasClass("is-open")) {
-        closeProfileModal("#profile-token-modal");
+        closeAppModal("#profile-token-modal");
     }
     if ($("#profile-password-modal").hasClass("is-open")) {
-        closeProfileModal("#profile-password-modal");
+        closeAppModal("#profile-password-modal");
     }
 });
 

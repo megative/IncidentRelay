@@ -13,38 +13,6 @@
     min-width: 170px;
 }
 
-.silence-name-button {
-    border: 0;
-    padding: 0;
-    background: transparent;
-    color: #101828;
-    cursor: pointer;
-    font: inherit;
-    font-weight: 800;
-    text-align: left;
-}
-
-.silence-name-button:hover {
-    color: var(--primary);
-    text-decoration: underline;
-}
-
-.silence-window {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-}
-
-.silence-window-main {
-    color: #101828;
-    font-weight: 700;
-}
-
-.silence-window-subtitle {
-    color: var(--muted);
-    font-size: 12px;
-}
-
 .silence-matchers-preview {
     max-width: 260px;
     overflow: hidden;
@@ -52,20 +20,4 @@
     font-size: 12px;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.silences-details-body {
-    padding: 16px 18px 18px;
-}
-
-.silence-details-code {
-    margin-top: 6px;
-    padding: 10px;
-    border-radius: 10px;
-    background: #101828;
-    color: #f9fafb;
-    font-size: 12px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    white-space: pre-wrap;
-    word-break: break-word;
 }

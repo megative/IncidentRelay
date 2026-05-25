@@ -36,8 +36,18 @@ function navigate(path, pushState) {
     const appPath = splitAppPath(path);
     const routePath = appPath.routePath;
 
-    if ((routePath === "/admin/users" || routePath === "/groups") && (!currentUser || !currentUser.is_admin)) {
-        alert("Admin permission is required.");
+    if (routePath === "/admin/sso" && (!currentUser || !currentUser.is_admin)) {
+        showAppError("Admin role is required");
+        path = "/";
+    }
+
+    if (routePath === "/admin/users" && !hasGroupUserAdminAccess()) {
+        showAppError("Group Admin role is required");
+        path = "/";
+    }
+
+    if (routePath === "/groups" && !hasGroupUserAdminAccess()) {
+        showAppError("Group Admin role is required");
         path = "/";
     }
 
@@ -54,7 +64,7 @@ function navigate(path, pushState) {
     $('.menu-link[href="' + normalizedPath.routePath + '"]').addClass("active");
 
     if (pushState) {
-        history.pushState({ path: normalizedPath.fullPath }, "", normalizedPath.fullPath);
+        history.pushState({path: normalizedPath.fullPath}, "", normalizedPath.fullPath);
     }
 
     safePageLoad(selectedRoute.load);
@@ -69,11 +79,26 @@ function safePageLoad(loadFunction) {
     }
 }
 function updateAuthUi() {
-    /* Update menu items that depend on authentication and role. */
-    if (!currentUser || !currentUser.is_admin) {
-        $(".menu-link-admin").addClass("is-hidden");
-    } else {
-        $(".menu-link-admin").removeClass("is-hidden");
+    /*
+     * Update role-dependent menu visibility.
+     */
+    const isGlobalAdmin = !!(currentUser && currentUser.is_admin);
+    const canManageUsers = hasGroupUserAdminAccess();
+
+    $(".menu-section-admin").addClass("is-hidden");
+    $(".menu-link-users").addClass("is-hidden");
+    $(".menu-link-groups").addClass("is-hidden");
+    $(".menu-link-global-admin").addClass("is-hidden");
+
+    if (canManageUsers) {
+        $(".menu-section-admin").removeClass("is-hidden");
+        $(".menu-link-users").removeClass("is-hidden");
+        $(".menu-link-groups").removeClass("is-hidden");
+    }
+
+    if (isGlobalAdmin) {
+        $(".menu-section-admin").removeClass("is-hidden");
+        $(".menu-link-global-admin").removeClass("is-hidden");
     }
 
     if (currentUser) {
@@ -127,4 +152,20 @@ function currentAppUrl() {
      * Return current SPA URL with query string and hash.
      */
     return window.location.pathname + window.location.search + window.location.hash;
+}
+function hasGroupUserAdminAccess() {
+    /*
+     * Return true when the current user can manage users in at least one group.
+     */
+    if (!currentUser) {
+        return false;
+    }
+
+    if (currentUser.is_admin) {
+        return true;
+    }
+
+    return asArray(currentUser.groups).some(function (group) {
+        return group.role === "user_admin";
+    });
 }

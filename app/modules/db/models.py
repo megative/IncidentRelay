@@ -412,6 +412,119 @@ class ApiToken(SoftDeleteModel):
     last_used_at = DateTimeField(null=True)
 
 
+class SsoProvider(SoftDeleteModel):
+    """SSO provider configuration for OIDC or SAML."""
+
+    id = AutoField()
+    slug = CharField(unique=True)
+    label = CharField()
+    protocol = CharField(default="oidc", index=True)  # oidc | saml
+    enabled = BooleanField(default=True)
+
+    # Common mapping options
+    subject_claim = CharField(default="sub")
+    email_claim = CharField(default="email")
+    username_claim = CharField(default="preferred_username")
+    display_name_claim = CharField(default="name")
+    groups_claim = CharField(default="groups")
+    phone_claim = CharField(default="mobile")
+
+    allowed_domains = JSONTextField(null=True)
+
+    auto_create_users = BooleanField(default=False)
+    auto_link_by_email = BooleanField(default=True)
+    require_verified_email = BooleanField(default=True)
+
+    sync_group_memberships = BooleanField(default=True)
+    remove_missing_group_memberships = BooleanField(default=False)
+
+    # OIDC
+    client_id = CharField(null=True)
+    client_secret_encrypted = TextField(null=True)
+    oidc_metadata_url = TextField(null=True)
+    oidc_issuer = TextField(null=True)
+    oidc_authorization_endpoint = TextField(null=True)
+    oidc_token_endpoint = TextField(null=True)
+    oidc_userinfo_endpoint = TextField(null=True)
+    oidc_jwks_uri = TextField(null=True)
+    oidc_scope = CharField(default="openid email profile")
+
+    # SAML IdP
+    saml_idp_entity_id = TextField(null=True)
+    saml_idp_sso_url = TextField(null=True)
+    saml_idp_slo_url = TextField(null=True)
+    saml_idp_x509_cert = TextField(null=True)
+    saml_idp_metadata_url = CharField(null=True, max_length=2048)
+
+    # SAML SP
+    saml_sp_entity_id = TextField(null=True)
+    saml_sp_acs_url = TextField(null=True)
+    saml_sp_sls_url = TextField(null=True)
+    saml_sp_x509_cert = TextField(null=True)
+    saml_sp_private_key_encrypted = TextField(null=True)
+    saml_name_id_format = TextField(
+        default="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
+    )
+
+    extra_config = JSONTextField(null=True)
+
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "sso_provider"
+
+
+class SsoIdentity(BaseModel):
+    """External SSO identity linked to local IncidentRelay user."""
+
+    id = AutoField()
+    user = ForeignKeyField(User, backref="sso_identities", on_delete="CASCADE")
+    provider = ForeignKeyField(SsoProvider, backref="identities", on_delete="CASCADE")
+
+    subject = CharField()
+    email = CharField(null=True)
+    username = CharField(null=True)
+
+    raw_claims = JSONTextField(null=True)
+
+    created_at = DateTimeField(default=datetime.utcnow)
+    last_login_at = DateTimeField(null=True)
+
+    class Meta:
+        table_name = "sso_identity"
+        indexes = (
+            (("provider", "subject"), True),
+        )
+
+
+class SsoGroupMapping(BaseModel):
+    """Map external SSO group value to IncidentRelay group role."""
+
+    id = AutoField()
+    provider = ForeignKeyField(SsoProvider, backref="group_mappings", on_delete="CASCADE")
+
+    external_group = CharField()
+    incidentrelay_group = ForeignKeyField(
+        Group,
+        backref="sso_group_mappings",
+        on_delete="CASCADE",
+    )
+
+    group_role = CharField(default="viewer")
+    active = BooleanField(default=True)
+    priority = IntegerField(default=100)
+
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "sso_group_mapping"
+        indexes = (
+            (("provider", "external_group", "incidentrelay_group"), True),
+        )
+
+
 class AuditLog(BaseModel):
     """Audit log entry for API actions."""
 

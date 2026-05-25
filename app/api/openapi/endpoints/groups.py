@@ -305,18 +305,4 @@ def paths():
                 },
             },
         },
-        "/api/groups/users/{membership_id}/disable": {
-            "post": {
-                "tags": ["groups"],
-                "summary": "Disable group membership",
-                "description": "Disables a user's membership in the group without globally disabling the user.",
-                "operationId": "disableGroupUser",
-                "parameters": [path_param("membership_id", "Group membership id.")],
-                "responses": {
-                    "200": response("Group membership disabled.", {"type": "object", "properties": {"disabled": {"type": "boolean"}, "id": {"type": "integer"}}}),
-                    "403": response("Group user-admin role is required.", ERROR_SCHEMA),
-                    "404": response("Membership not found.", ERROR_SCHEMA),
-                },
-            },
-        },
     }

@@ -9,6 +9,9 @@ from app.modules.db.models import (
     Rotation,
     RotationMember,
     RotationOverride,
+    RotationLayer,
+    RotationLayerMember,
+    RotationLayerRestriction,
     Silence,
     Team,
     TeamUser,
@@ -69,7 +72,15 @@ def get_team_by_slug(slug):
     )
 
 
-def create_team(slug, name, description=None, escalation_enabled=True, escalation_after_reminders=2, group_id=None):
+def create_team(
+    slug,
+    name,
+    description=None,
+    escalation_enabled=True,
+    escalation_after_reminders=2,
+    group_id=None,
+    active=True,
+):
     """Create a team."""
     return Team.create(
         group=group_id,
@@ -78,6 +89,7 @@ def create_team(slug, name, description=None, escalation_enabled=True, escalatio
         description=description,
         escalation_enabled=escalation_enabled,
         escalation_after_reminders=escalation_after_reminders,
+        active=active,
     )
 
 
@@ -149,29 +161,6 @@ def add_user_to_team(team_id, user_id, role=TEAM_VIEWER_ROLE):
     return membership
 
 
-def disable_team(team_id):
-    """Soft-delete a team and disable its resources."""
-    return soft_delete_team(team_id)
-
-
-def set_team_active(team_id: int, active: bool):
-    """Enable or disable a team without deleting team resources."""
-    team = get_team(team_id)
-    team.active = active
-    team.save()
-    return team
-
-
-def disable_team(team_id: int):
-    """Disable a team without deleting related resources."""
-    return set_team_active(team_id, False)
-
-
-def enable_team(team_id: int):
-    """Enable a disabled team."""
-    return set_team_active(team_id, True)
-
-
 def remove_team(team_id: int):
     """Remove a team from management UI and disable all resources under it."""
     return soft_delete_team(team_id)
@@ -188,6 +177,40 @@ def soft_delete_team(team_id: int):
             .select(Rotation.id)
             .where(Rotation.team == team.id)
         )
+        rotation_ids = [
+            rotation.id
+            for rotation in (
+                Rotation
+                .select(Rotation.id)
+                .where(Rotation.team == team.id)
+            )
+        ]
+
+        layer_ids = [
+            layer.id
+            for layer in (
+                RotationLayer
+                .select(RotationLayer.id)
+                .where(RotationLayer.rotation.in_(rotation_ids))
+            )
+        ]
+
+        if layer_ids:
+            RotationLayerRestriction.delete().where(
+                RotationLayerRestriction.layer.in_(layer_ids)
+            ).execute()
+
+            RotationLayerMember.delete().where(
+                RotationLayerMember.layer.in_(layer_ids)
+            ).execute()
+
+            RotationLayer.update(
+                deleted=True,
+                deleted_at=now,
+                enabled=False,
+            ).where(
+                RotationLayer.id.in_(layer_ids)
+            ).execute()
         route_ids_query = (
             AlertRoute
             .select(AlertRoute.id)
@@ -265,17 +288,18 @@ def get_team_membership(membership_id):
 def update_team_membership(membership_id, role, active=True):
     """Update a team membership."""
     membership = get_team_membership(membership_id)
-    membership.role = role
-    membership.active = active
-    membership.save()
-    return membership
 
+    with database_proxy.atomic():
+        membership.role = role
+        membership.active = active
+        membership.save()
 
-def disable_team_membership(membership_id):
-    """Disable a team membership."""
-    membership = get_team_membership(membership_id)
-    membership.active = False
-    membership.save()
+        if not active:
+            deactivate_user_in_team_rotations(
+                team_id=membership.team.id,
+                user_id=membership.user.id,
+            )
+
     return membership
 
 
@@ -292,14 +316,43 @@ def delete_team_membership(membership_id: int) -> dict:
             .select(Rotation.id)
             .where(Rotation.team == team_id)
         )
-        RotationMember.delete().where(
-            (RotationMember.user == user_id)
-            & (RotationMember.rotation.in_(rotation_ids_query))
-        ).execute()
-        RotationOverride.delete().where(
-            (RotationOverride.user == user_id)
-            & (RotationOverride.rotation.in_(rotation_ids_query))
-        ).execute()
+
+        layer_ids_query = (
+            RotationLayer
+            .select(RotationLayer.id)
+            .where(RotationLayer.rotation.in_(rotation_ids_query))
+        )
+
+        removed_rotation_layer_members = (
+            RotationLayerMember
+            .delete()
+            .where(
+                (RotationLayerMember.user == user_id)
+                & (RotationLayerMember.layer.in_(layer_ids_query))
+            )
+            .execute()
+        )
+
+        removed_rotation_members = (
+            RotationMember
+            .delete()
+            .where(
+                (RotationMember.user == user_id)
+                & (RotationMember.rotation.in_(rotation_ids_query))
+            )
+            .execute()
+        )
+
+        removed_rotation_overrides = (
+            RotationOverride
+            .delete()
+            .where(
+                (RotationOverride.user == user_id)
+                & (RotationOverride.rotation.in_(rotation_ids_query))
+            )
+            .execute()
+        )
+
         membership.delete_instance()
 
     return {
@@ -307,4 +360,60 @@ def delete_team_membership(membership_id: int) -> dict:
         "team_id": team_id,
         "group_id": group_id,
         "user_id": user_id,
+        "removed_rotation_members": removed_rotation_members,
+        "removed_rotation_layer_members": removed_rotation_layer_members,
+        "removed_rotation_overrides": removed_rotation_overrides,
+    }
+
+
+def deactivate_user_in_team_rotations(team_id: int, user_id: int) -> dict:
+    """Deactivate user inside all rotations and layers of one team."""
+    rotation_ids_query = (
+        Rotation
+        .select(Rotation.id)
+        .where(Rotation.team == team_id)
+    )
+
+    layer_ids_query = (
+        RotationLayer
+        .select(RotationLayer.id)
+        .where(RotationLayer.rotation.in_(rotation_ids_query))
+    )
+
+    disabled_rotation_layer_members = (
+        RotationLayerMember
+        .update(active=False)
+        .where(
+            (RotationLayerMember.user == user_id)
+            & (RotationLayerMember.layer.in_(layer_ids_query))
+            & (RotationLayerMember.active == True)
+        )
+        .execute()
+    )
+
+    disabled_rotation_members = (
+        RotationMember
+        .update(active=False)
+        .where(
+            (RotationMember.user == user_id)
+            & (RotationMember.rotation.in_(rotation_ids_query))
+            & (RotationMember.active == True)
+        )
+        .execute()
+    )
+
+    removed_rotation_overrides = (
+        RotationOverride
+        .delete()
+        .where(
+            (RotationOverride.user == user_id)
+            & (RotationOverride.rotation.in_(rotation_ids_query))
+        )
+        .execute()
+    )
+
+    return {
+        "disabled_rotation_members": disabled_rotation_members,
+        "disabled_rotation_layer_members": disabled_rotation_layer_members,
+        "removed_rotation_overrides": removed_rotation_overrides,
     }

@@ -153,20 +153,8 @@ function getTimezoneSelectValue(selector) {
     return $(selector).val() || "UTC";
 }
 
-function openRotationLayersModal() {
-    $("#rotation-layers-modal")
-        .css("display", "flex")
-        .addClass("is-open");
-
-    $("body").addClass("modal-open");
-}
-
 function closeRotationLayersModal() {
-    $("#rotation-layers-modal")
-        .css("display", "none")
-        .removeClass("is-open");
-
-    $("body").removeClass("modal-open");
+    closeAppModal("#rotation-layers-modal");
 
     selectedRotationForLayers = null;
     selectedRotationNameForLayers = "";
@@ -207,7 +195,7 @@ function selectRotationLayers(rotationId) {
 
     $("#rotation-layers-title").text("Rotation layers: " + selectedRotationNameForLayers);
 
-    openRotationLayersModal();
+    openAppModal("#rotation-layers-modal");
 
     loadEligibleUsersForLayerCards(rotation.id, function () {
         loadRotationLayerCards(rotation.id);
@@ -1510,7 +1498,7 @@ function refreshRotations(doneCallback) {
                 $("<td>").append(
                     $("<button>")
                         .attr("type", "button")
-                        .addClass("rotation-name-button")
+                        .addClass("name-button")
                         .text('#' + rotation.id)
                         .on("click", function () {
                             renderRotationDetails(rotation);
@@ -1522,7 +1510,7 @@ function refreshRotations(doneCallback) {
                 $("<td>").append(
                     $("<button>")
                         .attr("type", "button")
-                        .addClass("rotation-name-button")
+                        .addClass("name-button")
                         .text(rotation.name || "-")
                         .on("click", function () {
                             renderRotationDetails(rotation);
@@ -1658,7 +1646,7 @@ function saveRotation() {
 
     if (id) {
         apiPut("/api/rotations/" + id, collectRotationPayload(), function () {
-            closeRotationFormModal();
+            closeAppModal("#rotation-form-modal");
             resetRotationForm();
             refreshRotations();
         });
@@ -1666,7 +1654,7 @@ function saveRotation() {
     }
 
     apiPost("/api/rotations", collectRotationPayload(), function () {
-        closeRotationFormModal();
+        closeAppModal("#rotation-form-modal");
         resetRotationForm();
         refreshRotations();
     });
@@ -1837,7 +1825,7 @@ function selectOverrideRotation(rotationId, options) {
         ensureOverrideRotationOption(rotation);
 
         fillRotationEligibleUserSelect("#override-user", rotation.id, function () {
-            openRotationOverridesModal();
+            openAppModal("#rotation-overrides-modal");
 
             $("#override-rotation").val(String(rotation.id));
 
@@ -1988,7 +1976,7 @@ function renderRotationRow(rotation) {
 
     const rotationName = $("<button>")
         .attr("type", "button")
-        .addClass("rotation-name-button")
+        .addClass("name-button")
         .text(rotation.name || "-")
         .on("click", function () {
             renderRotationDetails(rotation);
@@ -2020,12 +2008,12 @@ function renderRotationRow(rotation) {
         row.append(
             $("<td>").append(
                 $("<div>")
-                    .addClass("rotation-current-user")
-                    .append($("<div>").addClass("rotation-user-avatar").text(rotationInitials(currentUser)))
+                    .addClass("person-inline")
+                    .append($("<div>").addClass("person-avatar").text(rotationInitials(currentUser)))
                     .append(
                         $("<div>")
-                            .append($("<div>").addClass("rotation-user-name").text(currentUser))
-                            .append($("<div>").addClass("rotation-user-meta").text("Currently on call"))
+                            .append($("<div>").addClass("person-name").text(currentUser))
+                            .append($("<div>").addClass("person-meta").text("Currently on call"))
                     )
             )
         );
@@ -2095,29 +2083,13 @@ function openRotationFormModal() {
     /*
      * Open rotation create/edit modal.
      */
-    $("#rotation-form-modal")
-        .css("display", "flex")
-        .addClass("is-open");
     initTimezoneSelect(
         "#rotation-timezone",
         "UTC",
         "#rotation-form-modal"
     );
-    $("body").addClass("modal-open");
+    openAppModal("#rotation-form-modal");
 }
-
-
-function closeRotationFormModal() {
-    /*
-     * Close rotation create/edit modal.
-     */
-    $("#rotation-form-modal")
-        .css("display", "none")
-        .removeClass("is-open");
-
-    $("body").removeClass("modal-open");
-}
-
 
 function openCreateRotationModal() {
     /*
@@ -2129,41 +2101,26 @@ function openCreateRotationModal() {
 }
 $(document).on("click", "#open-rotation-create-modal", openCreateRotationModal);
 
-$(document).on("click", "#close-rotation-form-modal", closeRotationFormModal);
+$(document).on("click", "#close-rotation-form-modal", closeAppModal);
 
 $(document).on("click", "#rotation-form-modal", function (event) {
     if (event.target === this) {
-        closeRotationFormModal();
+        closeAppModal("#rotation-form-modal");
     }
 });
 
 $(document).on("keydown", function (event) {
     if (event.key === "Escape" && $("#rotation-form-modal").hasClass("is-open")) {
-        closeRotationFormModal();
+        closeAppModal("#rotation-form-modal");
     }
 });
-
-function openRotationOverridesModal() {
-    /*
-     * Open rotation overrides modal.
-     */
-    $("#rotation-overrides-modal")
-        .css("display", "flex")
-        .addClass("is-open");
-
-    $("body").addClass("modal-open");
-}
 
 
 function closeRotationOverridesModal() {
     /*
      * Close rotation overrides modal.
      */
-    $("#rotation-overrides-modal")
-        .css("display", "none")
-        .removeClass("is-open");
-
-    $("body").removeClass("modal-open");
+    closeAppModal("#rotation-overrides-modal");
     rotationOverridesAfterChange = null;
 }
 

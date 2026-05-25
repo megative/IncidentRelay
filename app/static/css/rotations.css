@@ -19,55 +19,6 @@
     min-width: 260px;
 }
 
-.rotation-name-button {
-    border: 0;
-    padding: 0;
-    background: transparent;
-    color: var(--primary);
-    cursor: pointer;
-    font: inherit;
-    font-weight: 800;
-    text-align: left;
-}
-
-.rotation-name-button:hover {
-    color: var(--primary);
-    text-decoration: underline;
-}
-
-.rotation-current-user {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-}
-
-.rotation-user-avatar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 999px;
-    color: #ffffff;
-    background: linear-gradient(135deg, #0b6cff, #001f4d);
-    font-weight: 800;
-}
-
-.rotation-user-avatar {
-    width: 34px;
-    height: 34px;
-    font-size: 12px;
-}
-
-.rotation-user-name {
-    color: #101828;
-    font-weight: 800;
-}
-
-.rotation-user-meta {
-    margin-top: 2px;
-    color: var(--muted);
-    font-size: 12px;
-}
-
 .rotation-empty-user {
     color: var(--muted);
 }

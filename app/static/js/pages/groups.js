@@ -1,65 +1,14 @@
-var GROUP_VIEWER_ROLE = "viewer";
-var GROUP_EDITOR_ROLE = "editor";
-var GROUP_USER_ADMIN_ROLE = "user_admin";
-
-var GROUP_ROLES = [
-  { value: GROUP_VIEWER_ROLE, label: "Group Viewer" },
-  { value: GROUP_EDITOR_ROLE, label: "Group Editor" },
-  { value: GROUP_USER_ADMIN_ROLE, label: "Group Admin" },
-];
-
-var GROUP_CREATE_USER_ROLES = [
-  { value: GROUP_VIEWER_ROLE, label: "Group Viewer" },
-  { value: GROUP_EDITOR_ROLE, label: "Group Editor" },
-];
-
 let selectedGroupForMembers = null;
 let selectedGroupNameForMembers = "";
 let groupsCache = [];
 let groupMembersCache = [];
 
-function normalizeGroupRole(role) {
-  if (role === "read_only") {
-    return GROUP_VIEWER_ROLE;
-  }
-  if (role === "rw") {
-    return GROUP_EDITOR_ROLE;
-  }
-  return role || GROUP_VIEWER_ROLE;
-}
-
-function getGroupRoleLabel(role) {
-  const normalized = normalizeGroupRole(role);
-  const item = GROUP_ROLES.find(function (candidate) {
-    return candidate.value === normalized;
-  });
-  return item ? item.label : normalized;
-}
-
-function getGroupRoleClass(role) {
-  const normalized = normalizeGroupRole(role);
-  if (normalized === GROUP_USER_ADMIN_ROLE || normalized === GROUP_EDITOR_ROLE) {
-    return "role-rw";
-  }
-  return "role-read-only";
-}
-
-function fillGroupRoleSelect(selector, selectedValue, roles) {
-  const select = $(selector);
-  const allowedRoles = roles || GROUP_ROLES;
-  const selected = normalizeGroupRole(selectedValue || select.val() || GROUP_VIEWER_ROLE);
-  if (allowedRoles.some(function (role) { return role.value === selected; })) {
-    select.val(selected);
-  } else if (allowedRoles.length) {
-    select.val(allowedRoles[0].value);
-  }
-}
 
 function loadGroups() {
   /*
    * Load groups and render the groups table.
    */
-  fillGroupRoleSelect("#group-member-role", GROUP_VIEWER_ROLE, GROUP_ROLES);
+  RbacRoles.fillGroupSelect("#group-member-role", $("#group-member-role").val())
   ensureGroupScopedUserCreatePanel();
   apiGet("/api/groups", function (groups) {
     groupsCache = asArray(groups);
@@ -116,7 +65,7 @@ function renderGroupRow(group) {
       .append(
         $("<button>")
           .attr("type", "button")
-          .addClass("team-name-button")
+          .addClass("name-button")
           .text(group.name || group.slug || ("Group #" + group.id))
           .on("click", function () {
             openExistingGroupModal(group);
@@ -154,59 +103,54 @@ function renderGroupActions(group) {
    */
   const actions = $("<div>").addClass("actions");
   actions.append(
-    $("<button>")
-      .attr("type", "button")
-      .addClass("btn btn-small")
-      .text("Edit")
-      .on("click", function () {
-        openExistingGroupModal(group);
-      })
+      $("<button>")
+          .attr("type", "button")
+          .addClass("btn btn-small")
+          .text("Edit")
+          .on("click", function () {
+            openExistingGroupModal(group);
+          })
   );
   actions.append(
-    $("<button>")
-      .attr("type", "button")
-      .addClass("btn btn-small")
-      .text("Members")
-      .on("click", function () {
-        openExistingGroupModal(group);
-      })
+      $("<button>")
+          .attr("type", "button")
+          .addClass("btn btn-small")
+          .text("Members")
+          .on("click", function () {
+            openExistingGroupModal(group);
+          })
   );
   if (group.active) {
     actions.append(
-      $("<button>")
-        .attr("type", "button")
-        .addClass("btn btn-warning btn-small")
-        .text("Disable")
-        .on("click", function () {
-          setGroupActive(group, false);
-        })
+        $("<button>")
+            .attr("type", "button")
+            .addClass("btn btn-warning btn-small")
+            .text("Disable")
+            .on("click", function () {
+              setGroupActive(group, false);
+            })
     );
   } else {
     actions.append(
-      $("<button>")
-        .attr("type", "button")
-        .addClass("btn btn-success btn-small")
-        .text("Enable")
-        .on("click", function () {
-          setGroupActive(group, true);
-        })
+        $("<button>")
+            .attr("type", "button")
+            .addClass("btn btn-success btn-small")
+            .text("Enable")
+            .on("click", function () {
+              setGroupActive(group, true);
+            })
     );
   }
+  actions.append(
+      $("<button>")
+          .attr("type", "button")
+          .addClass("btn btn-danger btn-small")
+          .text("Delete")
+          .on("click", function () {
+            deleteGroup(group);
+          })
+  );
   return actions;
-}
-
-function openGroupModal() {
-  /*
-   * Open the group modal.
-   */
-  $("#group-modal").removeClass("is-hidden");
-}
-
-function closeGroupModal() {
-  /*
-   * Close the group modal.
-   */
-  $("#group-modal").addClass("is-hidden");
 }
 
 function openNewGroupModal() {
@@ -225,7 +169,7 @@ function openNewGroupModal() {
   $("#group-modal-title").text("New group");
   $("#group-modal-subtitle").text("Create a new access group.");
   $("#group-members-title").text("Group members");
-  openGroupModal();
+  openAppModal("#group-modal");
 }
 
 function openExistingGroupModal(group) {
@@ -243,7 +187,7 @@ function openExistingGroupModal(group) {
   $("#group-modal-title").text("Group details");
   $("#group-modal-subtitle").text(selectedGroupNameForMembers);
   $("#group-members-title").text("Group members: " + selectedGroupNameForMembers);
-  openGroupModal();
+  openAppModal("#group-modal");
   loadGroupMembers(group.id, selectedGroupNameForMembers);
 }
 
@@ -322,7 +266,7 @@ function setGroupActive(group, active) {
   showAppConfirm({
     title: "Are you sure?",
     message: "Are you sure you want to " + action + " this group?",
-    confirmText: action.charAt(0).toUpperCase() + action.slice(1),
+    confirmText: upperCaseFirst(action),
     confirmClass: active ? "btn-success" : "btn-warning",
   }).done(function () {
     apiPut(
@@ -376,7 +320,7 @@ function setGroupMemberControlsEnabled(enabled) {
       ? "Global admins can add existing users. Group Admins should use Create user in group."
       : "Save the group first, then add members."
   );
-  fillGroupRoleSelect("#group-member-role", $("#group-member-role").val(), GROUP_ROLES);
+  RbacRoles.fillGroupSelect("#group-member-role", $("#group-member-role").val())
 }
 
 function loadGroupMembers(groupId, groupName) {
@@ -426,8 +370,8 @@ function renderGroupMemberRow(member) {
   row.append(
     $("<td>").append(
       $("<span>")
-        .addClass(getGroupRoleClass(member.role))
-        .text(getGroupRoleLabel(member.role))
+        .addClass(RbacRoles.groupClass(member.role))
+        .text(RbacRoles.groupLabel(member.role))
     )
   );
   row.append(
@@ -452,35 +396,45 @@ function renderGroupMemberActions(member) {
    */
   const actions = $("<div>").addClass("actions");
   actions.append(
-    $("<button>")
-      .attr("type", "button")
-      .addClass("btn btn-small")
-      .text("Edit")
-      .on("click", function () {
-        editGroupMember(member);
-      })
+      $("<button>")
+          .attr("type", "button")
+          .addClass("btn btn-small")
+          .text("Edit")
+          .on("click", function () {
+            editGroupMember(member);
+          })
   );
   if (member.active) {
     actions.append(
-      $("<button>")
-        .attr("type", "button")
-        .addClass("btn btn-warning btn-small")
-        .text("Disable")
-        .on("click", function () {
-          setGroupMemberActive(member, false);
-        })
+        $("<button>")
+            .attr("type", "button")
+            .addClass("btn btn-warning btn-small")
+            .text("Disable")
+            .on("click", function () {
+              setGroupMemberActive(member, false);
+            })
     );
   } else {
     actions.append(
-      $("<button>")
-        .attr("type", "button")
-        .addClass("btn btn-success btn-small")
-        .text("Enable")
-        .on("click", function () {
-          setGroupMemberActive(member, true);
-        })
+        $("<button>")
+            .attr("type", "button")
+            .addClass("btn btn-success btn-small")
+            .text("Enable")
+            .on("click", function () {
+              setGroupMemberActive(member, true);
+            })
     );
   }
+
+  actions.append(
+      $("<button>")
+          .attr("type", "button")
+          .addClass("btn btn-danger btn-small")
+          .text("Delete")
+          .on("click", function () {
+            deleteGroupMember(member);
+          })
+  );
   return actions;
 }
 
@@ -491,7 +445,7 @@ function editGroupMember(member) {
   $("#group-member-form-title").text("Edit group membership #" + member.id);
   $("#group-membership-id").val(member.id);
   $("#group-member-user").val(String(member.user_id)).prop("disabled", true);
-  fillGroupRoleSelect("#group-member-role", member.role, GROUP_ROLES);
+  RbacRoles.fillGroupSelect("#group-member-role", member.role);
   $("#group-member-active").prop("checked", !!member.active);
 }
 
@@ -502,7 +456,7 @@ function resetGroupMemberForm() {
   $("#group-member-form-title").text("Add existing user to group");
   $("#group-membership-id").val("");
   $("#group-member-user").prop("disabled", !selectedGroupForMembers);
-  fillGroupRoleSelect("#group-member-role", GROUP_VIEWER_ROLE, GROUP_ROLES);
+  RbacRoles.fillGroupSelect("#group-member-role", GROUP_VIEWER_ROLE);
   $("#group-member-active").prop("checked", true);
   setGroupMemberControlsEnabled(!!selectedGroupForMembers);
 }
@@ -548,7 +502,28 @@ function saveGroupMember() {
     }
   );
 }
-
+function deleteGroupMember(member) {
+  /*
+   * Remove user from group membership completely.
+   * Backend also removes this user from teams and rotations inside this group.
+   */
+  showAppConfirm({
+    title: "Delete group membership?",
+    message:
+      "User '" +
+      (member.username || member.display_name || ("#" + member.user_id)) +
+      "' will be removed from this group. " +
+      "They will also be removed from teams and rotations inside this group.",
+    confirmText: "Delete",
+    confirmClass: "btn-danger",
+  }).done(function () {
+    apiDelete("/api/groups/users/" + member.id, function () {
+      resetGroupMemberForm();
+      loadGroupMembers(selectedGroupForMembers, selectedGroupNameForMembers);
+      loadGroups();
+    });
+  });
+}
 function setGroupMemberActive(member, active) {
   /*
    * Enable or disable group membership using the existing update endpoint.
@@ -557,19 +532,19 @@ function setGroupMemberActive(member, active) {
   showAppConfirm({
     title: "Are you sure?",
     message: "Are you sure you want to " + action + " this group membership?",
-    confirmText: action.charAt(0).toUpperCase() + action.slice(1),
+    confirmText: upperCaseFirst(action),
     confirmClass: active ? "btn-success" : "btn-warning",
   }).done(function () {
     apiPut(
-      "/api/groups/users/" + member.id,
-      {
-        role: normalizeGroupRole(member.role),
-        active: active,
-      },
-      function () {
-        resetGroupMemberForm();
-        loadGroupMembers(selectedGroupForMembers, selectedGroupNameForMembers);
-      }
+        "/api/groups/users/" + member.id,
+        {
+          role: member.role || GROUP_VIEWER_ROLE,
+          active: active,
+        },
+        function () {
+          resetGroupMemberForm();
+          loadGroupMembers(selectedGroupForMembers, selectedGroupNameForMembers);
+        }
     );
   });
 }
@@ -589,7 +564,7 @@ function resetGroupScopedUserCreateForm() {
   $("#group-create-user-email").val("");
   $("#group-create-user-phone").val("");
   $("#group-create-user-password").val("");
-  fillGroupRoleSelect("#group-create-user-role", GROUP_VIEWER_ROLE, GROUP_CREATE_USER_ROLES);
+  RbacRoles.fillGroupSelect("#group-create-user-role", GROUP_VIEWER_ROLE);
 }
 
 function setGroupScopedUserCreateControlsEnabled(enabled) {
@@ -662,14 +637,43 @@ $(document).on("click", "#reload-group-members", function () {
   }
   loadGroupMembers(selectedGroupForMembers, selectedGroupNameForMembers);
 });
-$(document).on("click", "#close-group-modal, #close-group-modal-footer", closeGroupModal);
+$(document).on("click", "#close-group-modal, #close-group-modal-footer", closeAppModal);
 $(document).on("click", "#group-modal", function (event) {
   if (event.target === this) {
-    closeGroupModal();
+    closeAppModal("#group-modal");
   }
 });
 $(document).on("keydown", function (event) {
   if (event.key === "Escape" && !$("#group-modal").hasClass("is-hidden")) {
-    closeGroupModal();
+    closeAppModal("#group-modal");
   }
 });
+function deleteGroup(group) {
+  /*
+   * Soft-delete a group and all resources under it.
+   */
+  const groupName = group.name || group.slug || ("Group #" + group.id);
+
+  showAppConfirm({
+    title: "Delete group?",
+    message:
+        "Group '" +
+        groupName +
+        "' will be deleted. Teams, routes, rotations, channels, silences and tokens under this group will be disabled.",
+    confirmText: "Delete",
+    confirmClass: "btn-danger",
+  }).done(function () {
+    apiDelete("/api/groups/" + group.id, function () {
+      if (Number($("#group-id").val()) === Number(group.id)) {
+        closeAppModal("#group-modal");
+        clearGroupForm();
+        resetGroupMemberForm();
+        resetGroupScopedUserCreateForm();
+        selectedGroupForMembers = null;
+        selectedGroupNameForMembers = "";
+      }
+
+      loadGroups();
+    });
+  });
+}

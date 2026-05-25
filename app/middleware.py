@@ -14,6 +14,7 @@ PUBLIC_API_PATHS = {
 }
 
 PUBLIC_API_PREFIXES = (
+    "/api/auth/sso/",
     "/api/integrations/",
     "/api/version",
 )

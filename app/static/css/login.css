@@ -215,3 +215,160 @@ body {
 #login-status:empty {
     display: none;
 }
+.login-sso-icon i {
+  font-size: 22px;
+  line-height: 1;
+}
+body.md-theme .login-sso-section,
+.login-sso-section {
+  margin-top: 22px;
+}
+
+body.md-theme .login-divider,
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0 16px;
+  color: rgba(226, 232, 240, 0.62);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+body.md-theme .login-divider::before,
+body.md-theme .login-divider::after,
+.login-divider::before,
+.login-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(226, 232, 240, 0.32);
+}
+
+body.md-theme .login-sso-buttons,
+.login-sso-buttons {
+  display: grid;
+  gap: 12px;
+}
+
+body.md-theme .login-sso-button,
+.login-sso-button {
+  display: grid;
+  grid-template-columns: 46px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 64px;
+  padding: 12px 14px;
+  border: 1px solid rgba(129, 140, 248, 0.36);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(79, 70, 229, 0.96), rgba(59, 130, 246, 0.88)),
+    rgba(30, 41, 59, 0.92);
+  color: #ffffff;
+  text-decoration: none;
+  box-shadow:
+    0 18px 42px rgba(37, 99, 235, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    border-color 0.16s ease,
+    filter 0.16s ease;
+}
+
+body.md-theme .login-sso-button:hover,
+.login-sso-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(191, 219, 254, 0.62);
+  color: #ffffff;
+  text-decoration: none;
+  filter: brightness(1.04);
+  box-shadow:
+    0 22px 52px rgba(37, 99, 235, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+body.md-theme .login-sso-button:active,
+.login-sso-button:active {
+  transform: translateY(0);
+  filter: brightness(0.98);
+}
+
+body.md-theme .login-sso-icon,
+.login-sso-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+body.md-theme .login-sso-main,
+.login-sso-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+body.md-theme .login-sso-title,
+.login-sso-title {
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.md-theme .login-sso-subtitle,
+.login-sso-subtitle {
+  color: rgba(226, 232, 240, 0.78);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.md-theme .login-sso-protocol,
+.login-sso-protocol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+body.md-theme .login-sso-button-saml,
+.login-sso-button-saml {
+  background:
+    linear-gradient(135deg, rgba(124, 58, 237, 0.96), rgba(37, 99, 235, 0.88)),
+    rgba(30, 41, 59, 0.92);
+}
+
+@media (max-width: 520px) {
+  body.md-theme .login-sso-button,
+  .login-sso-button {
+    grid-template-columns: 42px 1fr;
+  }
+
+  body.md-theme .login-sso-protocol,
+  .login-sso-protocol {
+    grid-column: 2;
+    justify-self: start;
+    height: 28px;
+  }
+}

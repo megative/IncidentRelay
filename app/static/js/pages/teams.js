@@ -1,65 +1,13 @@
-var TEAM_VIEWER_ROLE = "viewer";
-var TEAM_RESPONDER_ROLE = "responder";
-var TEAM_MANAGER_ROLE = "manager";
-
-var TEAM_ROLES = [
-  { value: TEAM_VIEWER_ROLE, label: "Team Viewer" },
-  { value: TEAM_RESPONDER_ROLE, label: "Team Responder" },
-  { value: TEAM_MANAGER_ROLE, label: "Team Manager" },
-];
-
 let teamsCache = [];
 let selectedTeamForMembers = null;
 let selectedTeamNameForMembers = "";
 let selectedTeamDetailsId = null;
 
-function normalizeTeamRole(role) {
-  if (role === "read_only") {
-    return TEAM_VIEWER_ROLE;
-  }
-  if (role === "member") {
-    return TEAM_RESPONDER_ROLE;
-  }
-  if (role === "rw") {
-    return TEAM_MANAGER_ROLE;
-  }
-  return role || TEAM_VIEWER_ROLE;
-}
-
-function getTeamRoleLabel(role) {
-  const normalized = normalizeTeamRole(role);
-  const item = TEAM_ROLES.find(function (candidate) {
-    return candidate.value === normalized;
-  });
-  return item ? item.label : normalized;
-}
-
-function getTeamRoleClass(role) {
-  const normalized = normalizeTeamRole(role);
-  if (normalized === TEAM_MANAGER_ROLE) {
-    return "role-rw";
-  }
-  if (normalized === TEAM_RESPONDER_ROLE) {
-    return "role-rw";
-  }
-  return "role-read-only";
-}
-
-function fillTeamRoleSelect(selectedValue) {
-  const select = $("#team-member-role");
-  const selected = normalizeTeamRole(selectedValue || select.val() || TEAM_VIEWER_ROLE);
-  if (TEAM_ROLES.some(function (role) { return role.value === selected; })) {
-    select.val(selected);
-  } else {
-    select.val(TEAM_VIEWER_ROLE);
-  }
-}
-
 function loadTeams() {
   /*
    * Load teams page.
    */
-  fillTeamRoleSelect(TEAM_VIEWER_ROLE);
+  RbacRoles.fillTeamSelect(TEAM_VIEWER_ROLE);
   loadTeamGroups(function () {
     refreshTeams();
     fillUserSelect("#team-member-user", null, "/api/users?all=1");
@@ -229,7 +177,7 @@ function renderTeamRow(team) {
       .append(
         $("<button>")
           .attr("type", "button")
-          .addClass("team-name-button")
+          .addClass("name-button")
           .text(team.name || "-")
           .on("click", function () {
             renderTeamDetails(team);
@@ -245,7 +193,7 @@ function renderTeamRow(team) {
     $("<td>").append(
       $("<span>")
         .addClass("pill")
-        .text(team.group_slug || "-")
+        .text(team.group_name || "-")
     )
   );
   row.append($("<td>").text(team.slug || "-"));
@@ -410,7 +358,7 @@ function openTeamMembers(teamId, teamName) {
   /*
    * Open team members modal and load members.
    */
-  fillTeamRoleSelect(TEAM_VIEWER_ROLE);
+  RbacRoles.fillTeamSelect(TEAM_VIEWER_ROLE);
   fillUserSelect("#team-member-user", null, "/api/users?all=1");
   loadTeamMembers(teamId, teamName);
   openTeamMembersModal();
@@ -459,8 +407,8 @@ function renderTeamMemberRow(member) {
     $("<td>").append(
       $("<span>")
         .addClass("role-pill")
-        .addClass(getTeamRoleClass(member.role))
-        .text(getTeamRoleLabel(member.role))
+        .addClass(RbacRoles.teamClass(member.role))
+        .text(RbacRoles.teamLabel(member.role))
     )
   );
   row.append($("<td>").append(renderStatusBadge(member.active, "Enabled", "Disabled")));
@@ -514,7 +462,7 @@ function editTeamMember(member) {
    */
   $("#team-member-id").val(member.id);
   $("#team-member-user").val(String(member.user_id)).prop("disabled", true);
-  fillTeamRoleSelect(member.role);
+  RbacRoles.fillTeamSelect(member.role);
   $("#team-member-active").prop("checked", !!member.active);
 }
 
@@ -524,7 +472,7 @@ function resetTeamMemberForm() {
    */
   $("#team-member-id").val("");
   $("#team-member-user").prop("disabled", false);
-  fillTeamRoleSelect(TEAM_VIEWER_ROLE);
+  RbacRoles.fillTeamSelect(TEAM_VIEWER_ROLE);
   $("#team-member-active").prop("checked", true);
 }
 
@@ -582,18 +530,18 @@ function setTeamMemberActive(member, active) {
     confirmClass: active ? "btn-success" : "btn-warning",
   }).done(function () {
     apiPut(
-      "/api/teams/users/" + member.id,
-      {
-        role: normalizeTeamRole(member.role),
-        active: active,
-      },
-      function () {
-        resetTeamMemberForm();
-        if (selectedTeamForMembers) {
-          loadTeamMembers(selectedTeamForMembers, selectedTeamNameForMembers);
+        "/api/teams/users/" + member.id,
+        {
+          role: member.role || TEAM_VIEWER_ROLE,
+          active: active,
+        },
+        function () {
+          resetTeamMemberForm();
+          if (selectedTeamForMembers) {
+            loadTeamMembers(selectedTeamForMembers, selectedTeamNameForMembers);
+          }
+          refreshTeams();
         }
-        refreshTeams();
-      }
     );
   });
 }
@@ -679,23 +627,11 @@ function resetTeamForm() {
 }
 
 function openTeamFormModal() {
-  /*
-   * Open team create/edit modal.
-   */
-  $("#team-form-modal")
-    .css("display", "flex")
-    .addClass("is-open");
-  $("body").addClass("modal-open");
+  openAppModal("#team-form-modal");
 }
 
 function closeTeamFormModal() {
-  /*
-   * Close team create/edit modal.
-   */
-  $("#team-form-modal")
-    .css("display", "none")
-    .removeClass("is-open");
-  $("body").removeClass("modal-open");
+  closeAppModal("#team-form-modal");
 }
 
 function openCreateTeamModal() {
@@ -708,23 +644,11 @@ function openCreateTeamModal() {
 }
 
 function openTeamMembersModal() {
-  /*
-   * Open team members modal.
-   */
-  $("#team-members-modal")
-    .css("display", "flex")
-    .addClass("is-open");
-  $("body").addClass("modal-open");
+  openAppModal("#team-members-modal");
 }
 
 function closeTeamMembersModal() {
-  /*
-   * Close team members modal.
-   */
-  $("#team-members-modal")
-    .css("display", "none")
-    .removeClass("is-open");
-  $("body").removeClass("modal-open");
+  closeAppModal("#team-members-modal");
 }
 
 $(document).on("input", "#teams-search", renderTeamsTable);

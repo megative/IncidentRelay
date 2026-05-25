@@ -1,13 +1,3 @@
-var GROUP_VIEWER_ROLE = "viewer";
-var GROUP_EDITOR_ROLE = "editor";
-var GROUP_USER_ADMIN_ROLE = "user_admin";
-
-var GROUP_ROLES = [
-  { value: GROUP_VIEWER_ROLE, label: "Group Viewer" },
-  { value: GROUP_EDITOR_ROLE, label: "Group Editor" },
-  { value: GROUP_USER_ADMIN_ROLE, label: "Group Admin" },
-];
-
 let adminUsersCache = [];
 
 function isCurrentAdminUser(user) {
@@ -25,35 +15,6 @@ function normalizeGroupRole(role) {
     return GROUP_EDITOR_ROLE;
   }
   return role || GROUP_VIEWER_ROLE;
-}
-
-function getRoleLabel(roles, value) {
-  const normalized = normalizeGroupRole(value);
-  const item = roles.find(function (role) {
-    return role.value === normalized;
-  });
-  return item ? item.label : normalized;
-}
-
-function getGroupRoleClass(role) {
-  const normalized = normalizeGroupRole(role);
-  if (normalized === GROUP_USER_ADMIN_ROLE) {
-    return "role-rw";
-  }
-  if (normalized === GROUP_EDITOR_ROLE) {
-    return "role-rw";
-  }
-  return "role-read-only";
-}
-
-function fillRoleSelect(selector, roles, selectedValue) {
-  const select = $(selector);
-  const selected = normalizeGroupRole(selectedValue || select.val() || GROUP_VIEWER_ROLE);
-  if (selected && roles.some(function (role) { return role.value === selected; })) {
-    select.val(selected);
-  } else if (roles.length) {
-    select.val(roles[0].value);
-  }
 }
 
 function loadAdminUsers() {
@@ -146,7 +107,7 @@ function renderAdminUserRow(user) {
       .append(
         $("<button>")
           .attr("type", "button")
-          .addClass("team-name-button")
+          .addClass("name-button")
           .text(user.display_name || user.username || ("User #" + user.id))
           .on("click", function () {
             openExistingAdminUserModal(user);
@@ -163,7 +124,7 @@ function renderAdminUserRow(user) {
   row.append(
     $("<td>").append(
       $("<span>")
-        .addClass(user.is_admin ? "role-rw" : "role-read-only")
+        .addClass(user.is_admin ? "role-editor" : "role-viewer")
         .text(user.is_admin ? "Admin" : "User")
     )
   );
@@ -177,7 +138,7 @@ function renderAdminUserRow(user) {
   );
   row.append(
     $("<td>")
-      .addClass("actions")
+      // .addClass("actions")
       .append(renderAdminUserActions(user))
   );
   return row;
@@ -569,7 +530,7 @@ function fillAdminUserGroupSelect() {
 }
 
 function fillAdminUserRoleSelect(selectedValue) {
-  fillRoleSelect("#admin-user-group-role", GROUP_ROLES, selectedValue || GROUP_VIEWER_ROLE);
+  RbacRoles.fillGroupSelect("#admin-user-group-role", selectedValue);
 }
 
 function setAdminUserGroupControlsEnabled(enabled) {

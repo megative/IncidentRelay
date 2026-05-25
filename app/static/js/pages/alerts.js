@@ -494,7 +494,7 @@ function renderAlertsTable(alerts) {
         tbody.append(
             $("<tr>").append(
                 $("<td>")
-                    .attr("colspan", "10")
+                    .attr("colspan", "11")
                     .addClass("empty-table-cell")
                     .text("No alerts found")
             )

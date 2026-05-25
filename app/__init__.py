@@ -20,6 +20,8 @@ from app.views.silences_view import silences_bp
 from app.views.teams_view import teams_bp
 from app.views.users_view import users_bp
 from app.views.version_view import version_bp
+from app.views.sso_admin_view import sso_admin_bp
+from app.views.sso_auth_view import sso_auth_bp
 
 
 def create_app():
@@ -68,6 +70,7 @@ def register_blueprints(flask_app):
     flask_app.register_blueprint(docs_bp)
     flask_app.register_blueprint(version_bp, url_prefix="/api/version")
     flask_app.register_blueprint(auth_bp, url_prefix="/api/auth")
+    flask_app.register_blueprint(sso_auth_bp, url_prefix="/api/auth/sso")
     flask_app.register_blueprint(groups_bp, url_prefix="/api/groups")
     flask_app.register_blueprint(profile_bp, url_prefix="/api/profile")
     flask_app.register_blueprint(teams_bp, url_prefix="/api/teams")
@@ -80,3 +83,4 @@ def register_blueprints(flask_app):
     flask_app.register_blueprint(routes_bp, url_prefix="/api/routes")
     flask_app.register_blueprint(silences_bp, url_prefix="/api/silences")
     flask_app.register_blueprint(integrations_bp, url_prefix="/api/integrations")
+    flask_app.register_blueprint(sso_admin_bp, url_prefix="/api/admin/sso")

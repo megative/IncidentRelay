@@ -1,10 +1,9 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/alerts.css') }}">
 
-<div class="first-div-page-layout">
+<div class="first-div-page-layout page-stack">
     {% set summary_id = "alerts-alerts-summary" %}
     {% include 'pages/include/alerts_summary_grid.html' %}
-
-    <section class="card alerts-card">
+    <section class="card alerts-table-card">
         <div class="card-header alerts-card-header">
             <div>
                 <h2>Alert inbox</h2>
@@ -18,98 +17,103 @@
                     </span>
                 </div>
             </div>
-
             <div class="card-header-actions">
-                <label class="alerts-switch">
+                <label class="alerts-switch md-switch">
                     <input id="alerts-auto-refresh" type="checkbox">
                     <span>Auto refresh</span>
                 </label>
-
-                <button id="reload-alerts" type="button" class="btn btn-primary">
-                    Reload
-                </button>
+                <button id="reload-alerts" type="button" class="btn btn-primary">Reload</button>
             </div>
         </div>
+        <div class="alerts-toolbar page-toolbar">
+            <div class="alerts-search page-toolbar-search">
+        <span class="alerts-search-icon page-toolbar-search-icon">⌕</span>
+        <input
+          id="alerts-search"
+          class="input"
+          type="search"
+          placeholder="Search by ID, alert name, team, assignee, source..."
+          autocomplete="off"
+        >
+      </div>
 
-        <div class="alerts-toolbar">
-            <div class="alerts-search">
-                <span class="alerts-search-icon">⌕</span>
-                <input
-                    id="alerts-search"
-                    class="input"
-                    type="search"
-                    placeholder="Search by id, title, team, assignee, source..."
-                    autocomplete="off"
-                >
-            </div>
+      <select id="status-filter" class="input alerts-filter-select page-toolbar-filter">
+        <option value="">All statuses</option>
+        <option value="firing">Firing</option>
+        <option value="acknowledged">Acknowledged</option>
+        <option value="resolved">Resolved</option>
+        <option value="silenced">Silenced</option>
+      </select>
 
-            <select id="status-filter" class="input alerts-filter-select">
-                <option value="">All statuses</option>
-                <option value="firing">Firing</option>
-                <option value="acknowledged">Acknowledged</option>
-                <option value="resolved">Resolved</option>
-                <option value="silenced">Silenced</option>
-            </select>
+      <select id="severity-filter" class="input alerts-filter-select page-toolbar-filter">
+        <option value="">All severities</option>
+        <option value="critical">Critical</option>
+        <option value="high">High</option>
+        <option value="warning">Warning</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+        <option value="info">Info</option>
+      </select>
 
-            <select id="severity-filter" class="input alerts-filter-select">
-                <option value="">All severities</option>
-                <option value="critical">Critical</option>
-                <option value="high">High</option>
-                <option value="warning">Warning</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-                <option value="info">Info</option>
-            </select>
-        </div>
+      <select id="alerts-sort" class="input alerts-filter-select page-toolbar-filter">
+        <option value="activity_desc">Newest activity</option>
+        <option value="created_desc">Newest created</option>
+        <option value="created_asc">Oldest created</option>
+        <option value="severity_desc">Severity first</option>
+        <option value="status_asc">Status</option>
+      </select>
+    </div>
 
-        <div id="alerts-active-filters" class="alerts-active-filters"></div>
+    <div id="alerts-active-filters" class="alerts-active-filters"></div>
 
-        <div class="table-wrapper">
-            <table id="alerts-table-view" class="data-table alerts-table sortable-table">
-              <thead>
-                <tr>
-                  <th data-sort="status" scope="col">Status</th>
-                  <th data-sort="id" scope="col">ID</th>
-                  <th data-sort="title" scope="col">Alert</th>
-                  <th data-sort="severity" scope="col">Severity</th>
-                  <th data-sort="team" scope="col">Team</th>
-                  <th data-sort="assignee" scope="col">Assignee</th>
-                  <th data-sort="created" scope="col">Created</th>
-                  <th data-sort="last_seen" scope="col">Last seen</th>
-                  <th scope="col">Escalations</th>
-                  <th data-sort="reminders" scope="col">Reminders</th>
-                  <th scope="col">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="alerts-table"></tbody>
-            </table>
-        </div>
-        <div class="alerts-pagination">
-            <div class="alerts-pagination-left">
-                <span>Rows per page</span>
+    <div class="table-wrapper">
+      <table id="alerts-table-view" class="data-table alerts-table alerts-inbox-table sortable-table">
+        <thead>
+          <tr>
+            <th data-sort="status">Status</th>
+            <th data-sort="id">ID</th>
+            <th data-sort="title">Alert</th>
+            <th data-sort="severity">Severity</th>
+            <th data-sort="team">Team</th>
+            <th data-sort="assignee">Assignee</th>
+            <th data-sort="created">Created</th>
+            <th data-sort="last_seen">Last seen</th>
+            <th>Escalations</th>
+            <th data-sort="reminders">Reminders</th>
+            <th class="alerts-actions-th">Actions</th>
+          </tr>
+        </thead>
 
-                <select id="alerts-page-size" class="input alerts-page-size">
-                    <option value="10">10</option>
-                    <option value="25" selected>25</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                </select>
-            </div>
+        <tbody id="alerts-table"></tbody>
+      </table>
+    </div>
 
-            <div class="alerts-pagination-center">
-                Page <span id="alerts-current-page">1</span>
-                of <span id="alerts-total-pages">1</span>
-            </div>
+    <div class="alerts-pagination page-toolbar">
+      <div class="alerts-pagination-left">
+        <span>Rows per page</span>
 
-            <div class="alerts-pagination-actions">
-                <button id="alerts-prev-page" type="button" class="btn btn-small">
-                    Previous
-                </button>
+        <select id="alerts-page-size" class="input alerts-page-size">
+          <option value="10">10</option>
+          <option value="25" selected>25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
 
-                <button id="alerts-next-page" type="button" class="btn btn-small">
-                    Next
-                </button>
-            </div>
-        </div>
-    </section>
+      <div class="alerts-pagination-center">
+        Page <span id="alerts-current-page">1</span>
+        of <span id="alerts-total-pages">1</span>
+      </div>
+
+      <div class="alerts-pagination-actions">
+        <button id="alerts-prev-page" type="button" class="btn btn-small">
+          Previous
+        </button>
+
+        <button id="alerts-next-page" type="button" class="btn btn-small">
+          Next
+        </button>
+      </div>
+    </div>
+  </section>
 </div>

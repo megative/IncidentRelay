@@ -7,7 +7,7 @@ from app.db import database_proxy as db
 from app.login import hash_password
 from app.modules.db import groups_repo, users_repo
 from app.services.audit import write_audit
-from app.services.rbac import require_admin_user, require_permission
+from app.services.rbac import require_admin_user, require_user_management_access, get_allowed_group_ids
 from app.services.serializers import serialize_user
 from app.services.validation import validate_body
 
@@ -38,17 +38,28 @@ def serialize_admin_user(user):
 
 
 @admin_users_bp.route("", methods=["GET"])
-@require_permission("users:admin")
 def admin_list_users():
     """Return users for the admin workspace."""
-    admin_error = require_admin_user()
-    if admin_error:
-        return admin_error
-    return jsonify([serialize_admin_user(user) for user in users_repo.list_users()])
+    access_error = require_user_management_access()
+    if access_error:
+        return access_error
+
+    user = request.current_user
+
+    if user.is_admin:
+        users = users_repo.list_users()
+    else:
+        group_ids = get_allowed_group_ids(
+            user=user,
+            manage_users_required=True,
+            use_active_group=True,
+        )
+        users = users_repo.list_users_by_group_ids(group_ids)
+
+    return jsonify([serialize_admin_user(item) for item in users])
 
 
 @admin_users_bp.route("", methods=["POST"])
-@require_permission("users:admin")
 def admin_create_user():
     """Create a user and optionally add it to a group. Global admin only."""
     admin_error = require_admin_user()
@@ -115,7 +126,6 @@ def admin_create_user():
 
 
 @admin_users_bp.route("/<int:user_id>", methods=["GET"])
-@require_permission("users:admin")
 def admin_get_user(user_id):
     """Return one user for the admin workspace."""
     admin_error = require_admin_user()
@@ -125,7 +135,6 @@ def admin_get_user(user_id):
 
 
 @admin_users_bp.route("/<int:user_id>", methods=["PUT"])
-@require_permission("users:admin")
 def admin_update_user(user_id):
     """Update a user from the admin workspace."""
     admin_error = require_admin_user()
@@ -202,7 +211,6 @@ def admin_update_user(user_id):
 
 
 @admin_users_bp.route("/<int:user_id>", methods=["DELETE"])
-@require_permission("users:admin")
 def admin_delete_user(user_id):
     """Remove a user from the admin workspace."""
     admin_error = require_admin_user()

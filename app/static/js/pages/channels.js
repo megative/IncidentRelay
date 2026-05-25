@@ -291,7 +291,7 @@ function renderChannelRow(channel) {
             .append(
                 $("<button>")
                     .attr("type", "button")
-                    .addClass("channel-name-button")
+                    .addClass("name-button")
                     .text(channel.name || "-")
                     .on("click", function () {
                         renderChannelDetails(channel);
@@ -311,15 +311,17 @@ function renderChannelRow(channel) {
 function renderChannelActions(channel) {
     const actions = $("<div>").addClass("actions");
 
-    actions.append(
-        $("<button>")
-            .attr("type", "button")
-            .addClass("btn btn-small")
-            .text("Edit")
-            .on("click", function () {
-                editChannel(channel.id);
-            })
-    );
+    if (canEditTeam(channel)) {
+        actions.append(
+            $("<button>")
+                .attr("type", "button")
+                .addClass("btn btn-small")
+                .text("Edit")
+                .on("click", function () {
+                    editChannel(channel.id);
+                })
+        );
+    }
 
     actions.append(
         $("<button>")
@@ -331,37 +333,39 @@ function renderChannelActions(channel) {
             })
     );
 
-    if (channel.enabled) {
+    if (canEditTeam(channel)) {
+        if (channel.enabled) {
+            actions.append(
+                $("<button>")
+                    .attr("type", "button")
+                    .addClass("btn btn-warning btn-small")
+                    .text("Disable")
+                    .on("click", function () {
+                        disableChannel(channel);
+                    })
+            );
+        } else {
+            actions.append(
+                $("<button>")
+                    .attr("type", "button")
+                    .addClass("btn btn-success btn-small")
+                    .text("Enable")
+                    .on("click", function () {
+                        enableChannel(channel);
+                    })
+            );
+        }
+
         actions.append(
             $("<button>")
                 .attr("type", "button")
-                .addClass("btn btn-warning btn-small")
-                .text("Disable")
+                .addClass("btn btn-danger btn-small")
+                .text("Delete")
                 .on("click", function () {
-                    disableChannel(channel);
-                })
-        );
-    } else {
-        actions.append(
-            $("<button>")
-                .attr("type", "button")
-                .addClass("btn btn-success btn-small")
-                .text("Enable")
-                .on("click", function () {
-                    enableChannel(channel);
+                    deleteChannel(channel);
                 })
         );
     }
-
-    actions.append(
-        $("<button>")
-            .attr("type", "button")
-            .addClass("btn btn-danger btn-small")
-            .text("Delete")
-            .on("click", function () {
-                deleteChannel(channel);
-            })
-    );
 
     return actions;
 }
@@ -372,7 +376,7 @@ function saveChannel() {
 
     if (id) {
         apiPut("/api/channels/" + id, payload, function () {
-            closeChannelFormModal();
+            closeAppModal("#channel-form-modal");
             resetChannelForm();
             refreshChannels();
         });
@@ -380,7 +384,7 @@ function saveChannel() {
     }
 
     apiPost("/api/channels", payload, function () {
-        closeChannelFormModal();
+        closeAppModal("#channel-form-modal");
         resetChannelForm();
         refreshChannels();
     });
@@ -416,7 +420,7 @@ function editChannel(id) {
     $("#channel-config-json").val(JSON.stringify(stripVisibleChannelConfig(channel.channel_type, channel.config || {}), null, 2));
     fillChannelFields(channel.channel_type, channel.config || {});
     showChannelFields();
-    openChannelFormModal();
+    openAppModal("#channel-form-modal");
 }
 
 function stripVisibleChannelConfig(type, config) {
@@ -691,6 +695,7 @@ function renderChannelDetails(channel) {
             .append(channelDetailsItem("Status", channel.enabled ? "Enabled" : "Disabled"))
             .append(channelDetailsItem("Config", getSafeChannelConfigSummary(channel)))
     );
+    if (canEditTeam(channel)) {
     body.append(
         $("<div>")
             .addClass("details-actions")
@@ -702,6 +707,7 @@ function renderChannelDetails(channel) {
             )
             .append(makeIconButton({ icon: "fas fa-trash-alt", label: "Delete channel", className: "btn-danger", onClick: function () { deleteChannel(channel); } }))
     );
+    }
 }
 
 function restoreChannelDetails() {
@@ -721,20 +727,10 @@ function renderChannelDetailsEmpty() {
     $("#channel-details-body").html("<p>Click a channel name to inspect delivery type, team binding and safe configuration summary.</p>");
 }
 
-function openChannelFormModal() {
-    $("#channel-form-modal").css("display", "flex").addClass("is-open");
-    $("body").addClass("modal-open");
-}
-
-function closeChannelFormModal() {
-    $("#channel-form-modal").css("display", "none").removeClass("is-open");
-    $("body").removeClass("modal-open");
-}
-
 function openCreateChannelModal() {
     resetChannelForm();
     $("#channel-form-title").text("Create channel");
-    openChannelFormModal();
+    openAppModal("#channel-form-modal");
 }
 
 function getChannelNotifySeverities() {
@@ -773,15 +769,15 @@ $(document).on("click", "#reset-email-template", resetEmailHtmlTemplate);
 $(document).on("input", "#channels-search", renderChannels);
 $(document).on("change", "#channels-type-filter, #channels-status-filter", renderChannels);
 $(document).on("click", "#open-channel-create-modal", openCreateChannelModal);
-$(document).on("click", "#close-channel-form-modal", closeChannelFormModal);
+$(document).on("click", "#close-channel-form-modal", closeAppModal);
 $(document).on("click", "#channel-form-modal", function (event) {
     if (event.target === this) {
-        closeChannelFormModal();
+        closeAppModal("#channel-form-modal");
     }
 });
 $(document).on("keydown", function (event) {
     if (event.key === "Escape" && $("#channel-form-modal").hasClass("is-open")) {
-        closeChannelFormModal();
+        closeAppModal("#channel-form-modal");
     }
 });
 $(document).on("click", "#format-channel-config-json", function () {

@@ -44,6 +44,9 @@ from app.modules.db.models import (  # noqa: E402
     RotationLayerRestriction,
     RotationLayerMember,
     RotationLayer,
+    SsoProvider,
+    SsoIdentity,
+    SsoGroupMapping,
 )
 
 
@@ -70,6 +73,9 @@ CLEANUP_MODELS = [
     AppLock,
     Role,
     User,
+    SsoProvider,
+    SsoIdentity,
+    SsoGroupMapping,
     Team,
     Group,
 ]

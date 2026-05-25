@@ -13,22 +13,6 @@
     min-width: 210px;
 }
 
-.team-name-button {
-    border: 0;
-    padding: 0;
-    background: transparent;
-    color: #101828;
-    cursor: pointer;
-    font: inherit;
-    font-weight: 800;
-    text-align: left;
-}
-
-.team-name-button:hover {
-    color: var(--primary);
-    text-decoration: underline;
-}
-
 .teams-member-form-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(150px, 1fr));

@@ -18,6 +18,7 @@ pages_bp = Blueprint("pages", __name__)
 @pages_bp.route("/groups")
 @pages_bp.route("/profile")
 @pages_bp.route("/admin/users")
+@pages_bp.route("/admin/sso")
 @pages_bp.route("/login")
 def app_page(alert_id=None):
     """
@@ -34,7 +35,7 @@ def app_page(alert_id=None):
     if not user:
         return redirect("/login")
 
-    if request.path in ("/admin/users", "/groups") and not user.is_admin:
+    if request.path in ("/admin/users", "/groups", "/admin/sso") and not user.is_admin:
         abort(403)
 
     return render_template("index.html", initial_page=request.path)

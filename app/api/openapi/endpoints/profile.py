@@ -1,3 +1,6 @@
+from app.api.schemas.roles import TEAM_ROLE_VALUES
+
+
 def path_param(name, description):
     """
     Build an integer path parameter.
@@ -80,7 +83,7 @@ GROUP_MEMBERSHIP_SCHEMA = {
         "role": {
             "type": "string",
             "description": "User role inside the group.",
-            "enum": ["read_only", "rw"],
+            "enum": list(TEAM_ROLE_VALUES),
             "example": "rw",
         },
         "active": {

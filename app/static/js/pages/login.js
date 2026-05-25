@@ -34,7 +34,7 @@ function login(event) {
             password: password
         },
         function (data) {
-            localStorage.setItem("oncall_jwt", data.access_token);
+            localStorage.setItem("incidentrelay_jwt", data.access_token);
 
             setLoginStatus(
                 "Logged in as " + data.user.username + "\nExpires at: " + data.expires_at,
@@ -59,20 +59,77 @@ function login(event) {
     );
 }
 
-function logout() {
-    /* Remove the stored JWT token and clear the cookie. */
-    apiPost("/api/auth/logout", {}, function () {
-        localStorage.removeItem("oncall_jwt");
-        $("#login-status").text("Logged out");
-        window.location.href = "/login";
-    });
-}
-
 function loadLogin() {
-    /* Show current login state. */
-    const token = localStorage.getItem("oncall_jwt");
-    $("#login-status").text(token ? "JWT token is stored in this browser." : "");
+    /*
+     * Show current login state and load SSO providers.
+     */
+    const token = localStorage.getItem("incidentrelay_jwt");
+
+    if (token) {
+        setLoginStatus("JWT token is stored in this browser.", "info");
+    } else {
+        $("#login-status").hide().text("");
+    }
+
+    loadSsoProviders();
 }
 
 $(document).on("submit", "#login-form", login);
 $(document).on("click", "#logout-submit", logout);
+$(document).ready(loadLogin);
+function renderSsoProviders(providers) {
+    const section = $("#sso-login-section");
+    const container = $("#sso-provider-buttons");
+
+    container.empty();
+
+    providers = Array.isArray(providers) ? providers : [];
+
+    if (!providers.length) {
+        section.hide();
+        return;
+    }
+
+    providers.forEach(function (provider) {
+        const protocol = String(provider.protocol || "sso").toUpperCase();
+        const protocolClass = "login-sso-button-" + String(provider.protocol || "sso").toLowerCase();
+        const label = provider.label || provider.slug || "SSO";
+        const iconClass = provider.protocol === "saml"
+            ? "fa-solid fa-id-card"
+            : "fa-solid fa-right-to-bracket";
+
+        container.append(
+            $("<a>")
+                .addClass("login-sso-button")
+                .addClass(protocolClass)
+                .attr("href", "/api/auth/sso/" + encodeURIComponent(provider.slug) + "/login")
+                .append(
+                    $("<span>")
+                        .addClass("login-sso-icon")
+                        .append($("<i>").addClass(iconClass))
+                )
+                .append(
+                    $("<span>")
+                        .addClass("login-sso-main")
+                        .append($("<span>").addClass("login-sso-title").text("Sign in with " + label))
+                        .append($("<span>").addClass("login-sso-subtitle").text("Continue using your identity provider"))
+                )
+                .append($("<span>").addClass("login-sso-protocol").text(protocol))
+        );
+    });
+
+    section.show();
+}
+
+function loadSsoProviders() {
+  $.ajax({
+    method: "GET",
+    url: "/api/auth/sso/providers",
+    success: function (providers) {
+      renderSsoProviders(providers);
+    },
+    error: function () {
+      $("#sso-login-section").hide();
+    },
+  });
+}

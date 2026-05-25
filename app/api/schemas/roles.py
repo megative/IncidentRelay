@@ -1,5 +1,7 @@
 """Canonical RBAC role names used by schemas, services and OpenAPI."""
 
+SSO_GLOBAL_ADMIN_ROLE = "global_admin"
+
 GROUP_VIEWER_ROLE = "viewer"
 GROUP_EDITOR_ROLE = "editor"
 GROUP_USER_ADMIN_ROLE = "user_admin"

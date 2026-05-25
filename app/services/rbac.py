@@ -73,11 +73,15 @@ def get_allowed_group_ids(user=None, write_required=False, manage_users_required
     return token_group_filter(group_ids)
 
 
-def get_allowed_team_ids(user=None, write_required=False, respond_required=False, use_active_group=True):
-    """Return team ids available to a user.
-
-    Group access only defines the boundary. For regular users, access to a team
-    also requires active TeamUser membership with an appropriate team role.
+def get_allowed_team_ids(
+    user=None,
+    write_required=False,
+    respond_required=False,
+    use_active_group=True,
+    active_only=True,
+):
+    """
+    Return team ids available to a user.
     """
     user = user or current_user()
     group_ids = get_allowed_group_ids(
@@ -89,10 +93,35 @@ def get_allowed_team_ids(user=None, write_required=False, respond_required=False
         return []
 
     if not user:
-        return [team.id for team in teams_repo.list_teams(active_only=True, group_ids=group_ids)]
+        return [
+            team.id
+            for team in teams_repo.list_teams(
+                active_only=active_only,
+                group_ids=group_ids,
+            )
+        ]
 
     if user.is_admin:
-        return [team.id for team in teams_repo.list_teams(active_only=True, group_ids=group_ids)]
+        return [
+            team.id
+            for team in teams_repo.list_teams(
+                active_only=active_only,
+                group_ids=group_ids,
+            )
+        ]
+
+    managed_group_ids = get_managed_group_ids(
+        user=user,
+        use_active_group=use_active_group,
+    )
+
+    managed_team_ids = {
+        team.id
+        for team in teams_repo.list_teams(
+            active_only=active_only,
+            group_ids=managed_group_ids,
+        )
+    }
 
     roles = TEAM_READ_ROLES
     if write_required:
@@ -100,15 +129,17 @@ def get_allowed_team_ids(user=None, write_required=False, respond_required=False
     elif respond_required:
         roles = TEAM_RESPOND_ROLES
 
-    return [
+    member_team_ids = {
         team.id
         for team in teams_repo.list_teams_for_user(
             user.id,
             roles=roles,
             group_ids=group_ids,
-            active_only=True,
+            active_only=active_only,
         )
-    ]
+    }
+
+    return sorted(managed_team_ids | member_team_ids)
 
 
 def can_read_group(user, group_id):
@@ -139,15 +170,19 @@ def can_manage_group_users(user, group_id):
 
 
 def can_read_team(user, team_id):
-    """Return True when a user can read a team."""
+    """
+    Return True when a user can read a team.
+    """
     if not user:
         return False
     if user.is_admin:
         return True
 
     team = teams_repo.get_team(team_id)
-    if not team.group_id:
+    if not team or not team.group_id:
         return False
+    if can_manage_group_users(user, team.group_id):
+        return True
     if not can_read_group(user, team.group_id):
         return False
     return teams_repo.get_user_team_role(user.id, team_id) in TEAM_READ_ROLES
@@ -236,57 +271,6 @@ def require_team_write(team_id):
     return None
 
 
-def require_permission(permission):
-    """Backward-compatible permission decorator."""
-    def decorator(func):
-        from functools import wraps
-
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            user = current_user()
-            if not user:
-                return jsonify({"error": "Authentication is required"}), 401
-            if user.is_admin:
-                return func(*args, **kwargs)
-            if permission.startswith("admin:") or permission.endswith(":admin"):
-                return jsonify({"error": "Admin role is required"}), 403
-            if permission.endswith(":write") or permission in ("write", "rw"):
-                if not get_allowed_group_ids(user, write_required=True):
-                    return jsonify({"error": "Group editor role is required"}), 403
-            return func(*args, **kwargs)
-
-        return wrapper
-    return decorator
-
-
-def require_any_permission(*permissions):
-    """Backward-compatible decorator for views that accept several permissions."""
-    def decorator(func):
-        from functools import wraps
-
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            user = current_user()
-            if not user:
-                return jsonify({"error": "Authentication is required"}), 401
-            if user.is_admin:
-                return func(*args, **kwargs)
-
-            for permission in permissions:
-                if permission.startswith("admin:") or permission.endswith(":admin"):
-                    continue
-                if permission.endswith(":write") or permission in ("write", "rw"):
-                    if get_allowed_group_ids(user, write_required=True):
-                        return func(*args, **kwargs)
-                elif get_allowed_group_ids(user, write_required=False):
-                    return func(*args, **kwargs)
-
-            return jsonify({"error": "Permission denied"}), 403
-
-        return wrapper
-    return decorator
-
-
 def parse_date_or_datetime(value):
     """Parse an ISO date or datetime string."""
     from datetime import datetime, time
@@ -297,3 +281,51 @@ def parse_date_or_datetime(value):
         return datetime.fromisoformat(value)
     except ValueError:
         return datetime.combine(datetime.strptime(value, "%Y-%m-%d").date(), time.min)
+
+
+def get_managed_group_ids(user=None, use_active_group=True):
+    """
+    Return groups where the user can manage users.
+    """
+    return get_allowed_group_ids(
+        user=user,
+        manage_users_required=True,
+        use_active_group=use_active_group,
+    )
+
+
+def require_user_management_access():
+    """
+    Return an error response when current user cannot manage users.
+    """
+    user = current_user()
+
+    if not user:
+        return jsonify({"error": "Authentication is required"}), 401
+
+    if user.is_admin:
+        return None
+
+    if get_allowed_group_ids(user=user, manage_users_required=True):
+        return None
+
+    return jsonify({"error": "Group Admin role is required"}), 403
+
+
+def get_group_permissions(user, group_id):
+    """Return group-level permissions for a user."""
+    return {
+        "can_read": can_read_group(user, group_id),
+        "can_write": can_write_group(user, group_id),
+        "can_manage_users": can_manage_group_users(user, group_id),
+    }
+
+
+def get_team_permissions(user, team_id):
+    """Return team-level permissions for a user."""
+    return {
+        "can_read": can_read_team(user, team_id),
+        "can_write": can_write_team(user, team_id),
+        "can_respond": can_respond_team(user, team_id),
+    }
+

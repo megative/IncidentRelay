@@ -13,7 +13,8 @@ from app.modules.db.models import (
     RotationLayerMember,
     RotationLayerRestriction,
     Team,
-    TeamUser
+    TeamUser,
+    User
 )
 
 
@@ -166,16 +167,19 @@ def create_rotation_if_missing(team_id, name, description, start_at, duration_se
 
 
 def list_rotation_members(rotation_id: int, active_only: bool = False):
-    """
-    Return rotation members ordered by position.
-
-    Management UI should use active_only=False.
-    On-call calculation should use active_only=True.
-    """
+    """Return rotation members ordered by position."""
     query = RotationMember.select().where(RotationMember.rotation == rotation_id)
 
     if active_only:
-        query = query.where(RotationMember.active == True)
+        query = (
+            query
+            .join(User)
+            .where(
+                (RotationMember.active == True)
+                & (User.active == True)
+                & (User.deleted == False)
+            )
+        )
 
     return list(query.order_by(RotationMember.position.asc(), RotationMember.id.asc()))
 
@@ -376,17 +380,6 @@ def update_rotation_member(member_id, position, active=True):
     member = get_rotation_member(member_id)
     member.position = position
     member.active = active
-    member.save()
-    return member
-
-
-def disable_rotation_member(member_id):
-    """
-    Disable a rotation member.
-    """
-
-    member = get_rotation_member(member_id)
-    member.active = False
     member.save()
     return member
 
@@ -593,11 +586,18 @@ def soft_delete_rotation_layer(layer_id):
 
 def list_rotation_layer_members(layer_id, active_only=False):
     """Return members of a rotation layer."""
-
     query = RotationLayerMember.select().where(RotationLayerMember.layer == layer_id)
 
     if active_only:
-        query = query.where(RotationLayerMember.active == True)
+        query = (
+            query
+            .join(User)
+            .where(
+                (RotationLayerMember.active == True)
+                & (User.active == True)
+                & (User.deleted == False)
+            )
+        )
 
     return list(query.order_by(RotationLayerMember.position.asc(), RotationLayerMember.id.asc()))
 

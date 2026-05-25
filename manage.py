@@ -139,7 +139,7 @@ def cmd_demo_data(args):
     - demo admin is not attached to any group;
     - regular demo users are attached to their groups;
     - regular demo users have active_group set;
-    - group and team roles use only supported values: read_only or rw.
+    - group and team roles use only supported values: viewer, editor, manager.
     """
 
     db = init_database()

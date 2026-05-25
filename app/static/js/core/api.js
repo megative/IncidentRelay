@@ -2,7 +2,9 @@ function getAuthHeaders() {
     /*
      * Return Authorization header from local storage token.
      */
-    const token = localStorage.getItem("oncall_jwt");
+    const token = typeof getStoredToken === "function"
+        ? getStoredToken()
+        : localStorage.getItem("incidentrelay_jwt");
 
     if (!token) {
         return {};
@@ -146,7 +148,11 @@ function showApiError(xhr, fallbackMessage) {
             "Your session has expired. Please sign in again.",
             "Unauthorized"
         ).always(function () {
-            localStorage.removeItem("oncall_jwt");
+            if (typeof clearStoredToken === "function") {
+                clearStoredToken();
+            } else {
+                localStorage.removeItem("incidentrelay_jwt");
+            }
             window.location.href = "/login";
         });
 

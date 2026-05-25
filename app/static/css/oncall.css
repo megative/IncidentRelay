@@ -127,15 +127,6 @@ summary {
     margin-top: 8px;
 }
 
-.code-box {
-    background: #f8fafc;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px;
-    min-height: 40px;
-    white-space: pre-wrap;
-}
-
 
 .details-grid {
     display: grid;
@@ -193,16 +184,6 @@ summary {
 .btn-resolve:hover {
     filter: brightness(0.95);
 }
-
-.role-read-only {
-    color: var(--muted);
-}
-
-.role-rw {
-    color: var(--success);
-    font-weight: 700;
-}
-
 
 .menu-section {
     margin-top: 12px;
@@ -748,10 +729,6 @@ summary {
     background: #d1e9ff;
 }
 
-.role-read-only {
-    color: #475467;
-    background: #f2f4f7;
-}
 .app-modal-dialog-small {
     width: min(460px, calc(100vw - 32px));
 }
@@ -852,7 +829,7 @@ summary {
 .table-actions,
 .details-actions {
     gap: 6px;
-    margin-top: 10px;
+    padding-top: 10px;
 }
 
 .sr-only {

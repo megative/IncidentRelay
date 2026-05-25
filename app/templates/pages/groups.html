@@ -1,4 +1,4 @@
-<div class="first-div-page-layout">
+<div class="first-div-page-layout page-stack">
   <div class="summary-grid">
     <div class="summary-card summary-primary">
       <div class="summary-icon">G</div>
@@ -26,15 +26,22 @@
     </div>
   </div>
 
-  <div class="card">
+  <section class="card">
     <div class="card-header">
       <div>
         <h2>Groups</h2>
-        <div class="card-subtitle">Access boundaries for teams, users and routes.</div>
+        <div class="card-subtitle">
+          Access boundaries for teams, users and routes.
+        </div>
       </div>
       <div class="card-header-actions">
-        <button id="reload-groups" type="button" class="btn btn-primary">Reload</button>
-        <button id="new-group" type="button" class="btn">New group</button>
+        <button id="reload-groups" type="button" class="btn">
+          Reload
+        </button>
+
+        <button id="new-group" type="button" class="btn btn-primary">
+          New group
+        </button>
       </div>
     </div>
     <div class="table-wrapper">
@@ -45,60 +52,106 @@
             <th>Group</th>
             <th>Description</th>
             <th>Status</th>
-            <th>Actions</th>
+            <th class="actions-th">Actions</th>
           </tr>
         </thead>
-        <tbody id="groups-table"></tbody>
+
+        <tbody id="groups-table">
+          <tr>
+            <td colspan="5" class="empty-cell">
+              No groups loaded
+            </td>
+          </tr>
+        </tbody>
       </table>
     </div>
-  </div>
+  </section>
 
   <div id="group-modal" class="app-modal is-hidden">
     <div class="app-modal-dialog app-modal-dialog-wide">
       <div class="app-modal-header">
         <div>
           <h2 id="group-modal-title">Group details</h2>
-          <div id="group-modal-subtitle" class="card-subtitle">Edit group settings and membership.</div>
+          <div id="group-modal-subtitle" class="card-subtitle">
+            Edit group settings and membership.
+          </div>
         </div>
-        <button id="close-group-modal" type="button" class="app-modal-close" aria-label="Close">×</button>
+
+        <button
+          id="close-group-modal"
+          type="button"
+          class="app-modal-close"
+          aria-label="Close"
+        >
+          ×
+        </button>
       </div>
 
       <div class="app-modal-body">
         <div class="grid-two">
-          <div class="card">
-            <div class="card-header details-header">
+            <section class="card">
+            <div class="card-header">
               <div>
                 <h2>Group settings</h2>
-                <div class="card-subtitle">Slug, display name and status.</div>
+                <div class="card-subtitle">
+                  Slug, display name and status.
+                </div>
               </div>
             </div>
             <div class="form-body">
               <input id="group-id" type="hidden">
               <label for="group-slug">Slug</label>
-              <input id="group-slug" class="input" placeholder="production">
+              <input
+                id="group-slug"
+                class="input"
+                type="text"
+                placeholder="infra"
+                autocomplete="off"
+              >
+
               <label for="group-name">Name</label>
-              <input id="group-name" class="input" placeholder="Production">
+              <input
+                id="group-name"
+                class="input"
+                type="text"
+                placeholder="Infrastructure"
+                autocomplete="off"
+              >
+
               <label for="group-description">Description</label>
-              <input id="group-description" class="input" placeholder="Production infrastructure access boundary">
-              <label>
+              <textarea
+                id="group-description"
+                class="input"
+                placeholder="Group purpose or access boundary"
+              ></textarea>
+
+              <label class="md-checkbox">
                 <input id="group-active" type="checkbox" checked>
-                Active
+                <span>Active</span>
               </label>
-              <div class="actions">
-                <button id="save-group" type="button" class="btn btn-primary">Save group</button>
-                <button id="clear-group-form" type="button" class="btn">Clear</button>
+
+              <div class="form-actions-inline">
+                <button id="save-group" type="button" class="btn btn-primary">
+                  Save group
+                </button>
+
+                <button id="clear-group-form" type="button" class="btn">
+                  Clear
+                </button>
               </div>
               <div class="help-text">
-                Only global admins can create groups. Group roles control visibility and user administration inside the selected group.
+                Only admins can create groups. Users with RW role can edit groups they belong to.
               </div>
             </div>
-          </div>
+          </section>
 
-          <div class="card">
-            <div class="card-header details-header">
+          <section class="card">
+            <div class="card-header">
               <div>
-                <h2 id="group-member-form-title">Add existing user to group</h2>
-                <div class="card-subtitle">Add a user or edit selected membership.</div>
+                <h2 id="group-member-form-title">Add user to group</h2>
+                <div class="card-subtitle">
+                  Add a user or edit selected membership.
+                </div>
               </div>
             </div>
             <div class="form-body">
@@ -107,78 +160,46 @@
               <select id="group-member-user" class="input"></select>
               <label for="group-member-role">Role</label>
               <select id="group-member-role" class="input">
-                <option value="viewer">Group Viewer</option>
-                <option value="editor">Group Editor</option>
-                <option value="user_admin">Group Admin</option>
+                  <option value="viewer">Group Viewer</option>
+                  <option value="editor">Group Editor</option>
+                  <option value="user_admin">Group Admin</option>
               </select>
-              <label>
+
+              <label class="md-checkbox">
                 <input id="group-member-active" type="checkbox" checked>
-                Active
+                <span>Active</span>
               </label>
-              <div class="actions">
-                <button id="save-group-member" type="button" class="btn btn-primary">Save membership</button>
-                <button id="reset-group-member-form" type="button" class="btn">Reset</button>
-              </div>
-              <div id="group-member-help" class="help-text">Save the group first, then add members.</div>
-            </div>
-          </div>
-        </div>
 
-        <div id="group-user-create-panel" class="card">
-          <div class="card-header details-header">
-            <div>
-              <h2>Create user in group</h2>
-              <div class="card-subtitle">
-                Group Admins can create users only inside this group. The group is taken from the selected group and cannot be changed in this form.
+              <div class="form-actions-inline">
+                <button id="save-group-member" type="button" class="btn btn-primary">
+                  Save membership
+                </button>
+
+                <button id="reset-group-member-form" type="button" class="btn">
+                  Reset
+                </button>
+              </div>
+
+              <div id="group-member-help" class="help-text">
+                Save the group first, then add members.
               </div>
             </div>
-          </div>
-          <div class="form-body form-grid">
-            <div>
-              <label for="group-create-user-username">Username</label>
-              <input id="group-create-user-username" class="input" placeholder="ivan" autocomplete="username">
-            </div>
-            <div>
-              <label for="group-create-user-display">Display name</label>
-              <input id="group-create-user-display" class="input" placeholder="Ivan Petrov">
-            </div>
-            <div>
-              <label for="group-create-user-email">Email</label>
-              <input id="group-create-user-email" class="input" type="email" placeholder="ivan@example.com">
-            </div>
-            <div>
-              <label for="group-create-user-phone">Phone</label>
-              <input id="group-create-user-phone" class="input" type="tel" inputmode="tel" maxlength="21" pattern="\+?[0-9]{5,20}" data-phone-input="true" placeholder="+77001234567">
-            </div>
-            <div>
-              <label for="group-create-user-password">Password</label>
-              <input id="group-create-user-password" class="input" type="password" autocomplete="new-password">
-            </div>
-            <div>
-              <label for="group-create-user-role">Group role</label>
-              <select id="group-create-user-role" class="input">
-                <option value="viewer">Group Viewer</option>
-                <option value="editor">Group Editor</option>
-              </select>
-            </div>
-            <div class="actions form-wide">
-              <button id="save-group-created-user" type="button" class="btn btn-primary">Create user</button>
-              <button id="reset-group-created-user" type="button" class="btn">Reset</button>
-            </div>
-            <div id="group-create-user-help" class="help-text form-wide">
-              Select a group first. New users are automatically attached to the selected group.
-            </div>
-          </div>
+          </section>
         </div>
 
-        <div class="card">
+        <section class="card">
           <div class="card-header">
             <div>
               <h2 id="group-members-title">Group members</h2>
-              <div class="card-subtitle">Users assigned to this group.</div>
+              <div class="card-subtitle">
+                Users assigned to this group.
+              </div>
             </div>
+
             <div class="card-header-actions">
-              <button id="reload-group-members" type="button" class="btn">Reload members</button>
+              <button id="reload-group-members" type="button" class="btn">
+                Reload members
+              </button>
             </div>
           </div>
           <div class="table-wrapper">
@@ -190,19 +211,25 @@
                   <th>Name</th>
                   <th>Role</th>
                   <th>Status</th>
-                  <th>Actions</th>
+                  <th class="actions-th">Actions</th>
                 </tr>
               </thead>
               <tbody id="group-members-table">
-                <tr><td colspan="6">Save or select a group to manage members</td></tr>
+                <tr>
+                  <td colspan="6" class="empty-cell">
+                    Save or select a group to manage members
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
       </div>
 
       <div class="app-modal-footer">
-        <button id="close-group-modal-footer" type="button" class="btn">Close</button>
+        <button id="close-group-modal-footer" type="button" class="btn">
+          Close
+        </button>
       </div>
     </div>
   </div>

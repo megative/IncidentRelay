@@ -12,15 +12,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="{{ url_for('static', filename='/css/vendor/fontawesome/all.min.css') }}">
     <link rel="stylesheet" href="/static/css/oncall.css">
-    <link rel="stylesheet" href="/static/css/alerts_modal.css">
-    <link rel="stylesheet" href="/static/css/alerts_summary.css">
-    <link rel="stylesheet" href="/static/css/modal.css">
+    <link rel="stylesheet" href="/static/css/material.css">
     <link rel="stylesheet" href="/static/css/vendor/select2/select2.min.css">
     <link rel="stylesheet" href="/static/css/vendor/select2/override-select2.css">
     <script src="/static/js/vendor/jquery-3.7.1.min.js"></script>
     <script src="/static/js/vendor/select2.min.js"></script>
 </head>
-<body>
+<body class="md-theme">
 <div class="layout">
     <aside id="app-sidebar" class="sidebar">
         <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -78,6 +76,10 @@
                 <path d="M15 3v4h4"/>
                 <path d="M9 12h6M9 16h6"/>
             </symbol>
+            <symbol id="icon-sso" viewBox="0 0 24 24">
+                <path d="M12 3a4 4 0 0 1 4 4c0 1.4-.7 2.6-1.8 3.3L20 16v5h-5v-3h-3v-3H9.5l-1.8-1.8A5 5 0 1 1 12 3Z"/>
+                <circle cx="7" cy="12" r="2"/>
+            </symbol>
         </svg>
 
     <div class="brand">
@@ -132,17 +134,21 @@
             <span class="menu-text">Teams</span>
         </a>
 
-        <div class="menu-section menu-link-admin">
+        <div class="menu-section menu-link-admin is-hidden">
             <div class="menu-section-title">Administration</div>
 
-            <a href="/groups" data-page="groups" class="menu-link menu-sub-link" title="Groups">
+            <a href="/groups" data-page="groups" class="menu-link menu-sub-link menu-link-groups is-hidden" title="Groups">
                 <svg class="menu-icon"><use href="#icon-groups"></use></svg>
                 <span class="menu-text">Groups</span>
             </a>
 
-            <a href="/admin/users" data-page="admin-users" class="menu-link menu-sub-link" title="Users">
+            <a href="/admin/users" data-page="admin-users" class="menu-link menu-sub-link menu-link-users is-hidden" title="Users">
                 <svg class="menu-icon"><use href="#icon-users"></use></svg>
                 <span class="menu-text">Users</span>
+            </a>
+            <a href="/admin/sso" data-page="sso" class="menu-link menu-sub-link menu-link-global-admin is-hidden" title="SSO">
+                <svg class="menu-icon"><use href="#icon-sso"></use></svg>
+                <span class="menu-text">SSO</span>
             </a>
         </div>
 
@@ -155,16 +161,25 @@
 
     <main class="content">
         <header class="topbar">
-            <div>
-                <h1 id="page-title">Overview</h1>
-                <div id="page-subtitle" class="page-subtitle">Current duty and alerts</div>
-            </div>
-            <div class="topbar-actions">
-                <select id="active-group-select" class="input"></select>
-                <select id="global-team-filter" class="input"></select>
-                <button id="topbar-profile" type="button" class="btn btn-small">Profile: <span id="topbar-username">user</span></button>
-                <button id="topbar-logout" type="button" class="btn btn-small btn-danger">Logout</button>
-                <span id="service-version" class="badge badge-info">version</span>
+            <div class="topbar-main">
+                <div class="topbar-title-block">
+                    <div class="topbar-kicker">IncidentRelay</div>
+                    <h1 id="page-title">Overview</h1>
+                    <div id="page-subtitle" class="page-subtitle">Current duty and alerts</div>
+                </div>
+
+                <div class="topbar-actions">
+                    <div class="topbar-select-group">
+                        <label class="topbar-select-label" for="global-team-filter">Team</label>
+                        <select id="global-team-filter" class="input topbar-select"></select>
+                    </div>
+                    <button id="topbar-profile" type="button" class="btn btn-small topbar-profile-btn">
+                        <span class="topbar-avatar">U</span>
+                        <span>Profile: <span id="topbar-username">user</span></span>
+                    </button>
+                    <button id="topbar-logout" type="button" class="btn btn-small btn-danger">Logout</button>
+                    <span id="service-version" class="badge badge-info">version</span>
+                </div>
             </div>
         </header>
 
@@ -178,11 +193,11 @@
             <div id="view-silences" class="view">{% include "pages/silences.html" %}</div>
             <div id="view-teams" class="view">{% include "pages/teams.html" %}</div>
             <div id="view-admin-users" class="view">{% include "pages/admin_users.html" %}</div>
+            <div id="view-sso" class="view">{% include "pages/sso.html" %}</div>
             <div id="view-groups" class="view">{% include "pages/groups.html" %}</div>
             <div id="view-profile" class="view">{% include "pages/profile.html" %}</div>
         </section>
         {% include 'pages/include/alerts_modal.html' %}
-        {% include 'pages/include/rotation_modal.html' %}
         <div id="app-dialog-modal" class="app-modal is-hidden" role="dialog" aria-modal="true">
             <div class="app-modal-dialog app-modal-dialog-small">
             <div class="app-modal-header">
@@ -220,9 +235,11 @@
         </div>
     </main>
 </div>
+<script src="/static/js/core/rbac_roles.js"></script>
 <script src="/static/js/core/state.js"></script>
 <script src="/static/js/core/dialogs.js"></script>
 <script src="/static/js/core/api.js"></script>
+<script src="/static/js/core/auth.js"></script>
 <script src="/static/js/core/dates.js"></script>
 <script src="/static/js/core/ui.js"></script>
 <script src="/static/js/core/selects.js"></script>
@@ -242,6 +259,7 @@
 <script src="/static/js/pages/admin_users.js"></script>
 <script src="/static/js/pages/groups.js"></script>
 <script src="/static/js/pages/profile.js"></script>
-<script src="/static/js/pages/login.js"></script>
+{#<script src="/static/js/pages/login.js"></script>#}
+<script src="/static/js/pages/sso.js"></script>
 </body>
 </html>

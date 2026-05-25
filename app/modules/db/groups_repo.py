@@ -12,6 +12,9 @@ from app.modules.db.models import (
     Group,
     NotificationChannel,
     Rotation,
+    RotationLayer,
+    RotationLayerMember,
+    RotationLayerRestriction,
     RotationMember,
     RotationOverride,
     Silence,
@@ -110,6 +113,7 @@ def list_user_groups(user_id):
         .join(Group)
         .where(
             (UserGroup.user == user_id)
+            & (UserGroup.active == True)
             & (Group.active == True)
             & (Group.deleted == False)
         )
@@ -145,14 +149,6 @@ def update_group_membership(membership_id, role, active=True):
     membership = get_group_membership(membership_id)
     membership.role = role
     membership.active = active
-    membership.save()
-    return membership
-
-
-def disable_group_membership(membership_id):
-    """Disable a group membership."""
-    membership = get_group_membership(membership_id)
-    membership.active = False
     membership.save()
     return membership
 
@@ -207,6 +203,40 @@ def soft_delete_group(group_id):
         ).execute()
 
         if team_ids:
+            rotation_ids = [
+                rotation.id
+                for rotation in (
+                    Rotation
+                    .select(Rotation.id)
+                    .where(Rotation.team.in_(team_ids))
+                )
+            ]
+
+            layer_ids = [
+                layer.id
+                for layer in (
+                    RotationLayer
+                    .select(RotationLayer.id)
+                    .where(RotationLayer.rotation.in_(rotation_ids))
+                )
+            ]
+
+            if layer_ids:
+                RotationLayerRestriction.delete().where(
+                    RotationLayerRestriction.layer.in_(layer_ids)
+                ).execute()
+
+                RotationLayerMember.delete().where(
+                    RotationLayerMember.layer.in_(layer_ids)
+                ).execute()
+
+                RotationLayer.update(
+                    deleted=True,
+                    deleted_at=now,
+                    enabled=False,
+                ).where(
+                    RotationLayer.id.in_(layer_ids)
+                ).execute()
             Rotation.update(
                 deleted=True,
                 deleted_at=now,
@@ -300,22 +330,60 @@ def delete_group_membership(membership_id: int) -> dict:
             .where(Rotation.team.in_(team_ids_query))
         )
 
-        RotationMember.delete().where(
-            (RotationMember.user == user_id)
-            & (RotationMember.rotation.in_(rotation_ids_query))
-        ).execute()
-        RotationOverride.delete().where(
-            (RotationOverride.user == user_id)
-            & (RotationOverride.rotation.in_(rotation_ids_query))
-        ).execute()
-        TeamUser.delete().where(
-            (TeamUser.user == user_id)
-            & (TeamUser.team.in_(team_ids_query))
-        ).execute()
+        layer_ids_query = (
+            RotationLayer
+            .select(RotationLayer.id)
+            .where(RotationLayer.rotation.in_(rotation_ids_query))
+        )
+
+        removed_rotation_members = (
+            RotationMember
+            .delete()
+            .where(
+                (RotationMember.user == user_id)
+                & (RotationMember.rotation.in_(rotation_ids_query))
+            )
+            .execute()
+        )
+
+        removed_layer_members = (
+            RotationLayerMember
+            .delete()
+            .where(
+                (RotationLayerMember.user == user_id)
+                & (RotationLayerMember.layer.in_(layer_ids_query))
+            )
+            .execute()
+        )
+
+        removed_overrides = (
+            RotationOverride
+            .delete()
+            .where(
+                (RotationOverride.user == user_id)
+                & (RotationOverride.rotation.in_(rotation_ids_query))
+            )
+            .execute()
+        )
+
+        removed_team_memberships = (
+            TeamUser
+            .delete()
+            .where(
+                (TeamUser.user == user_id)
+                & (TeamUser.team.in_(team_ids_query))
+            )
+            .execute()
+        )
+
         membership.delete_instance()
 
     return {
         "id": membership_id,
         "group_id": group_id,
         "user_id": user_id,
+        "removed_rotation_members": removed_rotation_members,
+        "removed_rotation_layer_members": removed_layer_members,
+        "removed_rotation_overrides": removed_overrides,
+        "removed_team_memberships": removed_team_memberships,
     }

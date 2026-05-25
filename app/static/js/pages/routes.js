@@ -282,7 +282,7 @@ function renderRouteRow(route) {
             .append(
                 $("<button>")
                     .attr("type", "button")
-                    .addClass("route-name-button")
+                    .addClass("name-button")
                     .text(route.name || "-")
                     .on("click", function () {
                         renderRouteDetails(route);
@@ -569,7 +569,7 @@ function saveRoute() {
 
     if (id) {
         apiPut("/api/routes/" + id, collectRoutePayload(), function () {
-            closeRouteFormModal();
+            closeAppModal("#route-form-modal");
             resetRouteForm();
             refreshRoutes();
         });
@@ -577,7 +577,7 @@ function saveRoute() {
     }
 
     apiPost("/api/routes", collectRoutePayload(), function (response) {
-        closeRouteFormModal();
+        closeAppModal("#route-form-modal");
         resetRouteForm();
         refreshRoutes();
         showRouteToken(response.intake_token);
@@ -613,7 +613,7 @@ function editRoute(id) {
         }));
     });
 
-    openRouteFormModal();
+    openAppModal("#route-form-modal");
 }
 
 
@@ -701,11 +701,7 @@ function showRouteToken(token) {
     /*
      * Show route token once.
      */
-    $("#route-token-box")
-        .css("display", "flex")
-        .addClass("is-open");
-
-    $("body").addClass("modal-open");
+    openAppModal("#route-token-box");
     $("#route-intake-token").val(token || "");
 }
 
@@ -714,11 +710,7 @@ function closeRouteTokenModal() {
     /*
      * Close route token modal.
      */
-    $("#route-token-box")
-        .css("display", "none")
-        .removeClass("is-open");
-
-    $("body").removeClass("modal-open");
+    closeAppModal("#route-token-box");
     $("#route-intake-token").val("");
 }
 
@@ -740,31 +732,6 @@ function regenerateRouteToken(routeId) {
     });
 }
 
-
-function openRouteFormModal() {
-    /*
-     * Open route create/edit modal.
-     */
-    $("#route-form-modal")
-        .css("display", "flex")
-        .addClass("is-open");
-
-    $("body").addClass("modal-open");
-}
-
-
-function closeRouteFormModal() {
-    /*
-     * Close route create/edit modal.
-     */
-    $("#route-form-modal")
-        .css("display", "none")
-        .removeClass("is-open");
-
-    $("body").removeClass("modal-open");
-}
-
-
 function openCreateRouteModal() {
     /*
      * Reset form and open create modal.
@@ -772,7 +739,7 @@ function openCreateRouteModal() {
     resetRouteForm();
     $("#route-form-title").text("Create route");
     loadRouteDependencies();
-    openRouteFormModal();
+    openAppModal("#route-form-modal");
 }
 
 
@@ -809,13 +776,13 @@ $(document).on("click", "#save-route", saveRoute);
 $(document).on("click", "#reset-route-form", resetRouteForm);
 $(document).on("click", "#reload-routes", refreshRoutes);
 
-$(document).on("click", "#close-route-form-modal", closeRouteFormModal);
+$(document).on("click", "#close-route-form-modal", closeAppModal);
 $(document).on("click", "#close-route-token-modal, #close-route-token-modal-footer", closeRouteTokenModal);
 $(document).on("click", "#copy-route-intake-token", copyRouteIntakeToken);
 
 $(document).on("click", "#route-form-modal", function (event) {
     if (event.target === this) {
-        closeRouteFormModal();
+        closeAppModal("#route-form-modal");
     }
 });
 
@@ -836,7 +803,7 @@ $(document).on("keydown", function (event) {
     }
 
     if ($("#route-form-modal").hasClass("is-open")) {
-        closeRouteFormModal();
+        closeAppModal("#route-form-modal");
     }
 });
 
