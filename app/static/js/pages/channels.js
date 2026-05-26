@@ -14,6 +14,7 @@ function loadChannels() {
 
 function loadChannelGroups(callback) {
     fillGroupSelect("#channel-group", false, function (groups) {
+        groups = asArray(groups);
         if (!groups.length) {
             $("#channel-group").append($("<option>").val("").text("No groups available"));
             $("#channel-team").empty().append($("<option>").val("").text("No teams available"));
@@ -25,6 +26,7 @@ function loadChannelGroups(callback) {
         loadChannelTeams(callback);
     });
 }
+
 function loadDefaultEmailHtmlTemplate(callback) {
     if (emailDefaultTemplateCache !== null) {
         if (typeof callback === "function") {
@@ -37,11 +39,9 @@ function loadDefaultEmailHtmlTemplate(callback) {
         response = response || {};
         emailDefaultTemplateCache = String(response.html_template || "");
         $("#cfg-email-html-template").data("defaultTemplate", emailDefaultTemplateCache);
-
         if (!String($("#cfg-email-html-template").val() || "").trim()) {
             $("#cfg-email-html-template").val(emailDefaultTemplateCache);
         }
-
         if (typeof callback === "function") {
             callback(emailDefaultTemplateCache);
         }
@@ -99,24 +99,20 @@ function showChannelFields() {
         $('[data-channel-config="telegram"]').show();
         return;
     }
-
     if (type === "mattermost") {
         $('[data-channel-config="mattermost"]').show();
         showMattermostModeFields();
         return;
     }
-
     if (["slack", "webhook", "discord", "teams"].includes(type)) {
         $('[data-channel-config="webhook"]').show();
         updateWebhookLabel(type);
         return;
     }
-
     if (type === "email") {
         $('[data-channel-config="email"]').show();
         return;
     }
-
     if (type === "voice_call") {
         $('[data-channel-config="voice_call"]').show();
     }
@@ -182,16 +178,13 @@ function buildChannelConfig() {
         config.chat_id = $("#cfg-telegram-chat-id").val();
         return config;
     }
-
     if (type === "mattermost") {
         return buildMattermostConfig(config);
     }
-
     if (["slack", "webhook", "discord", "teams"].includes(type)) {
         config.webhook_url = $("#cfg-webhook-url").val();
         return config;
     }
-
     if (type === "email") {
         const htmlTemplate = getEmailHtmlTemplateConfigValue();
         if (htmlTemplate) {
@@ -201,11 +194,6 @@ function buildChannelConfig() {
         }
         return config;
     }
-
-    if (type === "voice_call") {
-        return config;
-    }
-
     return config;
 }
 
@@ -230,6 +218,13 @@ function buildMattermostConfig(config) {
     return config;
 }
 
+function getSelectedChannelTeam() {
+    const teamId = Number($("#channel-team").val());
+    return channelTeamsCache.find(function (team) {
+        return Number(team.id) === teamId;
+    });
+}
+
 function collectChannelPayload() {
     const teamId = Number($("#channel-team").val());
     if (!teamId) {
@@ -251,7 +246,6 @@ function refreshChannels() {
         channelsCache = asArray(channels);
         renderChannelsSummary(channelsCache);
         renderChannels();
-
         if (selectedChannelDetailsId) {
             restoreChannelDetails();
         } else if (channelsCache.length) {
@@ -311,69 +305,61 @@ function renderChannelRow(channel) {
 function renderChannelActions(channel) {
     const actions = $("<div>").addClass("actions");
 
-    if (canEditTeam(channel)) {
-        actions.append(
-            $("<button>")
-                .attr("type", "button")
-                .addClass("btn btn-small")
-                .text("Edit")
-                .on("click", function () {
-                    editChannel(channel.id);
-                })
-        );
-    }
-
-    actions.append(
-        $("<button>")
-            .attr("type", "button")
-            .addClass("btn btn-small")
-            .text("Test")
-            .on("click", function () {
-                testChannel(channel.id);
-            })
-    );
-
-    if (canEditTeam(channel)) {
-        if (channel.enabled) {
-            actions.append(
-                $("<button>")
-                    .attr("type", "button")
-                    .addClass("btn btn-warning btn-small")
-                    .text("Disable")
-                    .on("click", function () {
-                        disableChannel(channel);
-                    })
-            );
-        } else {
-            actions.append(
-                $("<button>")
-                    .attr("type", "button")
-                    .addClass("btn btn-success btn-small")
-                    .text("Enable")
-                    .on("click", function () {
-                        enableChannel(channel);
-                    })
-            );
-        }
-
-        actions.append(
-            $("<button>")
-                .attr("type", "button")
-                .addClass("btn btn-danger btn-small")
-                .text("Delete")
-                .on("click", function () {
-                    deleteChannel(channel);
-                })
-        );
-    }
+    appendActionIfAllowed(actions, channel, {
+        required: "write",
+        text: "Edit",
+        className: "btn btn-small",
+        onClick: function () {
+            editChannel(channel.id);
+        },
+    });
+    appendActionIfAllowed(actions, channel, {
+        required: "write",
+        text: "Test",
+        className: "btn btn-small",
+        onClick: function () {
+            testChannel(channel.id);
+        },
+    });
+    appendActionIfAllowed(actions, channel, {
+        required: "write",
+        text: channel.enabled ? "Disable" : "Enable",
+        className: channel.enabled ? "btn btn-warning btn-small" : "btn btn-success btn-small",
+        onClick: function () {
+            if (channel.enabled) {
+                disableChannel(channel);
+            } else {
+                enableChannel(channel);
+            }
+        },
+    });
+    appendActionIfAllowed(actions, channel, {
+        required: "delete",
+        text: "Delete",
+        className: "btn btn-danger btn-small",
+        onClick: function () {
+            deleteChannel(channel);
+        },
+    });
 
     return actions;
 }
 
 function saveChannel() {
     const id = $("#channel-id").val();
-    const payload = collectChannelPayload();
+    const existing = id ? channelsCache.find(function (item) { return Number(item.id) === Number(id); }) : null;
+    const selectedTeam = getSelectedChannelTeam();
 
+    if (existing && !canWriteObject(existing)) {
+        showAppError("You do not have permission to edit this channel.");
+        return;
+    }
+    if (!existing && selectedTeam && !canWriteObject(selectedTeam)) {
+        showAppError("You do not have permission to create channels in this team.");
+        return;
+    }
+
+    const payload = collectChannelPayload();
     if (id) {
         apiPut("/api/channels/" + id, payload, function () {
             closeAppModal("#channel-form-modal");
@@ -392,9 +378,13 @@ function saveChannel() {
 
 function editChannel(id) {
     const channel = channelsCache.find(function (item) {
-        return item.id === id;
+        return Number(item.id) === Number(id);
     });
     if (!channel) {
+        return;
+    }
+    if (!canWriteObject(channel)) {
+        showAppError("You do not have permission to edit this channel.");
         return;
     }
 
@@ -402,9 +392,8 @@ function editChannel(id) {
     $("#channel-id").val(channel.id);
 
     const team = channelTeamsCache.find(function (item) {
-        return item.id === channel.team_id;
+        return Number(item.id) === Number(channel.team_id);
     });
-
     if (team && team.group_id) {
         $("#channel-group").val(String(team.group_id));
         loadChannelTeams(function () {
@@ -425,12 +414,10 @@ function editChannel(id) {
 
 function stripVisibleChannelConfig(type, config) {
     config = Object.assign({}, config || {});
-
     if (type === "telegram") {
         delete config.bot_token;
         delete config.chat_id;
     }
-
     if (type === "mattermost") {
         delete config.mode;
         delete config.api_url;
@@ -439,11 +426,9 @@ function stripVisibleChannelConfig(type, config) {
         delete config.callback_secret;
         delete config.webhook_url;
     }
-
     if (["slack", "webhook", "discord", "teams"].includes(type)) {
         delete config.webhook_url;
     }
-
     return config;
 }
 
@@ -455,7 +440,6 @@ function fillChannelFields(type, config) {
         $("#cfg-telegram-bot-token").val(config.bot_token || "");
         $("#cfg-telegram-chat-id").val(config.chat_id || "");
     }
-
     if (type === "mattermost") {
         $("#cfg-mm-mode").val(config.mode || (config.api_url ? "bot_api" : "webhook"));
         $("#cfg-mm-api-url").val(config.api_url || "");
@@ -465,12 +449,10 @@ function fillChannelFields(type, config) {
         $("#cfg-mm-webhook-url").val(config.webhook_url || "");
         showMattermostModeFields();
     }
-
     if (["slack", "webhook", "discord", "teams"].includes(type)) {
         $("#cfg-webhook-url").val(config.webhook_url || "");
         updateWebhookLabel(type);
     }
-
     if (type === "email") {
         $("#cfg-email-html-template").val(config.html_template || getDefaultEmailHtmlTemplate());
     }
@@ -491,20 +473,19 @@ function clearChannelFields() {
 }
 
 function confirmChannelAction(options, onConfirm) {
-    if (typeof showAppConfirm === "function") {
-        showAppConfirm(options).done(onConfirm);
-        return;
-    }
-    if (confirm(options.message || "Continue?")) {
-        onConfirm();
-    }
+    showAppConfirm(options).done(onConfirm);
 }
 
 function disableChannel(channel) {
+    if (!canWriteObject(channel)) {
+        showAppError("You do not have permission to disable this channel.");
+        return;
+    }
+
     const channelName = channel.name || ("Channel #" + channel.id);
     confirmChannelAction({
         title: "Disable this channel?",
-        message: `Disable channel "${channelName}"?\n\nThe channel will stop receiving notifications, but it will stay visible and can be enabled again.`,
+        message: "Disable channel \"" + channelName + "\"?\n\nThe channel will stop receiving notifications, but it will stay visible and can be enabled again.",
         confirmText: "Disable",
         confirmClass: "btn-warning",
     }, function () {
@@ -516,6 +497,11 @@ function disableChannel(channel) {
 }
 
 function enableChannel(channel) {
+    if (!canWriteObject(channel)) {
+        showAppError("You do not have permission to enable this channel.");
+        return;
+    }
+
     apiPost("/api/channels/" + channel.id + "/enable", {}, function () {
         refreshChannels();
         showAppSuccess("Channel enabled.");
@@ -523,10 +509,15 @@ function enableChannel(channel) {
 }
 
 function deleteChannel(channel) {
+    if (!canDeleteObject(channel)) {
+        showAppError("You do not have permission to delete this channel.");
+        return;
+    }
+
     const channelName = channel.name || ("Channel #" + channel.id);
     confirmChannelAction({
         title: "Delete this channel?",
-        message: `Delete channel "${channelName}"?\n\nThis will remove the channel from active channel lists and detach it from routes. Historical alerts will be preserved.`,
+        message: "Delete channel \"" + channelName + "\"?\n\nThis will remove the channel from active channel lists and detach it from routes.\nHistorical alerts will be preserved.",
         confirmText: "Delete",
         confirmClass: "btn-danger",
     }, function () {
@@ -542,6 +533,14 @@ function deleteChannel(channel) {
 }
 
 function testChannel(id) {
+    const channel = channelsCache.find(function (item) {
+        return Number(item.id) === Number(id);
+    });
+    if (channel && !canWriteObject(channel)) {
+        showAppError("You do not have permission to test this channel.");
+        return;
+    }
+
     apiPost("/api/channels/" + id + "/test", {}, function (response) {
         showAppSuccess(JSON.stringify(response, null, 2));
     });
@@ -560,23 +559,18 @@ function resetChannelForm() {
 
 function getChannelModeLabel(channel) {
     const config = channel.config || {};
-
     if (channel.channel_type === "mattermost") {
         return config.mode || (config.api_url ? "bot_api" : "webhook");
     }
-
     if (channel.channel_type === "voice_call") {
         return config.provider || "voice_call";
     }
-
     if (["slack", "webhook", "discord", "teams"].includes(channel.channel_type)) {
         return "webhook";
     }
-
     if (channel.channel_type === "email") {
         return "email";
     }
-
     return "-";
 }
 
@@ -654,33 +648,28 @@ function channelDetailsItem(label, value) {
 
 function getSafeChannelConfigSummary(channel) {
     const config = channel.config || {};
-
     if (channel.channel_type === "mattermost") {
         return getChannelModeLabel(channel);
     }
-
     if (channel.channel_type === "voice_call") {
         return "Provider: " + (config.provider || "-") + "; severities: " + getChannelSeverityLabel(channel);
     }
-
     if (channel.channel_type === "email") {
         return "Assigned user profile email; " + (config.html_template ? "custom HTML template" : "default HTML template");
     }
-
     if (["slack", "webhook", "discord", "teams"].includes(channel.channel_type)) {
         return config.webhook_url ? "Webhook configured" : "Webhook missing";
     }
-
     if (channel.channel_type === "telegram") {
         return config.chat_id ? "Chat configured" : "Chat missing";
     }
-
     return "-";
 }
 
 function renderChannelDetails(channel) {
     selectedChannelDetailsId = channel.id;
     $("#channel-details-subtitle").text((channel.team_slug || "-") + " / " + (channel.enabled ? "Enabled" : "Disabled"));
+
     const body = $("#channel-details-body");
     body.empty();
     body.append(
@@ -695,18 +684,49 @@ function renderChannelDetails(channel) {
             .append(channelDetailsItem("Status", channel.enabled ? "Enabled" : "Disabled"))
             .append(channelDetailsItem("Config", getSafeChannelConfigSummary(channel)))
     );
-    if (canEditTeam(channel)) {
-    body.append(
-        $("<div>")
-            .addClass("details-actions")
-            .append(makeIconButton({ icon: "fas fa-edit", label: "Edit channel", onClick: function () { editChannel(channel.id); } }))
-            .append(makeIconButton({ icon: "fas fa-paper-plane", label: "Test channel", onClick: function () { testChannel(channel.id); } }))
-            .append(channel.enabled
-                ? makeIconButton({ icon: "fas fa-pause", label: "Disable channel", className: "btn-warning", onClick: function () { disableChannel(channel); } })
-                : makeIconButton({ icon: "fas fa-play", label: "Enable channel", className: "btn-success", onClick: function () { enableChannel(channel); } })
-            )
-            .append(makeIconButton({ icon: "fas fa-trash-alt", label: "Delete channel", className: "btn-danger", onClick: function () { deleteChannel(channel); } }))
-    );
+
+    const actions = $("<div>").addClass("details-actions");
+    appendIconActionIfAllowed(actions, channel, {
+        required: "write",
+        icon: "fas fa-edit",
+        label: "Edit channel",
+        onClick: function () {
+            editChannel(channel.id);
+        },
+    });
+    appendIconActionIfAllowed(actions, channel, {
+        required: "write",
+        icon: "fas fa-paper-plane",
+        label: "Test channel",
+        onClick: function () {
+            testChannel(channel.id);
+        },
+    });
+    appendIconActionIfAllowed(actions, channel, {
+        required: "write",
+        icon: channel.enabled ? "fas fa-pause" : "fas fa-play",
+        label: channel.enabled ? "Disable channel" : "Enable channel",
+        className: channel.enabled ? "btn-warning" : "btn-success",
+        onClick: function () {
+            if (channel.enabled) {
+                disableChannel(channel);
+            } else {
+                enableChannel(channel);
+            }
+        },
+    });
+    appendIconActionIfAllowed(actions, channel, {
+        required: "delete",
+        icon: "fas fa-trash-alt",
+        label: "Delete channel",
+        className: "btn-danger",
+        onClick: function () {
+            deleteChannel(channel);
+        },
+    });
+
+    if (actions.children().length) {
+        body.append(actions);
     }
 }
 
@@ -724,12 +744,17 @@ function restoreChannelDetails() {
 function renderChannelDetailsEmpty() {
     selectedChannelDetailsId = null;
     $("#channel-details-subtitle").text("Select a channel");
-    $("#channel-details-body").html("<p>Click a channel name to inspect delivery type, team binding and safe configuration summary.</p>");
+    $("#channel-details-body").html("<p class=\"muted\">Click a channel name to inspect delivery type, team binding and safe configuration summary.</p>");
 }
 
 function openCreateChannelModal() {
     resetChannelForm();
     $("#channel-form-title").text("Create channel");
+    const team = getSelectedChannelTeam();
+    if (team && !canWriteObject(team)) {
+        showAppError("You do not have permission to create channels in this team.");
+        return;
+    }
     openAppModal("#channel-form-modal");
 }
 
@@ -769,7 +794,9 @@ $(document).on("click", "#reset-email-template", resetEmailHtmlTemplate);
 $(document).on("input", "#channels-search", renderChannels);
 $(document).on("change", "#channels-type-filter, #channels-status-filter", renderChannels);
 $(document).on("click", "#open-channel-create-modal", openCreateChannelModal);
-$(document).on("click", "#close-channel-form-modal", closeAppModal);
+$(document).on("click", "#close-channel-form-modal", function () {
+    closeAppModal("#channel-form-modal");
+});
 $(document).on("click", "#channel-form-modal", function (event) {
     if (event.target === this) {
         closeAppModal("#channel-form-modal");

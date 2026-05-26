@@ -5,11 +5,9 @@ function dashboardAsArray(value) {
     if (Array.isArray(value)) {
         return value;
     }
-
     if (value && Array.isArray(value.items)) {
         return value.items;
     }
-
     return [];
 }
 
@@ -21,19 +19,16 @@ function dashboardSortByActivity(alerts) {
     return alerts.slice().sort(function (left, right) {
         const leftDate = new Date(dashboardDateValue(left) || 0).getTime();
         const rightDate = new Date(dashboardDateValue(right) || 0).getTime();
-
         return rightDate - leftDate;
     });
 }
 
 function dashboardGroupCount(alerts, fieldName, fallback) {
     const result = {};
-
     alerts.forEach(function (alert) {
         const key = alert[fieldName] || fallback || "-";
         result[key] = (result[key] || 0) + 1;
     });
-
     return result;
 }
 
@@ -51,11 +46,9 @@ function loadDashboard() {
      * latest activity and renders widgets from response.items.
      */
     const params = [];
-
     if (typeof selectedTeamId === "function" && selectedTeamId()) {
         params.push("team_id=" + encodeURIComponent(selectedTeamId()));
     }
-
     params.push("page=1");
     params.push("page_size=100");
     params.push("sort=activity");
@@ -115,14 +108,12 @@ function renderDashboardAlertRow(alert) {
                 })
         )
     );
-
     row.append(
         $("<td>")
             .addClass("overview-alert-title-cell")
             .append($("<div>").addClass("overview-alert-title").text(alert.title || "-"))
             .append($("<div>").addClass("overview-alert-meta").text(alert.source || alert.route_name || "Alert"))
     );
-
     row.append(
         $("<td>").append(
             makeAlertBadge(
@@ -131,13 +122,11 @@ function renderDashboardAlertRow(alert) {
             )
         )
     );
-
     row.append(
         $("<td>").append(
             makeAlertBadge(alert.status || "-", statusBadgeClass(alert.status))
         )
     );
-
     row.append($("<td>").text(alert.team_slug || "-"));
     row.append($("<td>").addClass("overview-duration-cell").text(alertDuration(alert)));
     row.append($("<td>").text(formatDateTimeMinutes(dashboardDateValue(alert))));
@@ -145,33 +134,33 @@ function renderDashboardAlertRow(alert) {
     const actionsCell = $("<td>").addClass("actions-cell");
     const actions = $("<div>").addClass("table-actions");
 
-    if (alert.status === "firing") {
-        actions.append(
-            $("<button>")
-                .attr("type", "button")
-                .addClass("btn btn-warning btn-small")
-                .text("Ack")
-                .on("click", function () {
-                    apiPost("/api/alerts/" + alert.id + "/ack", {}, loadDashboard);
-                })
-        );
-    }
-
-    if (alert.status !== "resolved") {
-        actions.append(
-            $("<button>")
-                .attr("type", "button")
-                .addClass("btn btn-resolve btn-small")
-                .text("Resolve")
-                .on("click", function () {
-                    apiPost("/api/alerts/" + alert.id + "/resolve", {}, loadDashboard);
-                })
-        );
+    if (canRespondObject(alert)) {
+        if (alert.status === "firing") {
+            actions.append(
+                $("<button>")
+                    .attr("type", "button")
+                    .addClass("btn btn-warning btn-small")
+                    .text("Ack")
+                    .on("click", function () {
+                        apiPost("/api/alerts/" + alert.id + "/ack", {}, loadDashboard);
+                    })
+            );
+        }
+        if (alert.status !== "resolved") {
+            actions.append(
+                $("<button>")
+                    .attr("type", "button")
+                    .addClass("btn btn-resolve btn-small")
+                    .text("Resolve")
+                    .on("click", function () {
+                        apiPost("/api/alerts/" + alert.id + "/resolve", {}, loadDashboard);
+                    })
+            );
+        }
     }
 
     actionsCell.append(actions);
     row.append(actionsCell);
-
     return row;
 }
 
@@ -199,7 +188,6 @@ function renderDashboardRecentAlerts(alerts) {
                 .addClass("overview-list-dot")
                 .addClass("overview-dot-" + normalizeAlertValue(alert.status))
         );
-
         item.append(
             $("<span>")
                 .addClass("overview-list-main")
@@ -210,13 +198,11 @@ function renderDashboardRecentAlerts(alerts) {
                         .text((alert.team_slug || "-") + " · " + severityLabel(alert.severity))
                 )
         );
-
         item.append(
             $("<span>")
                 .addClass("overview-list-time")
                 .text(formatDateTimeMinutes(dashboardDateValue(alert)))
         );
-
         target.append(item);
     });
 }
@@ -266,7 +252,6 @@ function renderDashboardTeamsNow(activeAlerts) {
 function renderDashboardSeveritySplit(alerts) {
     const target = $("#dashboard-severity-split");
     target.empty();
-
     const counts = dashboardGroupCount(alerts, "severity", "unknown");
     const order = ["critical", "high", "medium", "low", "unknown"];
     renderDashboardBars(target, counts, order, alerts.length, severityLabel);
@@ -275,12 +260,10 @@ function renderDashboardSeveritySplit(alerts) {
 function renderDashboardTeamSummary(alerts) {
     const target = $("#dashboard-team-summary");
     target.empty();
-
     const counts = dashboardGroupCount(alerts, "team_slug", "Unknown team");
     const order = Object.keys(counts).sort(function (left, right) {
         return counts[right] - counts[left];
     });
-
     renderDashboardBars(target, counts, order.slice(0, 8), alerts.length, function (value) {
         return value;
     });
@@ -294,13 +277,10 @@ function renderDashboardBars(target, counts, order, total, labelFunction) {
 
     order.forEach(function (key) {
         const count = counts[key] || 0;
-
         if (!count) {
             return;
         }
-
         const percent = Math.round((count / total) * 100);
-
         target.append(
             $("<div>")
                 .addClass("overview-bar-row")
@@ -308,7 +288,7 @@ function renderDashboardBars(target, counts, order, total, labelFunction) {
                     $("<div>")
                         .addClass("overview-bar-meta")
                         .append($("<span>").text(labelFunction(key)))
-                        .append($("<strong>").text(count))
+                        .append($("<span>").text(count))
                 )
                 .append(
                     $("<div>")
@@ -333,17 +313,14 @@ function renderDashboardSystemStatus(alerts, activeAlerts) {
         target.text("No alerts in the current selection.");
         return;
     }
-
     if (firing > 0) {
         target.text(firing + " firing alert" + (firing === 1 ? "" : "s") + " require attention.");
         return;
     }
-
     if (activeAlerts.length > 0) {
         target.text(activeAlerts.length + " active alert" + (activeAlerts.length === 1 ? "" : "s") + " acknowledged.");
         return;
     }
-
     target.text("All tracked alerts are resolved.");
 }
 

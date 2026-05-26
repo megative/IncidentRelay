@@ -222,7 +222,11 @@ def require_admin_user():
     """Return an error response when current user is not an admin."""
     user = current_user()
     if not user or not user.is_admin:
-        return jsonify({"error": "Admin role is required"}), 403
+        return jsonify({
+            "error": "admin_required",
+            "message": "Admin role is required",
+        }), 403
+
     return None
 
 

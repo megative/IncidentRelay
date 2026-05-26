@@ -6,11 +6,9 @@ function getProfileInitials(profile) {
      */
     const source = profile.display_name || profile.username || "?";
     const parts = source.trim().split(/\s+/);
-
     if (parts.length >= 2) {
         return (parts[0][0] + parts[1][0]).toUpperCase();
     }
-
     return source.substring(0, 2).toUpperCase();
 }
 
@@ -99,7 +97,6 @@ function fillProfileGroupSelects(profile) {
     (profile.groups || []).forEach(function (membership) {
         const groupName = membership.group_name || membership.group_slug || ("Group #" + membership.group_id);
         const label = groupName + " (" + RbacRoles.groupLabel(membership.role) + ")";
-
         tokenGroupSelect.append(
             $("<option>")
                 .val(String(membership.group_id))
@@ -205,9 +202,9 @@ function renderProfileTokenRow(token) {
     row.append($("<td>").text(token.token_prefix || "-"));
     row.append($("<td>").text(token.group_name || token.group_slug || "No group limit"));
     row.append($("<td>").text((token.scopes || []).join(", ") || "-"));
-    row.append($("<td>").text(formatDateTime24(token.created_at, {seconds: false})));
-    row.append($("<td>").text(token.expires_at ? formatDateTime24(token.expires_at, {seconds: false}) : "Never"));
-    row.append($("<td>").text(token.last_used_at ? formatDateTime24(token.last_used_at, {seconds: false}) : "Never"));
+    row.append($("<td>").text(formatDateTime24(token.created_at, { seconds: false })));
+    row.append($("<td>").text(token.expires_at ? formatDateTime24(token.expires_at, { seconds: false }) : "Never"));
+    row.append($("<td>").text(token.last_used_at ? formatDateTime24(token.last_used_at, { seconds: false }) : "Never"));
     row.append(
         $("<td>").append(
             $("<span>")
@@ -229,7 +226,6 @@ function renderProfileTokenRow(token) {
                 })
         );
     }
-
     row.append($("<td>").addClass("actions-cell").append(actions));
     return row;
 }
@@ -238,12 +234,15 @@ function revokeProfileToken(token) {
     /*
      * Revoke a personal API token.
      */
-    if (!confirm("Revoke token \"" + (token.name || token.id) + "\"?")) {
-        return;
-    }
-
-    apiDelete("/api/profile/tokens/" + token.id, function () {
-        loadProfileTokens();
+    showAppConfirm({
+        title: "Revoke this token?",
+        message: "Revoke token \"" + (token.name || token.id) + "\"?",
+        confirmText: "Revoke",
+        confirmClass: "btn-danger",
+    }).done(function () {
+        apiDelete("/api/profile/tokens/" + token.id, function () {
+            loadProfileTokens();
+        });
     });
 }
 
@@ -338,8 +337,8 @@ function saveActiveGroup() {
      * Set the active group from the profile page.
      */
     const groupId = $("#profile-active-group").val();
-
     setProfileStatus("#profile-active-group-status", "Updating...", false);
+
     apiPost(
         "/api/profile/active-group",
         {
@@ -361,33 +360,27 @@ $(document).on("click", "#open-profile-token-modal", function () {
     resetProfileTokenModal();
     openAppModal("#profile-token-modal");
 });
-
 $(document).on("click", "#close-profile-token-modal, #close-profile-token-modal-footer", function () {
     closeAppModal("#profile-token-modal");
 });
-
 $(document).on("click", "#open-profile-password-modal", function () {
     setProfileInlineStatus("#profile-password-modal-status", "", false);
     $("#profile-old-password").val("");
     $("#profile-new-password").val("");
     openAppModal("#profile-password-modal");
 });
-
 $(document).on("click", "#close-profile-password-modal, #close-profile-password-modal-footer", function () {
     closeAppModal("#profile-password-modal");
 });
-
 $(document).on("click", "#profile-token-modal, #profile-password-modal", function (event) {
     if (event.target === this || $(event.target).hasClass("app-modal")) {
         closeAppModal("#" + $(this).attr("id"));
     }
 });
-
 $(document).on("keydown", function (event) {
     if (event.key !== "Escape") {
         return;
     }
-
     if ($("#profile-token-modal").hasClass("is-open")) {
         closeAppModal("#profile-token-modal");
     }

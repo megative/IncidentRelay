@@ -97,17 +97,17 @@ class SsoProviderUpdateSchema(ApiModel):
     Partial SSO provider update.
     """
 
-    slug: str | None = Field(default=None, min_length=1, max_length=80)
-    label: str | None = Field(default=None, min_length=1, max_length=255)
-    protocol: str | None = Field(default=None, max_length=16)
+    slug: str | None = Field(default=None, min_length=2, max_length=64, pattern=r"^[a-z0-9][a-z0-9_-]*$")
+    label: str | None = Field(default=None, min_length=2, max_length=128)
+    protocol: str | None = Field(default=None, pattern=SSO_PROTOCOL_PATTERN)
     enabled: bool | None = None
 
-    subject_claim: str | None = Field(default=None, max_length=255)
-    email_claim: str | None = Field(default=None, max_length=255)
-    username_claim: str | None = Field(default=None, max_length=255)
-    display_name_claim: str | None = Field(default=None, max_length=255)
-    phone_claim: str | None = Field(default=None, max_length=255)
-    groups_claim: str | None = Field(default=None, max_length=255)
+    subject_claim: str | None = Field(default=None, min_length=1, max_length=128)
+    email_claim: str | None = Field(default=None, min_length=1, max_length=128)
+    username_claim: str | None = Field(default=None, min_length=1, max_length=128)
+    display_name_claim: str | None = Field(default=None, min_length=1, max_length=128)
+    groups_claim: str | None = Field(default=None, min_length=1, max_length=128)
+    phone_claim: str | None = Field(default=None, min_length=1, max_length=20)
 
     allowed_domains: list[str] | None = None
 
@@ -117,21 +117,25 @@ class SsoProviderUpdateSchema(ApiModel):
     sync_group_memberships: bool | None = None
     remove_missing_group_memberships: bool | None = None
 
-    oidc_client_id: str | None = Field(default=None, max_length=255)
-    oidc_client_secret: str | None = Field(default=None, max_length=2048)
+    # OIDC
+    client_id: str | None = Field(default=None, max_length=512)
+    client_secret: str | None = Field(default=None, max_length=4096)
+    oidc_metadata_url: str | None = Field(default=None, max_length=2048)
     oidc_issuer: str | None = Field(default=None, max_length=2048)
     oidc_authorization_endpoint: str | None = Field(default=None, max_length=2048)
     oidc_token_endpoint: str | None = Field(default=None, max_length=2048)
     oidc_userinfo_endpoint: str | None = Field(default=None, max_length=2048)
     oidc_jwks_uri: str | None = Field(default=None, max_length=2048)
-    oidc_scope: str | None = Field(default=None, max_length=255)
+    oidc_scope: str | None = Field(default=None, max_length=512)
 
-    saml_idp_metadata_url: str | None = Field(default=None, max_length=2048)
+    # SAML IdP
     saml_idp_entity_id: str | None = Field(default=None, max_length=2048)
     saml_idp_sso_url: str | None = Field(default=None, max_length=2048)
     saml_idp_slo_url: str | None = Field(default=None, max_length=2048)
     saml_idp_x509_cert: str | None = None
+    saml_idp_metadata_url: str | None = Field(default=None, max_length=2048)
 
+    # SAML SP
     saml_sp_entity_id: str | None = Field(default=None, max_length=2048)
     saml_sp_acs_url: str | None = Field(default=None, max_length=2048)
     saml_sp_sls_url: str | None = Field(default=None, max_length=2048)
@@ -139,7 +143,21 @@ class SsoProviderUpdateSchema(ApiModel):
     saml_sp_private_key: str | None = None
     saml_name_id_format: str | None = Field(default=None, max_length=512)
 
-    extra_config: dict | None = None
+    extra_config: SsoExtraConfig | None = None
+
+    @field_validator("allowed_domains")
+    @classmethod
+    def normalize_allowed_domains(cls, value):
+        if value is None:
+            return None
+
+        result = []
+        for item in value:
+            domain = str(item).strip().lower()
+            if domain:
+                result.append(domain)
+
+        return result or None
 
 
 class SsoGroupMappingCreateSchema(ApiModel):

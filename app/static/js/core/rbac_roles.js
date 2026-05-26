@@ -1,240 +1,665 @@
 var GROUP_VIEWER_ROLE = "viewer";
 var GROUP_EDITOR_ROLE = "editor";
 var GROUP_USER_ADMIN_ROLE = "user_admin";
-
 var GROUP_ROLES = [
-  { value: GROUP_VIEWER_ROLE, label: "Group Viewer" },
-  { value: GROUP_EDITOR_ROLE, label: "Group Editor" },
-  { value: GROUP_USER_ADMIN_ROLE, label: "Group Admin" },
+    { value: GROUP_VIEWER_ROLE, label: "Group Viewer" },
+    { value: GROUP_EDITOR_ROLE, label: "Group Editor" },
+    { value: GROUP_USER_ADMIN_ROLE, label: "Group Admin" },
 ];
 
 var TEAM_VIEWER_ROLE = "viewer";
 var TEAM_RESPONDER_ROLE = "responder";
 var TEAM_MANAGER_ROLE = "manager";
-
 var TEAM_ROLES = [
-  { value: TEAM_VIEWER_ROLE, label: "Team Viewer" },
-  { value: TEAM_RESPONDER_ROLE, label: "Team Responder" },
-  { value: TEAM_MANAGER_ROLE, label: "Team Manager" },
+    { value: TEAM_VIEWER_ROLE, label: "Team Viewer" },
+    { value: TEAM_RESPONDER_ROLE, label: "Team Responder" },
+    { value: TEAM_MANAGER_ROLE, label: "Team Manager" },
 ];
 
 window.RbacRoles = (function () {
-  function getValue(value, fallbackValue) {
-    return value || fallbackValue;
-  }
-
-  function label(roles, value, fallbackValue) {
-    const safeRoles = Array.isArray(roles) ? roles : [];
-    const selected = getValue(value, fallbackValue);
-
-    const item = safeRoles.find(function (role) {
-      return role.value === selected;
-    });
-
-    return item ? item.label : selected;
-  }
-
-  function fillSelect(selector, roles, selectedValue, fallbackValue) {
-    const select = $(selector);
-    const safeRoles = Array.isArray(roles) ? roles : [];
-    const selected = selectedValue || select.val() || fallbackValue;
-
-    select.empty();
-
-    safeRoles.forEach(function (role) {
-      select.append(
-        $("<option>")
-          .val(role.value)
-          .text(role.label)
-      );
-    });
-
-    if (safeRoles.some(function (role) {
-      return role.value === selected;
-    })) {
-      select.val(selected);
-      return;
+    function getValue(value, fallbackValue) {
+        return value || fallbackValue;
     }
 
-    if (safeRoles.length) {
-      select.val(safeRoles[0].value);
-    }
-  }
-
-  function groupLabel(role) {
-    return label(GROUP_ROLES, role, GROUP_VIEWER_ROLE);
-  }
-
-  function teamLabel(role) {
-    return label(TEAM_ROLES, role, TEAM_VIEWER_ROLE);
-  }
-
-  function groupClass(role) {
-    const value = getValue(role, GROUP_VIEWER_ROLE);
-
-    if (value === GROUP_USER_ADMIN_ROLE) {
-      return "role-user-admin";
+    function label(roles, value, fallbackValue) {
+        const safeRoles = Array.isArray(roles) ? roles : [];
+        const selected = getValue(value, fallbackValue);
+        const item = safeRoles.find(function (role) {
+            return role.value === selected;
+        });
+        return item ? item.label : selected;
     }
 
-    if (value === GROUP_EDITOR_ROLE) {
-      return "role-editor";
+    function fillSelect(selector, roles, selectedValue, fallbackValue) {
+        const select = $(selector);
+        const safeRoles = Array.isArray(roles) ? roles : [];
+        const selected = selectedValue || select.val() || fallbackValue;
+
+        select.empty();
+        safeRoles.forEach(function (role) {
+            select.append(
+                $("<option>")
+                    .val(role.value)
+                    .text(role.label)
+            );
+        });
+
+        if (safeRoles.some(function (role) { return role.value === selected; })) {
+            select.val(selected);
+            return;
+        }
+
+        if (safeRoles.length) {
+            select.val(safeRoles[0].value);
+        }
     }
 
-    return "role-viewer";
-  }
-
-  function teamClass(role) {
-    const value = getValue(role, TEAM_VIEWER_ROLE);
-
-    if (value === TEAM_MANAGER_ROLE) {
-      return "role-manager";
+    function groupLabel(role) {
+        return label(GROUP_ROLES, role, GROUP_VIEWER_ROLE);
     }
 
-    if (value === TEAM_RESPONDER_ROLE) {
-      return "role-responder";
+    function teamLabel(role) {
+        return label(TEAM_ROLES, role, TEAM_VIEWER_ROLE);
     }
 
-    return "role-viewer";
-  }
+    function groupClass(role) {
+        const value = getValue(role, GROUP_VIEWER_ROLE);
+        if (value === GROUP_USER_ADMIN_ROLE) {
+            return "role-user-admin";
+        }
+        if (value === GROUP_EDITOR_ROLE) {
+            return "role-editor";
+        }
+        return "role-viewer";
+    }
 
-  function fillGroupSelect(selector, selectedValue) {
-    fillSelect(selector, GROUP_ROLES, selectedValue, GROUP_VIEWER_ROLE);
-  }
+    function teamClass(role) {
+        const value = getValue(role, TEAM_VIEWER_ROLE);
+        if (value === TEAM_MANAGER_ROLE) {
+            return "role-manager";
+        }
+        if (value === TEAM_RESPONDER_ROLE) {
+            return "role-responder";
+        }
+        return "role-viewer";
+    }
 
-  function fillTeamSelect(selector, selectedValue) {
-    fillSelect(selector, TEAM_ROLES, selectedValue, TEAM_VIEWER_ROLE);
-  }
+    function fillGroupSelect(selector, selectedValue) {
+        fillSelect(selector, GROUP_ROLES, selectedValue, GROUP_VIEWER_ROLE);
+    }
 
-  return {
-    label: label,
-    fillSelect: fillSelect,
+    function fillTeamSelect(selector, selectedValue) {
+        fillSelect(selector, TEAM_ROLES, selectedValue, TEAM_VIEWER_ROLE);
+    }
 
-    groupLabel: groupLabel,
-    teamLabel: teamLabel,
-
-    groupClass: groupClass,
-    teamClass: teamClass,
-
-    fillGroupSelect: fillGroupSelect,
-    fillTeamSelect: fillTeamSelect,
-  };
+    return {
+        label: label,
+        fillSelect: fillSelect,
+        groupLabel: groupLabel,
+        teamLabel: teamLabel,
+        groupClass: groupClass,
+        teamClass: teamClass,
+        fillGroupSelect: fillGroupSelect,
+        fillTeamSelect: fillTeamSelect,
+    };
 })();
+
 function getCurrentUserGroupRole(groupId) {
-  /*
-   * Return current user's role in a group.
-   */
-  if (!currentUser || currentUser.is_admin) {
-    return currentUser && currentUser.is_admin ? "global_admin" : null;
-  }
+    /*
+     * Return current user's role in a group.
+     */
+    if (!currentUser || currentUser.is_admin) {
+        return currentUser && currentUser.is_admin ? "global_admin" : null;
+    }
 
-  const group = asArray(currentUser.groups).find(function (item) {
-    return Number(item.id) === Number(groupId);
-  });
+    const group = asArray(currentUser.groups).find(function (item) {
+        return Number(item.id) === Number(groupId) || Number(item.group_id) === Number(groupId);
+    });
 
-  return group ? group.role : null;
+    return group ? group.role : null;
 }
 
 function canEditGroup(groupId) {
-  /*
-   * Return true when current user can edit objects in a group.
-   */
-  const role = getCurrentUserGroupRole(groupId);
-
-  return currentUser && (
-      currentUser.is_admin ||
-      role === "editor" ||
-      role === "user_admin"
-  );
+    /*
+     * Return true when current user can edit objects in a group.
+     */
+    const role = getCurrentUserGroupRole(groupId);
+    return !!(
+        currentUser && (
+            currentUser.is_admin ||
+            role === GROUP_EDITOR_ROLE ||
+            role === GROUP_USER_ADMIN_ROLE
+        )
+    );
 }
 
 function canManageGroupUsers(groupId) {
-  /*
-   * Return true when current user can manage users in a group.
-   */
-  const role = getCurrentUserGroupRole(groupId);
-
-  return currentUser && (
-      currentUser.is_admin ||
-      role === "user_admin"
-  );
+    /*
+     * Return true when current user can manage users in a group.
+     */
+    const role = getCurrentUserGroupRole(groupId);
+    return !!(
+        currentUser && (
+            currentUser.is_admin ||
+            role === GROUP_USER_ADMIN_ROLE
+        )
+    );
 }
 
-function canEditTeam(team) {
-  /*
-   * Return true when current user can edit a team-scoped object.
-   */
-  if (!currentUser) {
-    return false;
-  }
-
-  if (currentUser.is_admin) {
-    return true;
-  }
-
-  if (team && team.group_id && canEditGroup(team.group_id)) {
-    return true;
-  }
-
-  const teamRole = team && (team.current_user_role || team.user_role || team.role);
-
-  return teamRole === "manager";
-}
 function getObjectPermissions(item) {
-  /*
-   * Return normalized permissions object.
-   */
-  return (item && item.permissions) || {};
+    /*
+     * Return normalized permissions object from API payload.
+     */
+    return (item && item.permissions) || {};
+}
+
+function hasObjectPermissions(item) {
+    const permissions = getObjectPermissions(item);
+    return !!Object.keys(permissions).length;
 }
 
 function canReadObject(item) {
-  return !!getObjectPermissions(item).can_read;
+    const permissions = getObjectPermissions(item);
+    if (typeof permissions.can_read !== "undefined") {
+        return !!permissions.can_read;
+    }
+    return canWriteObject(item);
 }
 
 function canWriteObject(item) {
-  return !!getObjectPermissions(item).can_write;
+    const permissions = getObjectPermissions(item);
+    if (typeof permissions.can_write !== "undefined") {
+        return !!permissions.can_write;
+    }
+
+    if (!currentUser) {
+        return false;
+    }
+    if (currentUser.is_admin) {
+        return true;
+    }
+    if (item && item.group_id && canEditGroup(item.group_id)) {
+        return true;
+    }
+
+    const teamRole = item && (item.current_user_role || item.user_role || item.role);
+    return teamRole === TEAM_MANAGER_ROLE;
 }
 
 function canDeleteObject(item) {
-  const permissions = getObjectPermissions(item);
-
-  if (typeof permissions.can_delete !== "undefined") {
-    return !!permissions.can_delete;
-  }
-
-  return !!permissions.can_write;
+    const permissions = getObjectPermissions(item);
+    if (typeof permissions.can_delete !== "undefined") {
+        return !!permissions.can_delete;
+    }
+    return canWriteObject(item);
 }
 
 function canRespondObject(item) {
-  return !!getObjectPermissions(item).can_respond;
+    const permissions = getObjectPermissions(item);
+    if (typeof permissions.can_respond !== "undefined") {
+        return !!permissions.can_respond;
+    }
+
+    if (!currentUser) {
+        return false;
+    }
+    if (currentUser.is_admin) {
+        return true;
+    }
+
+    const teamRole = item && (item.current_user_role || item.user_role || item.role);
+    return teamRole === TEAM_RESPONDER_ROLE || teamRole === TEAM_MANAGER_ROLE || canWriteObject(item);
 }
 
 function canManageUsersObject(item) {
-  return !!getObjectPermissions(item).can_manage_users;
+    const permissions = getObjectPermissions(item);
+    if (typeof permissions.can_manage_users !== "undefined") {
+        return !!permissions.can_manage_users;
+    }
+
+    if (!currentUser) {
+        return false;
+    }
+    if (currentUser.is_admin) {
+        return true;
+    }
+    if (item && item.group_id && canManageGroupUsers(item.group_id)) {
+        return true;
+    }
+
+    const teamRole = item && (item.current_user_role || item.user_role || item.role);
+    return teamRole === TEAM_MANAGER_ROLE;
 }
+
+function canEditTeam(team) {
+    /*
+     * Backward compatible alias for old page code.
+     * Prefer canWriteObject/canDeleteObject/canRespondObject in new code.
+     */
+    return canWriteObject(team);
+}
+
+function canActionObject(item, required) {
+    const action = required || "write";
+    if (action === "read") {
+        return canReadObject(item);
+    }
+    if (action === "respond") {
+        return canRespondObject(item);
+    }
+    if (action === "manage_users") {
+        return canManageUsersObject(item);
+    }
+    if (action === "delete") {
+        return canDeleteObject(item);
+    }
+    return canWriteObject(item);
+}
+
 function appendActionIfAllowed(container, item, options) {
-  /*
-   * Append action button only when object permissions allow it.
-   */
-  const required = options.required || "write";
+    /*
+     * Append a text action button only when object permissions allow it.
+     */
+    options = options || {};
+    if (!canActionObject(item, options.required || "write")) {
+        return container;
+    }
 
-  const allowed =
-    required === "read" ? canReadObject(item) :
-    required === "respond" ? canRespondObject(item) :
-    required === "manage_users" ? canManageUsersObject(item) :
-    required === "delete" ? canDeleteObject(item) :
-    canWriteObject(item);
-
-  if (!allowed) {
+    container.append(
+        $("<button>")
+            .attr("type", "button")
+            .addClass(options.className || "btn btn-small btn-secondary")
+            .text(options.text || "Action")
+            .on("click", options.onClick)
+    );
     return container;
-  }
+}
 
-  container.append(
-    $("<button>")
-      .attr("type", "button")
-      .addClass(options.className || "btn btn-small btn-secondary")
-      .text(options.text)
-      .on("click", options.onClick)
-  );
+function appendIconActionIfAllowed(container, item, options) {
+    /*
+     * Append an icon action button only when object permissions allow it.
+     */
+    options = options || {};
+    if (!canActionObject(item, options.required || "write")) {
+        return container;
+    }
 
-  return container;
+    container.append(
+        makeIconButton({
+            icon: options.icon,
+            label: options.label,
+            className: options.className,
+            onClick: options.onClick,
+        })
+    );
+    return container;
+}
+
+function getCurrentUserActiveGroupId() {
+    /*
+     * Return the selected active group id from the current user or UI selector.
+     */
+    if (currentUser && currentUser.active_group_id) {
+        return Number(currentUser.active_group_id);
+    }
+
+    const selectedGroup = Number($("#active-group-select").val());
+    return selectedGroup || null;
+}
+
+function getCurrentUserGroups() {
+    return asArray(currentUser && currentUser.groups).filter(function (group) {
+        return group.active !== false;
+    });
+}
+
+function getCurrentUserActiveGroupRole() {
+    const activeGroupId = getCurrentUserActiveGroupId();
+    const groups = getCurrentUserGroups();
+
+    if (!activeGroupId) {
+        return groups.length === 1 ? groups[0].role : null;
+    }
+
+    const group = groups.find(function (item) {
+        return Number(item.group_id || item.id) === Number(activeGroupId);
+    });
+    return group ? group.role : null;
+}
+
+function hasCurrentUserGroupWriteAccess() {
+    /*
+     * Return true when the user is allowed to create operational objects.
+     * Viewer-only users must not see New/Create buttons.
+     */
+    if (!currentUser) {
+        return false;
+    }
+    if (currentUser.is_admin) {
+        return true;
+    }
+
+    return getCurrentUserGroups().some(function (group) {
+        return group.role === GROUP_VIEWER_ROLE || group.role === "viewer";
+    });
+}
+
+function isCurrentUserViewerOnly() {
+    /*
+     * Return true when every known group role is viewer/read-only.
+     */
+    if (!currentUser) {
+        return true;
+    }
+    if (currentUser.is_admin) {
+        return false;
+    }
+
+    const groups = getCurrentUserGroups();
+    if (!groups.length) {
+        return true;
+    }
+
+    return groups.every(function (group) {
+        return !group.role || group.role === GROUP_VIEWER_ROLE || group.role === "viewer";
+    });
+}
+
+function currentUserCanCreateUiObjects() {
+    /*
+     * UI-only helper for top-level New/Create buttons.
+     * Backend permissions remain authoritative.
+     */
+    if (!currentUser) {
+        return false;
+    }
+    if (currentUser.is_admin) {
+        return true;
+    }
+    if (isCurrentUserViewerOnly()) {
+        return false;
+    }
+
+    const activeRole = getCurrentUserActiveGroupRole();
+    if (activeRole) {
+        return activeRole !== GROUP_VIEWER_ROLE && activeRole !== "viewer";
+    }
+
+    return hasCurrentUserGroupWriteAccess();
+}
+
+function setElementAllowed(selector, allowed) {
+    const element = $(selector);
+    if (!element.length) {
+        return;
+    }
+    element.toggleClass("is-hidden", !allowed);
+    element.prop("disabled", !allowed);
+}
+
+function applyCreateButtonsVisibility() {
+    /*
+     * Hide top-level New/Create buttons for viewer-only users.
+     */
+    const allowed = currentUserCanCreateUiObjects();
+
+    [
+        "#open-team-create-modal",
+        "#open-rotation-create-modal",
+        "#open-route-create-modal",
+        "#open-channel-create-modal",
+        "#open-silence-create-modal"
+    ].forEach(function (selector) {
+        setElementAllowed(selector, allowed);
+    });
+}
+
+function getButtonText(button) {
+    return String($(button).text() || "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function isRotationsWriteButton(button) {
+    const text = getButtonText(button);
+    return [
+        "edit",
+        "edit rotation",
+        "layers",
+        "rotation layers",
+        "overrides",
+        "rotation overrides",
+        "disable",
+        "disable rotation",
+        "delete",
+        "remove",
+        "save",
+        "save layer",
+        "save restrictions",
+        "add user",
+        "+ add window",
+        "24/7",
+        "business hours",
+        "nights",
+        "weekend"
+    ].indexOf(text) !== -1;
+}
+
+function applyRotationsViewerUiState() {
+    /*
+     * Extra protection for rotations.js until all rotation renderers use permissions directly.
+     */
+    if (!isCurrentUserViewerOnly()) {
+        return;
+    }
+
+    [
+        "#open-rotation-create-modal",
+        "#save-rotation",
+        "#reset-rotation-form",
+        "#add-layer-card",
+        "#create-override"
+    ].forEach(function (selector) {
+        setElementAllowed(selector, false);
+    });
+
+    $("#view-rotations button").each(function () {
+        if (isRotationsWriteButton(this)) {
+            $(this).addClass("is-hidden").prop("disabled", true);
+        }
+    });
+}
+
+function applyRbacUiState() {
+    /*
+     * Re-apply role-aware visibility after navigation and page refreshes.
+     */
+    applyCreateButtonsVisibility();
+    applyRotationsViewerUiState();
+}
+
+function getRotationByIdFromCache(rotationId) {
+    if (!Array.isArray(window.rotationsCache)) {
+        return null;
+    }
+    return window.rotationsCache.find(function (item) {
+        return Number(item.id) === Number(rotationId);
+    }) || null;
+}
+
+function canWriteRotationById(rotationId) {
+    const rotation = getRotationByIdFromCache(rotationId);
+    if (rotation) {
+        return canWriteObject(rotation);
+    }
+    return !isCurrentUserViewerOnly();
+}
+
+function wrapFunction(name, wrapperFactory) {
+    const original = window[name];
+    if (typeof original !== "function" || original.__rbacWrapped) {
+        return;
+    }
+
+    const wrapped = wrapperFactory(original);
+    wrapped.__rbacWrapped = true;
+    window[name] = wrapped;
+}
+
+function filterRotationRowActions(row, rotation) {
+    if (!row || !row.find) {
+        return row;
+    }
+
+    const canWrite = canWriteObject(rotation);
+    const canDelete = canDeleteObject(rotation);
+
+    row.find("button").each(function () {
+        const text = getButtonText(this);
+        if ((text === "disable" || text === "remove" || text === "delete") && !canDelete) {
+            $(this).remove();
+            return;
+        }
+        if (["edit", "layers", "overrides", "rotation layers", "rotation overrides"].indexOf(text) !== -1 && !canWrite) {
+            $(this).remove();
+        }
+    });
+
+    return row;
+}
+
+function filterRotationDetailsActions(rotation) {
+    const canWrite = canWriteObject(rotation);
+    const canDelete = canDeleteObject(rotation);
+    const container = $("#rotation-details-body .details-actions");
+
+    container.find("button").each(function () {
+        const text = getButtonText(this);
+        if ((text === "disable rotation" || text === "delete" || text === "remove") && !canDelete) {
+            $(this).remove();
+            return;
+        }
+        if (["edit rotation", "rotation layers", "rotation overrides"].indexOf(text) !== -1 && !canWrite) {
+            $(this).remove();
+        }
+    });
+}
+
+function denyRbacAction(message) {
+    showAppError(message || "You do not have permission to perform this action.", "Access denied");
+}
+
+function installRbacUiPatches() {
+    /*
+     * Patch old renderers that still do not use permissions directly.
+     */
+    if (window.__incidentRelayRbacUiPatchesInstalled) {
+        return;
+    }
+    window.__incidentRelayRbacUiPatchesInstalled = true;
+
+    wrapFunction("renderRotationRow", function (original) {
+        return function (rotation) {
+            return filterRotationRowActions(original.apply(this, arguments), rotation);
+        };
+    });
+
+    wrapFunction("renderRotationDetails", function (original) {
+        return function (rotation) {
+            const result = original.apply(this, arguments);
+            filterRotationDetailsActions(rotation);
+            return result;
+        };
+    });
+
+    wrapFunction("editRotation", function (original) {
+        return function (rotationId) {
+            if (!canWriteRotationById(rotationId)) {
+                denyRbacAction("Team manager role is required to edit this rotation.");
+                return;
+            }
+            return original.apply(this, arguments);
+        };
+    });
+
+    wrapFunction("selectRotationLayers", function (original) {
+        return function (rotationId) {
+            if (!canWriteRotationById(rotationId)) {
+                denyRbacAction("Team manager role is required to manage rotation layers.");
+                return;
+            }
+            return original.apply(this, arguments);
+        };
+    });
+
+    wrapFunction("selectOverrideRotation", function (original) {
+        return function (rotationId) {
+            if (!canWriteRotationById(rotationId)) {
+                denyRbacAction("Team manager role is required to manage rotation overrides.");
+                return;
+            }
+            return original.apply(this, arguments);
+        };
+    });
+
+    wrapFunction("deleteRotation", function (original) {
+        return function (rotationId) {
+            if (!canWriteRotationById(rotationId)) {
+                denyRbacAction("Team manager role is required to disable this rotation.");
+                return;
+            }
+            return original.apply(this, arguments);
+        };
+    });
+
+    wrapFunction("saveRotation", function (original) {
+        return function () {
+            const rotationId = $("#rotation-id").val();
+            if (rotationId && !canWriteRotationById(rotationId)) {
+                denyRbacAction("Team manager role is required to save this rotation.");
+                return;
+            }
+            if (!rotationId && !currentUserCanCreateUiObjects()) {
+                denyRbacAction("Write role is required to create rotations.");
+                return;
+            }
+            return original.apply(this, arguments);
+        };
+    });
+
+    wrapFunction("openCreateRotationModal", function (original) {
+        return function () {
+            if (!currentUserCanCreateUiObjects()) {
+                denyRbacAction("Write role is required to create rotations.");
+                return;
+            }
+            return original.apply(this, arguments);
+        };
+    });
+
+    wrapFunction("addLayerCard", function (original) {
+        return function () {
+            if (!canWriteRotationById(window.selectedRotationForLayers)) {
+                denyRbacAction("Team manager role is required to create rotation layers.");
+                return;
+            }
+            return original.apply(this, arguments);
+        };
+    });
+
+    wrapFunction("createOverride", function (original) {
+        return function () {
+            const rotationId = $("#override-rotation").val();
+            if (!canWriteRotationById(rotationId)) {
+                denyRbacAction("Team manager role is required to create rotation overrides.");
+                return;
+            }
+            return original.apply(this, arguments);
+        };
+    });
+
+    const observer = new MutationObserver(function () {
+        applyRbacUiState();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    applyRbacUiState();
 }

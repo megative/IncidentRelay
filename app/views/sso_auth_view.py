@@ -8,7 +8,8 @@ from flask import Blueprint, Response, jsonify, redirect, request, session
 from onelogin.saml2.auth import OneLogin_Saml2_Auth
 from onelogin.saml2.settings import OneLogin_Saml2_Settings
 from authlib.jose import JsonWebKey, JsonWebToken
-from authlib.jose.errors import JoseError
+from authlib.jose.errors import JoseError as AuthlibJoseError
+from joserfc.errors import JoseError as JoseRFCError
 from authlib.oidc.core import CodeIDToken
 
 from app.modules.db import sso_repo
@@ -209,7 +210,7 @@ def _validate_oidc_id_token(provider, metadata, token, expected_nonce):
             claims_params=claims_params,
         )
         claims.validate(leeway=120)
-    except JoseError as exc:
+    except (AuthlibJoseError, JoseRFCError) as exc:
         raise SsoLoginError(
             "sso_oidc_id_token_invalid",
             f"OIDC id_token validation failed: {exc}",

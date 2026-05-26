@@ -6,7 +6,6 @@ function normalizeAppRoutePath(pathname) {
     if (/^\/alerts\/\d+\/?$/.test(pathname || "")) {
         return "/alerts";
     }
-
     return pathname || "/";
 }
 
@@ -16,13 +15,12 @@ function splitAppPath(path) {
      *
      * Example:
      * /alerts?status=firing -> routePath=/alerts, fullPath=/alerts?status=firing
-     * /alerts/123           -> routePath=/alerts, fullPath=/alerts/123
+     * /alerts/123 -> routePath=/alerts, fullPath=/alerts/123
      */
     const url = new URL(path || "/", window.location.origin);
-
     return {
         routePath: normalizeAppRoutePath(url.pathname),
-        fullPath: url.pathname + url.search + url.hash
+        fullPath: url.pathname + url.search + url.hash,
     };
 }
 
@@ -33,19 +31,17 @@ function navigate(path, pushState) {
      * Query string is preserved for page filters, but route lookup uses only
      * pathname because routes are registered as /alerts, /routes, etc.
      */
-    const appPath = splitAppPath(path);
-    const routePath = appPath.routePath;
+    let appPath = splitAppPath(path);
+    let routePath = appPath.routePath;
 
     if (routePath === "/admin/sso" && (!currentUser || !currentUser.is_admin)) {
         showAppError("Admin role is required");
         path = "/";
     }
-
     if (routePath === "/admin/users" && !hasGroupUserAdminAccess()) {
         showAppError("Group Admin role is required");
         path = "/";
     }
-
     if (routePath === "/groups" && !hasGroupUserAdminAccess()) {
         showAppError("Group Admin role is required");
         path = "/";
@@ -56,7 +52,6 @@ function navigate(path, pushState) {
 
     $(".view").removeClass("view-visible").css("display", "none");
     $("#view-" + selectedRoute.page).addClass("view-visible").css("display", "block");
-
     $("#page-title").text(selectedRoute.title);
     $("#page-subtitle").text(selectedRoute.subtitle);
 
@@ -64,40 +59,48 @@ function navigate(path, pushState) {
     $('.menu-link[href="' + normalizedPath.routePath + '"]').addClass("active");
 
     if (pushState) {
-        history.pushState({path: normalizedPath.fullPath}, "", normalizedPath.fullPath);
+        history.pushState({ path: normalizedPath.fullPath }, "", normalizedPath.fullPath);
     }
 
     safePageLoad(selectedRoute.load);
+    applyRbacUiState();
 }
+
 function safePageLoad(loadFunction) {
-    /* Prevent one page error from hiding the whole view. */
+    /*
+     * Prevent one page error from hiding the whole view.
+     */
     try {
         loadFunction();
     } catch (error) {
         console.error("Page load failed:", error);
-        alert("Page load failed: " + error);
+        showAppError("Page load failed: " + error);
     }
 }
+
 function updateAuthUi() {
     /*
      * Update role-dependent menu visibility.
      */
     const isGlobalAdmin = !!(currentUser && currentUser.is_admin);
     const canManageUsers = hasGroupUserAdminAccess();
+    const adminSection = $(".menu-section-admin, .menu-link-admin");
 
-    $(".menu-section-admin").addClass("is-hidden");
+    adminSection.addClass("is-hidden");
     $(".menu-link-users").addClass("is-hidden");
     $(".menu-link-groups").addClass("is-hidden");
     $(".menu-link-global-admin").addClass("is-hidden");
 
     if (canManageUsers) {
-        $(".menu-section-admin").removeClass("is-hidden");
+        adminSection.removeClass("is-hidden");
         $(".menu-link-users").removeClass("is-hidden");
         $(".menu-link-groups").removeClass("is-hidden");
     }
 
     if (isGlobalAdmin) {
-        $(".menu-section-admin").removeClass("is-hidden");
+        adminSection.removeClass("is-hidden");
+        $(".menu-link-users").removeClass("is-hidden");
+        $(".menu-link-groups").removeClass("is-hidden");
         $(".menu-link-global-admin").removeClass("is-hidden");
     }
 
@@ -105,18 +108,31 @@ function updateAuthUi() {
         $("#topbar-username").text(currentUser.display_name || currentUser.username);
         fillActiveGroupSelect();
     }
+
+    applyRbacUiState();
 }
+
 function startAuthenticatedApp() {
-    /* Load user state and start the application. */
+    /*
+     * Load user state and start the application.
+     */
     apiGet("/api/auth/me", function (user) {
         currentUser = user;
         updateAuthUi();
-        fillTeamSelect("#global-team-filter", true, function () { navigate(currentAppUrl(), false); });
+        fillTeamSelect("#global-team-filter", true, function () {
+            navigate(currentAppUrl(), false);
+        });
     });
 }
 
 $(document).ready(function () {
-    /* Initialize frontend routing and global selectors. */
+    /*
+     * Initialize frontend routing and global selectors.
+     */
+    if (typeof installRbacUiPatches === "function") {
+        installRbacUiPatches();
+    }
+
     loadVersion();
 
     if (window.location.pathname === "/login") {
@@ -125,34 +141,47 @@ $(document).ready(function () {
         startAuthenticatedApp();
     }
 
-    $(".menu-link[data-page]").on("click", function (event) { event.preventDefault(); navigate($(this).attr("href"), true); });
+    $(".menu-link[data-page]").on("click", function (event) {
+        event.preventDefault();
+        navigate($(this).attr("href"), true);
+    });
 
-    $("#global-team-filter").on("change", function () { navigate(currentAppUrl(), false); });
+    $("#global-team-filter").on("change", function () {
+        navigate(currentAppUrl(), false);
+        applyRbacUiState();
+    });
 
     $("#active-group-select").on("change", function () {
         const groupId = $(this).val();
-
         apiPost("/api/profile/active-group", { group_id: groupId ? Number(groupId) : null }, function (user) {
             currentUser = user;
             updateAuthUi();
-            fillTeamSelect("#global-team-filter", true, function () { navigate(currentAppUrl(), false); });
+            fillTeamSelect("#global-team-filter", true, function () {
+                navigate(currentAppUrl(), false);
+            });
         });
     });
 
-    $("#topbar-profile").on("click", function () { navigate("/profile", true); });
+    $("#topbar-profile").on("click", function () {
+        navigate("/profile", true);
+    });
 
     $("#topbar-logout").on("click", function () {
         logout();
     });
 
-    window.onpopstate = function () { navigate(currentAppUrl(), false); };
+    window.onpopstate = function () {
+        navigate(currentAppUrl(), false);
+    };
 });
+
 function currentAppUrl() {
     /*
      * Return current SPA URL with query string and hash.
      */
     return window.location.pathname + window.location.search + window.location.hash;
 }
+
 function hasGroupUserAdminAccess() {
     /*
      * Return true when the current user can manage users in at least one group.
@@ -160,12 +189,10 @@ function hasGroupUserAdminAccess() {
     if (!currentUser) {
         return false;
     }
-
     if (currentUser.is_admin) {
         return true;
     }
-
     return asArray(currentUser.groups).some(function (group) {
-        return group.role === "user_admin";
+        return group.role === GROUP_USER_ADMIN_ROLE || group.role === "user_admin";
     });
 }
