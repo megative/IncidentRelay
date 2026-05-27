@@ -146,14 +146,34 @@ $(document).ready(function () {
         navigate($(this).attr("href"), true);
     });
 
+    function currentAppUrlWithoutTeamScope() {
+        /*
+         * Global team selector is the only source of team filtering.
+         * Remove stale team_id from page URLs so page code cannot reset
+         * the global selector back to an old value.
+         */
+        const url = new URL(currentAppUrl(), window.location.origin);
+        const routePath = normalizeAppRoutePath(url.pathname);
+
+        url.searchParams.delete("team_id");
+
+        if (routePath === "/calendar") {
+            url.searchParams.delete("rotation_id");
+        }
+
+        const query = url.searchParams.toString();
+
+        return url.pathname + (query ? "?" + query : "") + url.hash;
+    }
+
     $("#global-team-filter").on("change", function () {
-        navigate(currentAppUrl(), false);
+        navigate(currentAppUrlWithoutTeamScope(), false);
         applyRbacUiState();
     });
 
     $("#active-group-select").on("change", function () {
         const groupId = $(this).val();
-        apiPost("/api/profile/active-group", { group_id: groupId ? Number(groupId) : null }, function (user) {
+        apiPost("/api/profile/active-group", {group_id: groupId ? Number(groupId) : null}, function (user) {
             currentUser = user;
             updateAuthUi();
             fillTeamSelect("#global-team-filter", true, function () {

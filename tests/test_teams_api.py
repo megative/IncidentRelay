@@ -1,4 +1,11 @@
-def test_add_team_user_respects_active_checkbox(client, admin_headers, team, user):
+from tests.factories import create_group, create_team, create_user
+
+
+def test_add_team_user_respects_active_checkbox(client, admin_headers):
+    group = create_group()
+    team = create_team(group=group)
+    user = create_user(group=group)
+
     response = client.post(
         f"/api/teams/{team.id}/users",
         json={
@@ -20,7 +27,8 @@ def test_add_team_user_respects_active_checkbox(client, admin_headers, team, use
     )
 
     assert members_response.status_code == 200
-    members = members_response.get_json()
 
+    members = members_response.get_json()
     membership = next(item for item in members if item["user_id"] == user.id)
+
     assert membership["active"] is False

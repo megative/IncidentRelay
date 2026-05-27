@@ -1,6 +1,24 @@
 function selectedTeamId() { return $("#global-team-filter").val(); }
 function selectedTeamQuery() { const teamId = selectedTeamId(); return teamId ? "?team_id=" + encodeURIComponent(teamId) : ""; }
+function selectedTeamNumber() {
+    const teamId = selectedTeamId();
+    return teamId ? Number(teamId) : null;
+}
 
+function setSelectedTeamId(teamId, triggerChange) {
+    const select = $("#global-team-filter");
+    const value = teamId ? String(teamId) : "";
+
+    if (!select.length) {
+        return;
+    }
+
+    select.val(value);
+
+    if (triggerChange) {
+        select.trigger("change");
+    }
+}
 function fillGroupSelect(selector, includeAll, callback) {
     /* Fill a select element with groups ordered by id. */
     apiGet("/api/groups", function (groups) {

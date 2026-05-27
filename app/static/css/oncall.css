@@ -918,3 +918,34 @@ body.has-app-sticky-x-scroll {
     gap: 4px;
     min-width: 150px;
 }
+.status-scheduled {
+    background: #fff7e6;
+    color: #b54708;
+    border: 1px solid #fedf89;
+}
+.filters-row,
+.toolbar-filters,
+.page-filters {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.filter-search {
+    flex: 1 1 320px;
+    min-width: 240px;
+}
+
+.filter-select {
+    flex: 0 1 260px;
+    min-width: 220px;
+}
+
+@media (max-width: 768px) {
+    .filter-search,
+    .filter-select {
+        flex: 1 1 100%;
+        width: 100%;
+    }
+}

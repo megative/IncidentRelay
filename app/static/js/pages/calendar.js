@@ -1,6 +1,5 @@
 let calendarTeamsCache = [];
 let calendarEventsCache = [];
-let calendarSelectedTeamId = null;
 let calendarSelectedRotationId = null;
 let calendarMode = "week";
 let selectedCalendarEvent = null;
@@ -277,7 +276,6 @@ function getCalendarQueryTeamId() {
     return value ? Number(value) : null;
 }
 
-
 function getCalendarQueryRotationId() {
     /*
      * Return rotation_id from current URL query string.
@@ -352,13 +350,29 @@ function setDefaultCalendarRange() {
 }
 
 
+function getCalendarInitialTeamId() {
+    /*
+     * Direct links may still contain team_id.
+     * If team_id exists in URL, sync it into the global selector.
+     * Otherwise use the global selector.
+     */
+    const queryTeamId = getCalendarQueryTeamId();
+
+    if (queryTeamId) {
+        setSelectedTeamId(queryTeamId, false);
+        return queryTeamId;
+    }
+
+    return selectedTeamNumber();
+}
+
 function loadCalendar() {
     /*
      * Load calendar page data.
      */
-
-    calendarSelectedTeamId = getCalendarQueryTeamId();
+    calendarSelectedTeamId = getCalendarInitialTeamId();
     calendarSelectedRotationId = getCalendarQueryRotationId();
+
     calendarMode = (calendarSelectedTeamId || calendarSelectedRotationId) ? "month" : "week";
 
     if (calendarMode === "month") {
@@ -374,30 +388,10 @@ function loadCalendar() {
 
 function loadCalendarTeams(callback) {
     /*
-     * Load available teams and fill calendar team filter.
+     * Load available teams.
      */
-
     apiGet("/api/teams", function (teams) {
         calendarTeamsCache = Array.isArray(teams) ? teams : [];
-
-        const select = $("#calendar-team-filter");
-
-        select.empty();
-        select.append($("<option>").val("").text("All teams"));
-
-        calendarTeamsCache.forEach(function (team) {
-            select.append(
-                $("<option>")
-                    .val(team.id)
-                    .text(team.name + " (" + team.slug + ")")
-            );
-        });
-
-        if (calendarSelectedTeamId) {
-            select.val(String(calendarSelectedTeamId));
-        } else {
-            select.val("");
-        }
 
         if (typeof callback === "function") {
             callback();
@@ -405,13 +399,11 @@ function loadCalendarTeams(callback) {
     });
 }
 
-
 function getCalendarVisibleTeams() {
     /*
      * Return teams visible in the current calendar view.
      */
-
-    const selected = $("#calendar-team-filter").val();
+    const selected = getCalendarSelectedTeamId();
 
     if (selected) {
         return calendarTeamsCache.filter(function (team) {
@@ -421,7 +413,6 @@ function getCalendarVisibleTeams() {
 
     return calendarTeamsCache;
 }
-
 
 function getSelectedCalendarTeam() {
     /*
@@ -440,23 +431,55 @@ function getSelectedCalendarTeam() {
 
 function ensureCalendarRotationFilter() {
     /*
-     * Create rotation selector near team filter when the page needs it.
+     * Rotation selector is rendered in calendar.html.
+     * JS only fills and shows/hides it.
      */
+    const select = $("#calendar-rotation-filter");
 
-    if ($("#calendar-rotation-filter").length) {
-        return $("#calendar-rotation-filter");
+    if (select.length) {
+        return select;
     }
 
-    const select = $("<select>")
+    return $("<select>")
         .attr("id", "calendar-rotation-filter")
-        .addClass("input calendar-filter calendar-rotation-filter")
+        .addClass("input filter-select")
         .hide();
-
-    $("#calendar-team-filter").after(select);
-
-    return select;
 }
+function getCalendarSelectedTeamId() {
+    /*
+     * Global team selector is the only team scope source.
+     * Do not prefer cached calendarSelectedTeamId because it becomes stale
+     * after changing #global-team-filter.
+     */
+    if (typeof selectedTeamNumber === "function") {
+        return selectedTeamNumber();
+    }
 
+    if (typeof selectedTeamId === "function") {
+        const value = selectedTeamId();
+        return value ? Number(value) : null;
+    }
+
+    const value = $("#global-team-filter").val();
+    return value ? Number(value) : null;
+}
+function syncCalendarTeamScopeFromGlobal() {
+    /*
+     * Sync calendar state from global team selector.
+     * If team changed, selected rotation must be reset.
+     */
+    const globalTeamId = getCalendarSelectedTeamId();
+    const currentTeamId = calendarSelectedTeamId ? Number(calendarSelectedTeamId) : null;
+
+    if (Number(currentTeamId || 0) !== Number(globalTeamId || 0)) {
+        calendarSelectedRotationId = null;
+    }
+
+    calendarSelectedTeamId = globalTeamId;
+    calendarMode = calendarSelectedTeamId ? "month" : "week";
+
+    return calendarSelectedTeamId;
+}
 
 function getSelectedCalendarRotation() {
     /*
@@ -477,27 +500,26 @@ function getSelectedCalendarRotation() {
 
 function syncSelectedRotationCalendar(calendars) {
     /*
-     * Month mode renders exactly one rotation calendar.
-     * If no rotation is selected, pick the first available rotation.
+     * Keep selected rotation valid for current team.
+     * When team has 0 or 1 rotations, do not keep a local rotation selection.
      */
+    calendars = Array.isArray(calendars) ? calendars : [];
 
     if (calendarMode !== "month") {
         calendarSelectedRotationId = null;
         return;
     }
 
-    calendars = Array.isArray(calendars) ? calendars : [];
-
-    if (!calendars.length) {
+    if (calendars.length <= 1) {
         calendarSelectedRotationId = null;
         return;
     }
 
-    const exists = calendars.some(function (calendar) {
+    const selectedExists = calendars.some(function (calendar) {
         return Number(calendar.rotation_id) === Number(calendarSelectedRotationId);
     });
 
-    if (!calendarSelectedRotationId || !exists) {
+    if (!calendarSelectedRotationId || !selectedExists) {
         calendarSelectedRotationId = calendars[0].rotation_id;
     }
 }
@@ -506,18 +528,21 @@ function syncSelectedRotationCalendar(calendars) {
 function updateCalendarRotationFilter(calendars) {
     /*
      * Fill rotation selector for selected team calendar.
+     * Hide and clear selector when team has 0 or 1 rotations.
      */
-
     const select = ensureCalendarRotationFilter();
+    const selectedTeamId = getCalendarSelectedTeamId();
 
     calendars = Array.isArray(calendars) ? calendars : [];
 
-    if (calendarMode !== "month" || !$("#calendar-team-filter").val()) {
-        select.hide().empty();
+    select.empty();
+
+    if (calendarMode !== "month" || !selectedTeamId || calendars.length <= 1) {
+        calendarSelectedRotationId = null;
+        select.val("");
+        select.hide();
         return;
     }
-
-    select.empty();
 
     calendars.forEach(function (calendar) {
         select.append(
@@ -531,7 +556,7 @@ function updateCalendarRotationFilter(calendars) {
         select.val(String(calendarSelectedRotationId));
     }
 
-    select.toggle(calendars.length > 1);
+    select.show();
 }
 
 
@@ -539,13 +564,12 @@ function getRotationCalendarsForCurrentView() {
     /*
      * Return rotation calendars that should be rendered now.
      */
-
     let calendars = getRotationCalendarsFromEvents();
-    const selectedTeamId = Number($("#calendar-team-filter").val() || calendarSelectedTeamId || 0);
+    const selectedTeamId = getCalendarSelectedTeamId();
 
     if (selectedTeamId) {
         calendars = calendars.filter(function (calendar) {
-            return Number(calendar.team_id) === selectedTeamId;
+            return Number(calendar.team_id) === Number(selectedTeamId);
         });
     }
 
@@ -564,23 +588,33 @@ function getRotationCalendarsForCurrentView() {
     return calendars;
 }
 
-
 function refreshCalendar() {
     /*
      * Refresh calendar events for all visible teams.
+     * Team scope always comes from the global team selector.
      */
+    syncCalendarTeamScopeFromGlobal();
+
+    if (calendarMode === "month") {
+        setMonthCalendarRange(new Date($("#calendar-start").val() || new Date()));
+    } else {
+        setWeekCalendarRange(new Date($("#calendar-start").val() || new Date()));
+    }
 
     const teams = getCalendarVisibleTeams();
     const grid = $("#calendar-grid");
 
-    calendarMode = $("#calendar-team-filter").val() ? "month" : "week";
     calendarEventsCache = [];
-
     grid.empty();
     updateCalendarTitle();
 
     if (!teams.length) {
-        grid.append($("<div>").addClass("calendar-empty").text("No teams available."));
+        $("#calendar-rotation-filter").hide().empty();
+        grid.append(
+            $("<div>")
+                .addClass("calendar-empty")
+                .text("No teams available.")
+        );
         $("#calendar-legend").empty();
         renderCalendarSummaryCards();
         renderCalendarDetailsEmpty();
@@ -591,15 +625,14 @@ function refreshCalendar() {
 
     teams.forEach(function (team) {
         apiGet(
-            "/api/calendar?team_id=" + team.id +
-                "&start=" + encodeURIComponent($("#calendar-start").val()) +
-                "&end=" + encodeURIComponent($("#calendar-end").val()),
+            "/api/calendar?team_id=" + team.id
+            + "&start=" + encodeURIComponent($("#calendar-start").val())
+            + "&end=" + encodeURIComponent($("#calendar-end").val()),
             function (events) {
                 events = Array.isArray(events) ? events : [];
 
                 events.forEach(function (event) {
                     const teamId = getCalendarTeamId(team);
-
                     event.team_id = getCalendarEventTeamId(event) || teamId;
                     event.team_slug = event.team_slug || team.slug;
                     event.team_name = event.team_name || team.name;
@@ -610,15 +643,18 @@ function refreshCalendar() {
                 pending -= 1;
 
                 if (pending === 0) {
-                    const allCalendars = getRotationCalendarsFromEvents();
-                    const visibleCalendars = allCalendars.filter(function (calendar) {
-                        const selectedTeamId = Number($("#calendar-team-filter").val() || 0);
+                    const visibleCalendars = getRotationCalendarsFromEvents().filter(function (calendar) {
+                        const selectedTeamId = getCalendarSelectedTeamId();
 
-                        return !selectedTeamId || Number(calendar.team_id) === selectedTeamId;
+                        return !selectedTeamId
+                            || Number(calendar.team_id) === Number(selectedTeamId);
                     });
 
                     syncSelectedRotationCalendar(visibleCalendars);
                     updateCalendarRotationFilter(visibleCalendars);
+
+                    setCalendarQueryTeamId(calendarSelectedTeamId, calendarSelectedRotationId);
+
                     updateCalendarTitle();
 
                     if (calendarMode === "month") {
@@ -1102,50 +1138,6 @@ function getCalendarTimelinePosition(clippedStart, clippedEnd, dayStart, dayEnd)
     };
 }
 
-
-// function renderCalendarLegend() {
-//     /*
-//      * Render user color legend for visible events.
-//      */
-//
-//     const legend = $("#calendar-legend");
-//     const users = {};
-//
-//     legend.empty();
-//
-//     calendarEventsCache.forEach(function (event) {
-//         if (!event.user_id) {
-//             return;
-//         }
-//
-//         users[event.user_id] = {
-//             id: event.user_id,
-//             label: getCalendarUserLabel(event),
-//             color: getCalendarUserColor(event.user_id)
-//         };
-//     });
-//
-//     Object.keys(users)
-//         .sort(function (a, b) {
-//             return Number(a) - Number(b);
-//         })
-//         .forEach(function (userId) {
-//             const user = users[userId];
-//
-//             legend.append(
-//                 $("<div>")
-//                     .addClass("calendar-legend-item")
-//                     .append(
-//                         $("<span>")
-//                             .addClass("calendar-legend-color")
-//                             .attr("style", "background-color: " + user.color)
-//                     )
-//                     .append($("<span>").addClass("calendar-legend-name").text(user.label))
-//             );
-//         });
-// }
-
-
 function shiftCalendarRange(direction) {
     /*
      * Move calendar range.
@@ -1172,38 +1164,18 @@ function shiftCalendarRange(direction) {
 
 function openCalendarTeam(teamId, rotationId) {
     /*
-     * Open one rotation calendar in month mode.
-     * When rotationId is omitted, the first rotation for the team is selected after events load.
+     * Open one team calendar in month mode.
      */
-
-    calendarSelectedTeamId = teamId;
+    calendarSelectedTeamId = teamId ? Number(teamId) : null;
     calendarSelectedRotationId = rotationId || null;
     calendarMode = "month";
 
-    $("#calendar-team-filter").val(String(teamId));
+    setSelectedTeamId(calendarSelectedTeamId, false);
 
-    setCalendarQueryTeamId(teamId, calendarSelectedRotationId);
+    setCalendarQueryTeamId(calendarSelectedTeamId, calendarSelectedRotationId);
     setMonthCalendarRange(new Date());
     refreshCalendar();
 }
-
-
-function resetCalendarToAllTeams() {
-    /*
-     * Show all teams in week mode.
-     */
-
-    calendarSelectedTeamId = null;
-    calendarSelectedRotationId = null;
-    calendarMode = "week";
-
-    $("#calendar-team-filter").val("");
-
-    setCalendarQueryTeamId(null);
-    setWeekCalendarRange(new Date());
-    refreshCalendar();
-}
-
 
 function hexToCalendarSoftColor(hex, alpha) {
     /*
@@ -1471,26 +1443,34 @@ $(document).on("click", "#calendar-next", function () {
     shiftCalendarRange(1);
 });
 
-$(document).on("change", "#calendar-team-filter", function () {
-    const value = $(this).val();
-
-    if (value) {
-        openCalendarTeam(Number(value));
-        return;
-    }
-
-    resetCalendarToAllTeams();
-});
 
 $(document).on("change", "#calendar-rotation-filter", function () {
     const value = $(this).val();
 
+    calendarSelectedTeamId = getCalendarSelectedTeamId();
     calendarSelectedRotationId = value ? Number(value) : null;
 
-    setCalendarQueryTeamId(calendarSelectedTeamId || Number($("#calendar-team-filter").val()), calendarSelectedRotationId);
+    setCalendarQueryTeamId(calendarSelectedTeamId, calendarSelectedRotationId);
     updateCalendarTitle();
     renderCalendarMonth();
     renderCalendarDetailsEmpty();
+});
+function currentAppUrlWithoutGlobalTeamOwnedParams() {
+    const url = new URL(currentAppUrl(), window.location.origin);
+    const routePath = normalizeAppRoutePath(url.pathname);
+
+    if (routePath === "/calendar") {
+        url.searchParams.delete("team_id");
+        url.searchParams.delete("rotation_id");
+    }
+
+    const query = url.searchParams.toString();
+    return url.pathname + (query ? "?" + query : "") + url.hash;
+}
+
+$("#global-team-filter").on("change", function () {
+    navigate(currentAppUrlWithoutGlobalTeamOwnedParams(), false);
+    applyRbacUiState();
 });
 
 

@@ -2,7 +2,12 @@ from flask import Blueprint, jsonify, request
 from peewee import DoesNotExist
 
 from app.api.schemas.routes import RouteChannelsReplaceSchema, RouteCreateSchema, RouteUpdateSchema
-from app.modules.db import routes_repo, channels_repo, rotations_repo
+from app.modules.db import (
+    routes_repo,
+    channels_repo,
+    rotations_repo,
+    escalation_policies_repo,
+)
 from app.services.auth import create_raw_token, hash_token
 from app.services.audit import write_audit
 from app.services.rbac import get_allowed_team_ids, require_team_read, require_team_write
@@ -11,8 +16,6 @@ from app.services.validation import validate_body
 
 
 routes_bp = Blueprint("routes_api", __name__)
-
-
 
 
 def validate_route_rotation(team_id, rotation_id):
@@ -42,7 +45,7 @@ def validate_route_rotation(team_id, rotation_id):
 
 
 def validate_route_escalation_policy(team_id, escalation_policy_id):
-    """Ensure selected escalation policy exists and belongs to the route team."""
+    """Ensure selected escalation policy exists, is enabled and belongs to the route team."""
     if not escalation_policy_id:
         return None
 
@@ -63,6 +66,24 @@ def validate_route_escalation_policy(team_id, escalation_policy_id):
             "policy_team_id": policy.team_id,
             "team_id": team_id,
         }), 400
+
+    if getattr(policy, "deleted", False):
+        return jsonify({
+            "error": "escalation_policy_deleted",
+            "message": "Escalation policy was deleted",
+            "escalation_policy_id": escalation_policy_id,
+        }), 400
+
+    if not getattr(policy, "enabled", True):
+        return jsonify({
+            "error": "escalation_policy_disabled",
+            "message": "Escalation policy is disabled",
+            "escalation_policy_id": escalation_policy_id,
+        }), 400
+
+    error = require_team_write(policy.team_id)
+    if error:
+        return error
 
     return None
 
@@ -196,6 +217,7 @@ def create_route():
         name=payload.name,
         source=payload.source,
         rotation_id=payload.rotation_id,
+        escalation_policy_id=payload.escalation_policy_id,
         matchers=payload.matchers,
         group_by=payload.group_by,
         enabled=payload.enabled,
@@ -248,6 +270,13 @@ def update_route(route_id):
     rotation_error = validate_route_rotation(payload.team_id, payload.rotation_id)
     if rotation_error:
         return rotation_error
+
+    policy_error = validate_route_escalation_policy(
+        payload.team_id,
+        payload.escalation_policy_id,
+    )
+    if policy_error:
+        return policy_error
 
     route = routes_repo.update_route(
         route_id,

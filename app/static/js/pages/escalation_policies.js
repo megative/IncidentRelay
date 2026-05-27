@@ -62,21 +62,16 @@ function createUnsavedEscalationRule() {
 }
 
 function loadEscalationPolicies() {
-    fillTeamSelect("#escalation-policy-team", false);
-    fillTeamSelect("#escalation-policies-team-filter", true, function () {
-        refreshEscalationPolicies();
+    fillTeamSelect("#escalation-policy-team", false, function () {
+        resetEscalationPolicyForm();
     });
+
+    refreshEscalationPolicies();
     updateEscalationPolicyCreateButtonState();
 }
 
 function buildEscalationPoliciesApiUrl() {
-    const teamId = $("#escalation-policies-team-filter").val();
-
-    if (teamId) {
-        return "/api/escalation-policies?team_id=" + encodeURIComponent(teamId);
-    }
-
-    return "/api/escalation-policies";
+    return "/api/escalation-policies" + selectedTeamQuery();
 }
 
 function updateEscalationPolicyCreateButtonState() {
@@ -231,45 +226,49 @@ function renderEscalationPolicyRow(policy) {
 }
 
 function renderEscalationPolicyActions(policy) {
-    const actions = $("<div>").addClass("table-actions");
-
-    appendActionIfAllowed(actions, policy, {
-        required: "write",
-        text: "Edit",
-        className: "btn btn-small",
-        onClick: function () {
-            editEscalationPolicy(policy.id);
-        },
+    return makeActionMenu({
+        object: policy,
+        items: [
+            {
+                label: "Edit",
+                icon: "fas fa-edit",
+                required: "write",
+                denyMessage: "Team manager role is required to edit this policy.",
+                onClick: function () {
+                    editEscalationPolicy(policy.id);
+                }
+            },
+            {
+                label: "Rules",
+                icon: "fas fa-list-ol",
+                required: "write",
+                denyMessage: "Team manager role is required to manage policy rules.",
+                onClick: function () {
+                    openEscalationRulesModal(policy.id);
+                }
+            },
+            {
+                label: policy.enabled ? "Disable" : "Enable",
+                icon: policy.enabled ? "fas fa-pause" : "fas fa-play",
+                required: "write",
+                danger: policy.enabled,
+                denyMessage: "Team manager role is required to enable or disable this policy.",
+                onClick: function () {
+                    setEscalationPolicyEnabled(policy, !policy.enabled);
+                }
+            },
+            {
+                label: "Remove",
+                icon: "fas fa-trash",
+                required: "delete",
+                danger: true,
+                denyMessage: "Delete permission is required to remove this policy.",
+                onClick: function () {
+                    removeEscalationPolicy(policy);
+                }
+            }
+        ]
     });
-
-    appendActionIfAllowed(actions, policy, {
-        required: "write",
-        text: "Rules",
-        className: "btn btn-small",
-        onClick: function () {
-            openEscalationRulesModal(policy.id);
-        },
-    });
-
-    appendActionIfAllowed(actions, policy, {
-        required: "write",
-        text: policy.enabled ? "Disable" : "Enable",
-        className: policy.enabled ? "btn btn-warning btn-small" : "btn btn-success btn-small",
-        onClick: function () {
-            setEscalationPolicyEnabled(policy, !policy.enabled);
-        },
-    });
-
-    appendActionIfAllowed(actions, policy, {
-        required: "delete",
-        text: "Remove",
-        className: "btn btn-danger btn-small",
-        onClick: function () {
-            removeEscalationPolicy(policy);
-        },
-    });
-
-    return actions;
 }
 
 function escalationPolicyDetailsItem(label, value) {
@@ -519,7 +518,7 @@ function resetEscalationPolicyForm() {
     $("#escalation-policy-enabled").prop("checked", true);
     $("#escalation-policy-team").prop("disabled", false);
 
-    const selectedTeam = $("#global-team-filter").val() || $("#escalation-policies-team-filter").val();
+    const selectedTeam = $("#global-team-filter").val();
     if (selectedTeam) {
         $("#escalation-policy-team").val(selectedTeam);
     }
@@ -1141,7 +1140,6 @@ function toggleEscalationRuleEditor(ruleId) {
 
 $(document).on("input", "#escalation-policies-search", applyEscalationPolicyFilters);
 $(document).on("change", "#escalation-policies-status-filter", applyEscalationPolicyFilters);
-$(document).on("change", "#escalation-policies-team-filter", refreshEscalationPolicies);
 $(document).on("click", "#reload-escalation-policies", refreshEscalationPolicies);
 $(document).on("click", "#open-escalation-policy-create-modal", openCreateEscalationPolicyModal);
 $(document).on("click", "#save-escalation-policy", saveEscalationPolicy);

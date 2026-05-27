@@ -1412,14 +1412,10 @@ function getRotationSearchText(rotation) {
 
 function getFilteredRotations() {
     const query = String($("#rotations-search").val() || "").trim().toLowerCase();
-    const team = String($("#rotations-team-filter").val() || "");
     const status = String($("#rotations-status-filter").val() || "");
 
     return rotationsCache.filter(function (rotation) {
         const runtimeStatus = getRotationRuntimeStatus(rotation);
-        if (team && String(rotation.team_slug || "") !== team) {
-            return false;
-        }
         if (status === "active" && runtimeStatus.key !== "active") {
             return false;
         }
@@ -2275,7 +2271,6 @@ $(document).on("click", "#reload-overrides", loadOverrides);
 $(document).on("click", "#create-override", createOverride);
 
 $(document).on("input", "#rotations-search", renderRotationsTable);
-$(document).on("change", "#rotations-team-filter, #rotations-status-filter", renderRotationsTable);
 
 $(document).on("click", "#open-rotation-create-modal", openCreateRotationModal);
 $(document).on("click", "#close-rotation-form-modal", function () {
