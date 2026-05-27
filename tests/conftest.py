@@ -18,6 +18,8 @@ os.environ.setdefault("PYTHONPATH", str(ROOT_DIR))
 
 from app import create_app  # noqa: E402
 from app.db import init_database  # noqa: E402
+from app.login import create_access_token  # noqa: E402
+from tests.factories import create_user  # noqa: E402
 from app.modules.db.migrations import migrate  # noqa: E402
 from app.modules.db.models import (  # noqa: E402
     Alert,
@@ -47,6 +49,8 @@ from app.modules.db.models import (  # noqa: E402
     SsoProvider,
     SsoIdentity,
     SsoGroupMapping,
+    EscalationPolicy,
+    EscalationPolicyRule,
 )
 
 
@@ -78,6 +82,8 @@ CLEANUP_MODELS = [
     SsoGroupMapping,
     Team,
     Group,
+    EscalationPolicyRule,
+    EscalationPolicy,
 ]
 
 
@@ -141,3 +147,21 @@ def app(migrated_database):
 @pytest.fixture
 def client(app):
     return app.test_client()
+
+
+@pytest.fixture
+def admin_user(db):
+    return create_user(
+        username="admin",
+        email="admin@example.com",
+        is_admin=True,
+    )
+
+
+@pytest.fixture
+def admin_headers(admin_user):
+    token, _ = create_access_token(admin_user)
+
+    return {
+        "Authorization": f"Bearer {token}",
+    }

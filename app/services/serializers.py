@@ -211,6 +211,13 @@ def serialize_route(route, current_user=None):
         "source": route.source,
         "rotation_id": route.rotation.id if route.rotation else None,
         "rotation_name": route.rotation.name if route.rotation else None,
+        "escalation_policy_id": route.escalation_policy.id if route.escalation_policy else None,
+        "escalation_policy_name": route.escalation_policy.name if route.escalation_policy else None,
+        "escalation_mode": "policy" if route.escalation_policy else "rotation",
+        "team_escalation_enabled": route.team.escalation_enabled if route.team else None,
+        "team_escalation_after_reminders": (
+            route.team.escalation_after_reminders if route.team else None
+        ),
         "matchers": route.matchers,
         "group_by": route.group_by,
         "enabled": route.enabled,
@@ -269,6 +276,16 @@ def serialize_alert(
     team = alert.team
     route = alert.route
     rotation = alert.rotation
+    escalation_policy = (
+        alert.escalation_policy
+        if getattr(alert, "escalation_policy_id", None)
+        else None
+    )
+    escalation_rule = (
+        alert.escalation_rule
+        if getattr(alert, "escalation_rule_id", None)
+        else None
+    )
 
     data = {
         "id": alert.id,
@@ -304,6 +321,17 @@ def serialize_alert(
         "last_notification_at": serialize_utc_datetime(alert.last_notification_at),
         "reminder_count": alert.reminder_count,
         "escalation_level": alert.escalation_level,
+        "escalation_mode": "policy" if escalation_policy else "rotation",
+        "escalation_policy_id": escalation_policy.id if escalation_policy else None,
+        "escalation_policy_name": escalation_policy.name if escalation_policy else None,
+        "escalation_rule_id": escalation_rule.id if escalation_rule else None,
+        "escalation_rule_position": escalation_rule.position if escalation_rule else None,
+        "escalation_rule_target_type": escalation_rule.target_type if escalation_rule else None,
+        "next_escalation_at": serialize_utc_datetime(getattr(alert, "next_escalation_at", None)),
+        "last_escalated_at": serialize_utc_datetime(getattr(alert, "last_escalated_at", None)),
+        "escalation_repeat_count": getattr(alert, "escalation_repeat_count", 0),
+        "team_escalation_enabled": team.escalation_enabled if team else None,
+        "team_escalation_after_reminders": (team.escalation_after_reminders if team else None),
         "resolved_at": serialize_utc_datetime(alert.resolved_at),
     }
 
@@ -316,6 +344,15 @@ def serialize_alert(
             "group_by": route.group_by,
             "enabled": route.enabled,
         }
+        data["route"]["escalation_policy_id"] = (
+            route.escalation_policy.id if getattr(route, "escalation_policy_id", None) else None
+        )
+        data["route"]["escalation_policy_name"] = (
+            route.escalation_policy.name if getattr(route, "escalation_policy_id", None) else None
+        )
+        data["route"]["escalation_mode"] = (
+            "policy" if getattr(route, "escalation_policy_id", None) else "rotation"
+        )
 
     if rotation:
         data["rotation"] = {

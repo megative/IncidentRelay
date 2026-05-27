@@ -92,6 +92,38 @@ ROUTE_SCHEMA = {
             "readOnly": True,
             "description": "Returned only on route creation and token regeneration.",
         },
+        "escalation_policy_id": {
+            "type": "integer",
+            "nullable": True,
+            "description": (
+                "Escalation policy used by this route. "
+                "When set, rotation_id should be null and team reminder-based escalation is ignored."
+            ),
+        },
+        "escalation_policy_name": {
+            "type": "string",
+            "nullable": True,
+            "readOnly": True,
+            "description": "Human-readable policy name.",
+        },
+        "escalation_mode": {
+            "type": "string",
+            "readOnly": True,
+            "enum": ["rotation", "policy"],
+            "description": "Route escalation mode.",
+        },
+        "team_escalation_enabled": {
+            "type": "boolean",
+            "nullable": True,
+            "readOnly": True,
+            "description": "Team simple rotation escalation flag.",
+        },
+        "team_escalation_after_reminders": {
+            "type": "integer",
+            "nullable": True,
+            "readOnly": True,
+            "description": "Team simple rotation escalation threshold.",
+        },
     },
 }
 

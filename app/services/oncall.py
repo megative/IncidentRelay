@@ -112,7 +112,7 @@ def get_scheduled_oncall_user_for_layer(layer, now=None):
     elapsed = int((now - start_at).total_seconds())
 
     if elapsed < 0:
-        return members[0].user
+        return None
 
     slot = elapsed // int(duration_seconds)
     return members[slot % len(members)].user
@@ -121,7 +121,7 @@ def get_scheduled_oncall_user_for_layer(layer, now=None):
 def get_active_rotation_layer(rotation, now=None):
     """Return highest-priority active layer for a rotation."""
 
-    if not rotation:
+    if not rotation or not rotation.enabled or rotation.deleted:
         return None
 
     now = _as_utc_naive(now or datetime.utcnow())
@@ -143,7 +143,7 @@ def get_active_rotation_layer(rotation, now=None):
 
 def get_scheduled_oncall_user(rotation, now=None):
     """Return scheduled user from active rotation layer."""
-    if not rotation:
+    if not rotation or not rotation.enabled or rotation.deleted:
         return None
 
     now = _as_utc_naive(now or datetime.utcnow())
@@ -160,7 +160,7 @@ def get_current_oncall_user(rotation, now=None):
 
     Rotation override still wins over all layers.
     """
-    if not rotation:
+    if not rotation or not rotation.enabled or rotation.deleted:
         return None
 
     now = _as_utc_naive(now or datetime.utcnow())
@@ -176,7 +176,7 @@ def get_current_oncall_user(rotation, now=None):
 def get_next_rotation_user(rotation, current_user=None, now=None):
     """Return next user in the active layer."""
 
-    if not rotation:
+    if not rotation or not rotation.enabled or rotation.deleted:
         return None
 
     now = _as_utc_naive(now or datetime.utcnow())

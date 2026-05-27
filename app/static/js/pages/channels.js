@@ -303,46 +303,56 @@ function renderChannelRow(channel) {
 }
 
 function renderChannelActions(channel) {
-    const actions = $("<div>").addClass("actions");
-
-    appendActionIfAllowed(actions, channel, {
-        required: "write",
-        text: "Edit",
-        className: "btn btn-small",
-        onClick: function () {
-            editChannel(channel.id);
-        },
-    });
-    appendActionIfAllowed(actions, channel, {
-        required: "write",
-        text: "Test",
-        className: "btn btn-small",
-        onClick: function () {
-            testChannel(channel.id);
-        },
-    });
-    appendActionIfAllowed(actions, channel, {
-        required: "write",
-        text: channel.enabled ? "Disable" : "Enable",
-        className: channel.enabled ? "btn btn-warning btn-small" : "btn btn-success btn-small",
-        onClick: function () {
-            if (channel.enabled) {
-                disableChannel(channel);
-            } else {
-                enableChannel(channel);
+    /*
+     * Render channel row actions as a shared three-dots menu.
+     */
+    return makeActionMenu({
+        object: channel,
+        items: [
+            {
+                label: "Edit",
+                icon: "fas fa-edit",
+                required: "write",
+                denyMessage: "Team manager role is required to edit this channel.",
+                onClick: function () {
+                    editChannel(channel.id);
+                }
+            },
+            {
+                label: "Test",
+                icon: "fas fa-vial",
+                required: "write",
+                denyMessage: "Team manager role is required to test this channel.",
+                onClick: function () {
+                    testChannel(channel.id);
+                }
+            },
+            {
+                label: channel.enabled ? "Disable" : "Enable",
+                icon: channel.enabled ? "fas fa-pause" : "fas fa-play",
+                required: "write",
+                danger: channel.enabled,
+                denyMessage: "Team manager role is required to enable or disable this channel.",
+                onClick: function () {
+                    if (channel.enabled) {
+                        disableChannel(channel);
+                    } else {
+                        enableChannel(channel);
+                    }
+                }
+            },
+            {
+                label: "Delete",
+                icon: "fas fa-trash",
+                required: "delete",
+                danger: true,
+                denyMessage: "Delete permission is required to delete this channel.",
+                onClick: function () {
+                    deleteChannel(channel);
+                }
             }
-        },
+        ]
     });
-    appendActionIfAllowed(actions, channel, {
-        required: "delete",
-        text: "Delete",
-        className: "btn btn-danger btn-small",
-        onClick: function () {
-            deleteChannel(channel);
-        },
-    });
-
-    return actions;
 }
 
 function saveChannel() {

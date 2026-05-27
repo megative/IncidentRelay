@@ -393,7 +393,7 @@ function renderAlertPageRow(alert) {
     row.append($("<td>").text(alert.assignee || "-"));
     row.append($("<td>").text(formatDateTimeMinutes(alertCreatedValue(alert))));
     row.append($("<td>").text(formatDateTimeMinutes(alert.last_seen_at)));
-    row.append($("<td>").append(renderEscalationCount(alert)));
+    row.append($("<td>").append(renderEscalationCell(alert)));
     row.append($("<td>").append(renderReminderCount(alert)));
 
     const actionsCell = $("<td>").addClass("actions-cell");
@@ -449,15 +449,97 @@ function renderReminderCount(alert) {
         .toggleClass("is-active", count > 0)
         .text(count);
 }
+function renderEscalationModeBadge(alert) {
+    const isPolicy = !!alert.escalation_policy_name;
+    const label = isPolicy ? "Policy" : "Rotation";
 
-function renderEscalationCount(alert) {
-    const count = alert.escalation_level || 0;
     return $("<span>")
-        .addClass("alerts-reminder-badge")
-        .toggleClass("is-active", count > 0)
-        .text(count);
+        .addClass("alerts-pill")
+        .addClass(isPolicy ? "alerts-badge-info" : "alerts-badge-muted")
+        .attr("title", isPolicy
+            ? "Escalation policy: " + alert.escalation_policy_name
+            : "Simple rotation escalation")
+        .text(label);
 }
 
+function renderEscalationCell(alert) {
+    const wrapper = $("<div>").addClass("alerts-escalation-cell");
+
+    wrapper.append(renderEscalationModeBadge(alert));
+
+    if (alert.escalation_policy_name) {
+        wrapper.append(
+            $("<div>")
+                .addClass("alerts-subtitle")
+                .text(alert.escalation_policy_name)
+        );
+
+        if (alert.escalation_rule_position) {
+            wrapper.append(
+                $("<div>")
+                    .addClass("alerts-subtitle")
+                    .text(
+                        "Rule #" + alert.escalation_rule_position +
+                        " / " + (alert.escalation_rule_target_type || "-")
+                    )
+            );
+        }
+
+        if (alert.next_escalation_at) {
+            wrapper.append(
+                $("<div>")
+                    .addClass("alerts-age")
+                    .text("Next: " + formatDateTimeMinutes(alert.next_escalation_at))
+            );
+        }
+
+        return wrapper;
+    }
+
+    wrapper.append(
+        $("<div>")
+            .addClass("alerts-subtitle")
+            .text("Level: " + (alert.escalation_level || 0))
+    );
+
+    if (alert.team_escalation_enabled) {
+        wrapper.append(
+            $("<div>")
+                .addClass("alerts-age")
+                .text("After " + (alert.team_escalation_after_reminders || 0) + " reminders")
+        );
+    }
+
+    return wrapper;
+}
+function alertEscalationModeLabel(alert) {
+    if (alert.escalation_policy_name) {
+        return "Policy";
+    }
+
+    return "Simple rotation";
+}
+
+function alertPolicyRuleLabel(alert) {
+    if (!alert.escalation_rule_position) {
+        return "-";
+    }
+
+    const targetType = alert.escalation_rule_target_type || "-";
+
+    return "#" + alert.escalation_rule_position + " / " + targetType;
+}
+function alertTeamEscalationLabel(alert) {
+    if (alert.escalation_policy_name) {
+        return "Ignored for policy mode";
+    }
+
+    if (alert.team_escalation_enabled) {
+        return "After " + (alert.team_escalation_after_reminders || 0) + " reminders";
+    }
+
+    return "Disabled";
+}
 function showAlertDetails(alertId) {
     currentDetailsAlertId = alertId;
     apiGet("/api/alerts/" + alertId, function (alert) {
@@ -495,11 +577,20 @@ function showAlertDetails(alertId) {
 function renderAlertDetailsSummary(alert, modal) {
     const summary = modal.find("#alert-details-summary");
     summary.empty();
+
     summary.append(detailItem("Source", alert.source));
     summary.append(detailItem("External ID", alert.external_id));
     summary.append(detailItem("Route", alert.route_name));
+    summary.append(detailItem("Escalation mode", alertEscalationModeLabel(alert)));
+    summary.append(detailItem("Escalation policy", alert.escalation_policy_name));
+    summary.append(detailItem("Policy rule", alertPolicyRuleLabel(alert)));
     summary.append(detailItem("Rotation", alert.rotation_name));
     summary.append(detailItem("Assignee", alert.assignee));
+    summary.append(detailItem("Next escalation", formatDateTimeMinutes(alert.next_escalation_at)));
+    summary.append(detailItem("Last escalated", formatDateTimeMinutes(alert.last_escalated_at)));
+    summary.append(detailItem("Escalation level", alert.escalation_level || 0));
+    summary.append(detailItem("Policy repeat count", alert.escalation_repeat_count || 0));
+    summary.append(detailItem("Team escalation", alertTeamEscalationLabel(alert)));
     summary.append(detailItem("Acknowledged by", alert.acknowledged_by));
     summary.append(detailItem("Created", formatDateTimeMinutes(alert.first_seen_at || alert.created_at)));
     summary.append(detailItem("Last seen", formatDateTimeMinutes(alert.last_seen_at)));
@@ -509,7 +600,9 @@ function renderAlertDetailsSummary(alert, modal) {
     summary.append(detailItem("Reminder count", alert.reminder_count || 0));
     summary.append(detailItem(
         "Reminder interval",
-        alert.rotation_reminder_interval_seconds ? alert.rotation_reminder_interval_seconds + "s" : "-"
+        alert.rotation_reminder_interval_seconds
+            ? alert.rotation_reminder_interval_seconds + "s"
+            : "-"
     ));
 }
 

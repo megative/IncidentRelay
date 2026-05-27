@@ -30,9 +30,9 @@
     <div class="summary-card summary-info">
       <div class="summary-icon">↻</div>
       <div>
-        <div class="summary-title">With rotation</div>
+        <div class="summary-title">With escalation</div>
         <div id="routes-summary-rotation" class="summary-value">0</div>
-        <div class="summary-hint">Assigned to on-call</div>
+        <div class="summary-hint">Rotation or policy</div>
       </div>
     </div>
   </div>
@@ -89,7 +89,7 @@
               <th data-sort="name">Route</th>
               <th data-sort="team">Team</th>
               <th data-sort="source">Source</th>
-              <th data-sort="rotation">Rotation</th>
+              <th data-sort="rotation">Escalation</th>
               <th data-sort="channels">Channels</th>
               <th>Token</th>
               <th data-sort="enabled">Status</th>
@@ -177,7 +177,20 @@
                 <option value="zabbix">Zabbix</option>
                 <option value="webhook">Webhook</option>
               </select>
+                <div class="form-group">
+                    <label for="route-escalation-mode">Escalation mode</label>
+                    <select id="route-escalation-mode">
+                        <option value="rotation">Simple rotation</option>
+                        <option value="policy">Escalation policy</option>
+                    </select>
+                </div>
 
+                <div class="form-group" id="route-policy-group">
+                    <label for="route-escalation-policy">Escalation policy</label>
+                    <select id="route-escalation-policy">
+                        <option value="">No policy</option>
+                    </select>
+                </div>
               <label for="route-rotation">Rotation</label>
               <select id="route-rotation" class="input">
                 <option value="">No rotation</option>

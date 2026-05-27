@@ -15,6 +15,8 @@ from app.modules.db.models import (
     TeamUser,
     User,
     UserGroup,
+    EscalationPolicy,
+    EscalationPolicyRule,
 )
 
 _counter = 0
@@ -145,16 +147,19 @@ def create_channel(
 def create_route(
     team: Team,
     *,
+    name: str | None = None,
     source: str = "alertmanager",
     token_hash: str | None = None,
     rotation: Rotation | None = None,
+    escalation_policy=None,
     matchers: dict | None = None,
     group_by: list[str] | None = None,
 ) -> AlertRoute:
     return AlertRoute.create(
         team=team,
         rotation=rotation,
-        name=unique("route"),
+        escalation_policy=escalation_policy,
+        name=name or unique("route"),
         source=source,
         enabled=True,
         matchers=matchers or {},
@@ -202,3 +207,42 @@ def create_silence(
         ends_at=ends_at or datetime.utcnow() + timedelta(minutes=5),
         enabled=True,
     )
+
+
+def create_escalation_policy(
+    team: Team,
+    *,
+    name: str | None = None,
+    description: str | None = None,
+    enabled: bool = True,
+    repeat_count: int = 0,
+) -> EscalationPolicy:
+    return EscalationPolicy.create(
+        team=team,
+        name=name or unique("policy"),
+        description=description,
+        enabled=enabled,
+        repeat_count=repeat_count,
+    )
+
+
+def create_escalation_policy_rule(
+    policy: EscalationPolicy,
+    *,
+    position: int = 1,
+    delay_seconds: int = 60,
+    target_type: str = "rotation",
+    rotation: Rotation | None = None,
+    user: User | None = None,
+    enabled: bool = True,
+) -> EscalationPolicyRule:
+    return EscalationPolicyRule.create(
+        policy=policy,
+        position=position,
+        delay_seconds=delay_seconds,
+        target_type=target_type,
+        target_rotation=rotation if target_type == "rotation" else None,
+        target_user=user if target_type == "user" else None,
+        enabled=enabled,
+    )
+

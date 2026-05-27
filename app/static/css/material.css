@@ -2493,3 +2493,123 @@ body.md-theme .login-sso-protocol,
   letter-spacing: 0.08em;
   color: var(--md-text-muted, #64748b);
 }
+.actions-cell,
+.table-actions-cell {
+    overflow: visible;
+    text-align: right;
+}
+
+.app-action-menu {
+    position: relative;
+    display: inline-flex;
+    justify-content: flex-end;
+}
+
+.app-action-menu-toggle {
+    min-width: 34px;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    font-size: 16px;
+    line-height: 1;
+}
+
+.app-action-menu-list {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 1000;
+    display: none;
+    min-width: 190px;
+    padding: 6px;
+    border: 1px solid var(--border, #e5edf6);
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 18px 42px rgba(16, 24, 40, 0.16);
+}
+
+.app-action-menu.is-open .app-action-menu-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.app-action-menu-item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text, #101828);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.app-action-menu-item:hover {
+    background: #f5f8fb;
+}
+
+.app-action-menu-item.is-danger {
+    color: #b42318;
+}
+
+.app-action-menu-item.is-danger:hover {
+    background: #fff1f0;
+}
+
+.app-action-menu-item.is-disabled,
+.app-action-menu-item:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.app-action-menu-icon {
+    width: 18px;
+    text-align: center;
+    color: inherit;
+}
+/* Generic table text truncation */
+
+.table-cell-truncate {
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.table-cell-truncate-wide {
+    max-width: 420px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.table-cell-truncate,
+.table-cell-truncate-wide {
+    vertical-align: middle;
+}
+
+/* If cell contains button/link/span */
+.table-cell-truncate > *,
+.table-cell-truncate-wide > * {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Important: do not break actions dropdown */
+.actions-cell {
+    width: 56px;
+    min-width: 56px;
+    max-width: 56px;
+    overflow: visible;
+    text-align: right;
+}

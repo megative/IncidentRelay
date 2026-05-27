@@ -227,7 +227,12 @@ def add_team_user(team_id):
             "message": "User must already belong to the team's group before being added to the team",
         }), 400
 
-    membership = teams_repo.add_user_to_team(team_id, payload.user_id, payload.role)
+    membership = teams_repo.add_user_to_team(
+        team_id,
+        payload.user_id,
+        payload.role,
+        active=payload.active,
+    )
     write_audit(
         "team.user.add",
         object_type="team",
@@ -236,7 +241,14 @@ def add_team_user(team_id):
         team_id=team_id,
         data=payload.model_dump(),
     )
-    return jsonify({"id": membership.id}), 201
+    return jsonify({
+        "id": membership.id,
+        "user_id": membership.user.id,
+        "username": membership.user.username,
+        "display_name": membership.user.display_name,
+        "role": membership.role,
+        "active": membership.active,
+    }), 201
 
 
 @teams_bp.route("/users/<int:membership_id>", methods=["PUT"])

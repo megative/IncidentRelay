@@ -233,20 +233,6 @@ function renderAdminUserActions(user) {
   return actions;
 }
 
-function openAdminUserModal() {
-  /*
-   * Open admin user modal.
-   */
-  $("#admin-user-modal").removeClass("is-hidden");
-}
-
-function closeAdminUserModal() {
-  /*
-   * Close admin user modal.
-   */
-  $("#admin-user-modal").addClass("is-hidden");
-}
-
 function openNewAdminUserModal() {
   /*
    * Open modal for a new user.
@@ -257,7 +243,7 @@ function openNewAdminUserModal() {
   $("#admin-user-modal-title").text("New user");
   $("#admin-user-modal-subtitle").text("Create local user account.");
   $("#admin-user-password").attr("placeholder", "Password");
-  openAdminUserModal();
+  openAppModal("#admin-user-modal");
 }
 
 function openExistingAdminUserModal(user) {
@@ -270,7 +256,7 @@ function openExistingAdminUserModal(user) {
   $("#admin-user-modal-subtitle").text(user.display_name || user.username || ("User #" + user.id));
   $("#admin-user-password").attr("placeholder", "Leave empty to keep current password");
   applyAdminUserSelfProtection(user);
-  openAdminUserModal();
+  openAppModal("#admin-user-modal");
 }
 
 function collectAdminUserPayload() {
@@ -325,14 +311,14 @@ function saveAdminUser() {
   if (id) {
     apiPut("/api/admin/users/" + id, data, function () {
       resetAdminUserForm();
-      closeAdminUserModal();
+      closeAppModal("#admin-user-modal");
       refreshAdminUsers();
     });
     return;
   }
   apiPost("/api/admin/users", data, function () {
     resetAdminUserForm();
-    closeAdminUserModal();
+    closeAppModal("#admin-user-modal");
     refreshAdminUsers();
   });
 }
@@ -462,17 +448,7 @@ $(document).on("input", "#admin-users-search", function () {
 $(document).on("click", "#new-admin-user", openNewAdminUserModal);
 $(document).on("click", "#admin-save-user", saveAdminUser);
 $(document).on("click", "#admin-reset-user-form", resetAdminUserForm);
-$(document).on("click", "#close-admin-user-modal, #close-admin-user-modal-footer", closeAdminUserModal);
-$(document).on("click", "#admin-user-modal", function (event) {
-  if (event.target === this) {
-    closeAdminUserModal();
-  }
-});
-$(document).on("keydown", function (event) {
-  if (event.key === "Escape" && !$("#admin-user-modal").hasClass("is-hidden")) {
-    closeAdminUserModal();
-  }
-});
+$(document).on("click", "#close-admin-user-modal, #close-admin-user-modal-footer", closeAppModal);
 
 function removeAdminUser(user) {
   /*
@@ -501,7 +477,7 @@ function removeAdminUser(user) {
   }).done(function () {
     apiDelete("/api/admin/users/" + user.id, function () {
       resetAdminUserForm();
-      closeAdminUserModal();
+      closeAppModal("#admin-user-modal");
       refreshAdminUsers();
     });
   });

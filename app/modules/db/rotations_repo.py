@@ -686,3 +686,21 @@ def replace_rotation_layer_restrictions(layer_id, restrictions):
         )
 
     return result
+
+
+def set_rotation_enabled(rotation_id: int, enabled: bool):
+    """Enable or disable a rotation without deleting schedule data."""
+    rotation = get_rotation(rotation_id)
+    rotation.enabled = enabled
+    rotation.save()
+    return rotation
+
+
+def enable_rotation(rotation_id: int):
+    """Enable a rotation without restoring deleted data."""
+    return set_rotation_enabled(rotation_id, True)
+
+
+def disable_rotation(rotation_id: int):
+    """Disable a rotation without deleting layers, members, overrides or routes."""
+    return set_rotation_enabled(rotation_id, False)

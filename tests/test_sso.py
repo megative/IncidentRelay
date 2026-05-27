@@ -33,6 +33,7 @@ from app.views.sso_auth_view import (
     public_sso_providers,
 )
 from tests.factories import create_group, create_user, unique
+from app.api.schemas.limits import normalize_phone
 
 
 def make_admin():
@@ -716,3 +717,28 @@ def test_validate_oidc_id_token_rejects_wrong_nonce(monkeypatch):
         )
 
     assert exc.value.error == "sso_oidc_id_token_invalid"
+
+
+def test_validate_phone_accepts_common_formatting():
+    assert normalize_phone("+7 (111) 111-11-11") == "+71111111111"
+    assert normalize_phone("+7-111-111-11-11") == "+71111111111"
+    assert normalize_phone("+7 111 111 11 11") == "+71111111111"
+    assert normalize_phone("71111111111") == "71111111111"
+
+
+def test_validate_phone_rejects_invalid_plus_position():
+    try:
+        normalize_phone("7+111111111")
+    except ValueError as exc:
+        assert "phone +" in str(exc)
+    else:
+        raise AssertionError("ValueError was not raised")
+
+
+def test_validate_phone_rejects_letters():
+    try:
+        normalize_phone("+7 phone 111")
+    except ValueError as exc:
+        assert "phone may contain" in str(exc)
+    else:
+        raise AssertionError("ValueError was not raised")

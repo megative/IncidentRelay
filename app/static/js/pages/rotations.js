@@ -6,6 +6,8 @@ let rotationLayerEligibleUsersCache = [];
 let layerMembersCache = {};
 let layerRestrictionsCache = {};
 let expandedLayerId = null;
+let rotationOverridesAfterChange = null;
+let selectedRotationDetailsId = null;
 
 const WEEKDAY_LABELS = [
     "Monday",
@@ -43,10 +45,7 @@ const FALLBACK_TIMEZONES = [
 function getBrowserTimezones() {
     let zones = [];
 
-    if (
-        window.Intl
-        && typeof Intl.supportedValuesOf === "function"
-    ) {
+    if (window.Intl && typeof Intl.supportedValuesOf === "function") {
         try {
             zones = Intl.supportedValuesOf("timeZone") || [];
         } catch (error) {
@@ -153,6 +152,30 @@ function getTimezoneSelectValue(selector) {
     return $(selector).val() || "UTC";
 }
 
+function findRotationInCache(rotationId) {
+    return rotationsCache.find(function (item) {
+        return Number(item.id) === Number(rotationId);
+    }) || null;
+}
+
+function rememberRotationInCache(rotation) {
+    const rotationId = Number(rotation.id);
+    const index = rotationsCache.findIndex(function (item) {
+        return Number(item.id) === rotationId;
+    });
+
+    if (index >= 0) {
+        rotationsCache[index] = rotation;
+        return;
+    }
+
+    rotationsCache.push(rotation);
+}
+
+function findSelectedLayerRotation() {
+    return findRotationInCache(selectedRotationForLayers);
+}
+
 function closeRotationLayersModal() {
     closeAppModal("#rotation-layers-modal");
 
@@ -166,19 +189,15 @@ function closeRotationLayersModal() {
 
     $("#rotation-layer-cards")
         .empty()
-        .append($("<div>").addClass("empty-cell").text("No rotation selected"));
-}
-
-function findSelectedLayerRotation() {
-    return rotationsCache.find(function (item) {
-        return Number(item.id) === Number(selectedRotationForLayers);
-    });
+        .append(
+            $("<div>")
+                .addClass("empty-cell")
+                .text("No rotation selected")
+        );
 }
 
 function selectRotationLayers(rotationId) {
-    const rotation = rotationsCache.find(function (item) {
-        return Number(item.id) === Number(rotationId);
-    });
+    const rotation = findRotationInCache(rotationId);
 
     if (!rotation) {
         showAppError("Rotation was not found.");
@@ -194,7 +213,6 @@ function selectRotationLayers(rotationId) {
     expandedLayerId = null;
 
     $("#rotation-layers-title").text("Rotation layers: " + selectedRotationNameForLayers);
-
     openAppModal("#rotation-layers-modal");
 
     loadEligibleUsersForLayerCards(rotation.id, function () {
@@ -217,7 +235,11 @@ function loadRotationLayerCards(rotationId, callback) {
 
     container
         .empty()
-        .append($("<div>").addClass("layer-card-loading").text("Loading layers..."));
+        .append(
+            $("<div>")
+                .addClass("layer-card-loading")
+                .text("Loading layers...")
+        );
 
     apiGet("/api/rotations/" + rotationId + "/layers", function (layers) {
         rotationLayersCache = asArray(layers).sort(function (a, b) {
@@ -301,6 +323,7 @@ function loadOneLayerCardDetails(layerId, callback) {
 
 function renderRotationLayerCards() {
     const container = $("#rotation-layer-cards");
+
     container.empty();
 
     if (!rotationLayersCache.length) {
@@ -316,6 +339,7 @@ function renderRotationLayerCards() {
         container.append(renderRotationLayerCard(layer, index + 1));
         updateLayerCadenceVisibility(layer.id);
     });
+
     initLayerTimezoneSelects();
 }
 
@@ -333,7 +357,6 @@ function renderRotationLayerCard(layer, number) {
     editor.append(renderLayerSettingsEditor(layer));
     editor.append(renderLayerMembersEditor(layer));
     editor.append(renderLayerRestrictionsEditor(layer));
-
     card.append(editor);
 
     return card;
@@ -353,8 +376,9 @@ function renderLayerCardHeader(layer, number) {
             .addClass("rotation-layer-title")
             .append($("<strong>").text(layer.name || "Unnamed layer"))
             .append(
-                $("<small>").text(
-                    "Priority " + Number(layer.priority || 0) +
+                $("<span>").text(
+                    "Priority " +
+                    Number(layer.priority || 0) +
                     " · " +
                     (layer.enabled ? "Enabled" : "Disabled") +
                     " · " +
@@ -427,7 +451,7 @@ function formatLayerMembersSummary(layerId) {
         });
 
     if (!members.length) {
-        return '<span class="muted">No users</span>';
+        return "No users";
     }
 
     return members.map(function (member) {
@@ -449,12 +473,7 @@ function formatLayerCadence(layer) {
     }
 
     if (type === "custom") {
-        return "Every " +
-            (layer.interval_value || 1) +
-            " " +
-            (layer.interval_unit || "days") +
-            ", " +
-            timezone;
+        return "Every " + (layer.interval_value || 1) + " " + (layer.interval_unit || "days") + ", " + timezone;
     }
 
     return "Daily, " + handoff + ", " + timezone;
@@ -464,16 +483,12 @@ function formatLayerRestrictionsSummary(layerId) {
     const restrictions = asArray(layerRestrictionsCache[layerId]);
 
     if (!restrictions.length) {
-        return '<span class="muted">24/7</span>';
+        return "24/7";
     }
 
     const parts = restrictions.slice(0, 4).map(function (item) {
         return escapeHtml(
-            weekdayLabel(item.weekday) +
-            " " +
-            item.start_time +
-            "-" +
-            item.end_time
+            weekdayLabel(item.weekday) + " " + item.start_time + "-" + item.end_time
         );
     });
 
@@ -643,6 +658,7 @@ function renderLayerSettingsEditor(layer) {
 
     return section;
 }
+
 function layerTimezoneField(layerId, value) {
     const select = $("<select>")
         .addClass("input timezone-select")
@@ -672,6 +688,7 @@ function layerTimezoneField(layerId, value) {
         .append($("<label>").text("Timezone"))
         .append(select);
 }
+
 function renderLayerMembersEditor(layer) {
     const section = $("<section>").addClass("layer-editor-section");
 
@@ -683,7 +700,6 @@ function renderLayerMembersEditor(layer) {
     );
 
     const addRow = $("<div>").addClass("layer-member-add-row");
-
     const userSelect = $("<select>")
         .addClass("input")
         .attr("data-layer-member-user", layer.id);
@@ -834,7 +850,6 @@ function renderLayerRestrictionsEditor(layer) {
     toolbar.append(presetButton(layer.id, "Business hours", "business"));
     toolbar.append(presetButton(layer.id, "Nights", "nights"));
     toolbar.append(presetButton(layer.id, "Weekend", "weekend"));
-
     toolbar.append(
         $("<button>")
             .attr("type", "button")
@@ -981,8 +996,8 @@ function layerField(layerId, field) {
 
 function collectLayerPayloadFromCard(layerId) {
     const rotation = findSelectedLayerRotation();
-
     const rotationType = layerField(layerId, "rotation_type").val() || "daily";
+
     const payload = {
         name: layerField(layerId, "name").val(),
         description: layerField(layerId, "description").val() || null,
@@ -1061,7 +1076,6 @@ function addLayerCard() {
 
     apiPost("/api/rotations/" + selectedRotationForLayers + "/layers", payload, function (layer) {
         expandedLayerId = layer.id;
-
         loadRotationLayerCards(selectedRotationForLayers, function () {
             showAppSuccess("Layer created.");
         });
@@ -1073,7 +1087,6 @@ function saveRotationLayerFromCard(layerId) {
 
     apiPut("/api/rotations/layers/" + layerId, payload, function () {
         expandedLayerId = layerId;
-
         loadRotationLayerCards(selectedRotationForLayers, function () {
             refreshRotations();
             showAppSuccess("Layer updated.");
@@ -1086,7 +1099,7 @@ function deleteRotationLayer(layerId) {
         title: "Delete this layer?",
         message: "Delete this layer?",
         confirmText: "Delete layer",
-        confirmClass: "btn-danger",
+        confirmClass: "btn-danger"
     }).done(function () {
         apiDelete("/api/rotations/layers/" + layerId, function () {
             if (Number(expandedLayerId) === Number(layerId)) {
@@ -1154,7 +1167,7 @@ function removeLayerMemberFromCard(layerId, memberId) {
         title: "Remove this user from the layer?",
         message: "Remove this user from the layer?",
         confirmText: "Remove user from the layer",
-        confirmClass: "btn-danger",
+        confirmClass: "btn-danger"
     }).done(function () {
         apiDelete("/api/rotations/layers/members/" + memberId, function () {
             loadOneLayerCardDetails(layerId, function () {
@@ -1197,41 +1210,57 @@ function refreshRestrictionDraftFromCard(layerId) {
 
 function addRestrictionRowToCard(layerId) {
     refreshRestrictionDraftFromCard(layerId);
-
     layerRestrictionsCache[layerId].push({
         weekday: null,
         start_time: "09:00",
         end_time: "18:00"
     });
-
     renderRotationLayerCards();
 }
 
 function removeRestrictionRowFromCard(layerId, index) {
     refreshRestrictionDraftFromCard(layerId);
-
     layerRestrictionsCache[layerId].splice(index, 1);
-
     renderRotationLayerCards();
 }
 
 function applyLayerRestrictionPreset(layerId, preset) {
     if (preset === "24x7") {
         layerRestrictionsCache[layerId] = [
-            { weekday: null, start_time: "00:00", end_time: "00:00" }
+            {
+                weekday: null,
+                start_time: "00:00",
+                end_time: "00:00"
+            }
         ];
     } else if (preset === "business") {
         layerRestrictionsCache[layerId] = [0, 1, 2, 3, 4].map(function (weekday) {
-            return { weekday: weekday, start_time: "09:00", end_time: "18:00" };
+            return {
+                weekday: weekday,
+                start_time: "09:00",
+                end_time: "18:00"
+            };
         });
     } else if (preset === "nights") {
         layerRestrictionsCache[layerId] = [0, 1, 2, 3, 4].map(function (weekday) {
-            return { weekday: weekday, start_time: "18:00", end_time: "09:00" };
+            return {
+                weekday: weekday,
+                start_time: "18:00",
+                end_time: "09:00"
+            };
         });
     } else if (preset === "weekend") {
         layerRestrictionsCache[layerId] = [
-            { weekday: 5, start_time: "00:00", end_time: "00:00" },
-            { weekday: 6, start_time: "00:00", end_time: "00:00" }
+            {
+                weekday: 5,
+                start_time: "00:00",
+                end_time: "00:00"
+            },
+            {
+                weekday: 6,
+                start_time: "00:00",
+                end_time: "00:00"
+            }
         ];
     }
 
@@ -1263,32 +1292,7 @@ function escapeHtml(value) {
         .replace(/'/g, "&#039;");
 }
 
-$(document).on("click", "#add-layer-card", addLayerCard);
-
-$(document).on(
-    "click",
-    "#close-rotation-layers-modal, #close-rotation-layers-modal-footer",
-    closeRotationLayersModal
-);
-
-$(document).on("click", "#rotation-layers-modal", function (event) {
-    if (event.target === this) {
-        closeRotationLayersModal();
-    }
-});
-
-$(document).on("change", '[data-layer-field="rotation_type"]', function () {
-    const layerId = $(this).closest(".rotation-layer-card").attr("data-layer-id");
-    updateLayerCadenceVisibility(layerId);
-});
-
-$(document).on("keydown", function (event) {
-    if (event.key === "Escape" && $("#rotation-layers-modal").hasClass("is-open")) {
-        closeRotationLayersModal();
-    }
-});
 function loadRotations() {
-    /* Load rotations page data. */
     fillTeamSelect("#rotation-team", false);
     fillUserSelect("#member-user");
     fillUserSelect("#override-user");
@@ -1297,18 +1301,26 @@ function loadRotations() {
 }
 
 function formatSeconds(seconds) {
-    /* Format seconds as a compact duration. */
-    if (!seconds) { return "-"; }
-    if (seconds % 86400 === 0) { return (seconds / 86400) + "d"; }
-    if (seconds % 3600 === 0) { return (seconds / 3600) + "h"; }
-    if (seconds % 60 === 0) { return (seconds / 60) + "m"; }
+    if (!seconds) {
+        return "-";
+    }
+
+    if (seconds % 86400 === 0) {
+        return (seconds / 86400) + "d";
+    }
+
+    if (seconds % 3600 === 0) {
+        return (seconds / 3600) + "h";
+    }
+
+    if (seconds % 60 === 0) {
+        return (seconds / 60) + "m";
+    }
+
     return seconds + "s";
 }
 
 function rotationInitials(value) {
-    /*
-     * Build initials for user avatar.
-     */
     return String(value || "?")
         .trim()
         .split(/\s+/)
@@ -1319,19 +1331,70 @@ function rotationInitials(value) {
         .join("") || "?";
 }
 
-
 function getRotationCurrentUser(rotation) {
-    /*
-     * Return current on-call user label.
-     */
     return rotation.current_oncall || rotation.current_user || rotation.current_username || "";
 }
+function parseRotationDate(value) {
+    if (!value) {
+        return null;
+    }
 
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return null;
+    }
 
+    return date;
+}
+
+function getRotationRuntimeStatus(rotation) {
+    if (!rotation.enabled) {
+        return {
+            key: "disabled",
+            label: "Disabled",
+        };
+    }
+
+    const startAt = parseRotationDate(rotation.start_at);
+    if (startAt && startAt.getTime() > Date.now()) {
+        return {
+            key: "scheduled",
+            label: "Scheduled",
+        };
+    }
+
+    if (getRotationCurrentUser(rotation)) {
+        return {
+            key: "active",
+            label: "Active now",
+        };
+    }
+
+    return {
+        key: "idle",
+        label: "No active layer",
+    };
+}
+
+function renderRotationRuntimeStatusBadge(rotation) {
+    const status = getRotationRuntimeStatus(rotation);
+
+    if (status.key === "active") {
+        return renderStatusBadge(true, "Active now", "Disabled");
+    }
+
+    if (status.key === "disabled") {
+        return renderStatusBadge(false, "Active now", "Disabled");
+    }
+
+    return $("<span>")
+        .addClass("status-pill")
+        .addClass(status.key === "scheduled" ? "status-scheduled" : "status-neutral")
+        .text(status.label);
+}
 function getRotationSearchText(rotation) {
-    /*
-     * Build searchable rotation text.
-     */
+    const runtimeStatus = getRotationRuntimeStatus(rotation);
+
     return [
         rotation.id,
         rotation.team_slug,
@@ -1341,29 +1404,29 @@ function getRotationSearchText(rotation) {
         rotation.rotation_type,
         rotation.handoff_time,
         getRotationCurrentUser(rotation),
-        rotation.enabled ? "active" : "inactive"
+        rotation.enabled ? "enabled" : "disabled",
+        runtimeStatus.key,
+        runtimeStatus.label
     ].join(" ").toLowerCase();
 }
 
-
 function getFilteredRotations() {
-    /*
-     * Apply client-side filters to rotationsCache.
-     */
     const query = String($("#rotations-search").val() || "").trim().toLowerCase();
     const team = String($("#rotations-team-filter").val() || "");
     const status = String($("#rotations-status-filter").val() || "");
 
     return rotationsCache.filter(function (rotation) {
+        const runtimeStatus = getRotationRuntimeStatus(rotation);
         if (team && String(rotation.team_slug || "") !== team) {
             return false;
         }
-
-        if (status === "active" && !rotation.enabled) {
+        if (status === "active" && runtimeStatus.key !== "active") {
             return false;
         }
-
-        if (status === "inactive" && rotation.enabled) {
+        if (status === "inactive" && runtimeStatus.key !== "disabled") {
+            return false;
+        }
+        if (status === "scheduled" && runtimeStatus.key !== "scheduled") {
             return false;
         }
 
@@ -1376,9 +1439,6 @@ function getFilteredRotations() {
 }
 
 function renderRotationsSummary(rotations) {
-    /*
-     * Render rotations summary cards.
-     */
     rotations = Array.isArray(rotations) ? rotations : [];
 
     let active = 0;
@@ -1386,7 +1446,7 @@ function renderRotationsSummary(rotations) {
     let reminders = 0;
 
     rotations.forEach(function (rotation) {
-        if (rotation.enabled) {
+        if (getRotationRuntimeStatus(rotation).key === "active") {
             active += 1;
         }
 
@@ -1405,17 +1465,23 @@ function renderRotationsSummary(rotations) {
     $("#rotations-summary-reminders").text(reminders);
 }
 function reminderValueToSeconds() {
-    /* Convert reminder value and unit to seconds. */
     const value = Number($("#rotation-reminder-value").val() || 5);
     const unit = $("#rotation-reminder-unit").val();
 
-    if (unit === "days") { return value * 86400; }
-    if (unit === "hours") { return value * 3600; }
+    if (unit === "days") {
+        return value * 86400;
+    }
+
+    if (unit === "hours") {
+        return value * 3600;
+    }
+
     return value * 60;
 }
 
 function setReminderFields(seconds) {
-    /* Fill reminder fields from seconds. */
+    seconds = Number(seconds || 300);
+
     if (seconds % 86400 === 0) {
         $("#rotation-reminder-value").val(seconds / 86400);
         $("#rotation-reminder-unit").val("days");
@@ -1429,46 +1495,56 @@ function setReminderFields(seconds) {
 }
 
 function refreshRotations(doneCallback) {
-    /*
-     * Refresh rotations table and selects.
-     */
     apiGet("/api/rotations" + selectedTeamQuery(), function (rotations) {
         rotations = Array.isArray(rotations) ? rotations : [];
         rotationsCache = rotations;
 
         renderRotationsSummary(rotationsCache);
-        renderRotationsInboxCounter(rotationsCache, rotationsCache);
 
-        const tbody = $("#rotations-table");
         const memberSelect = $("#member-rotation");
         const overrideSelect = $("#override-rotation");
         const savedOverrideRotationId = overrideSelect.val();
 
-        tbody.empty();
         memberSelect.empty();
         overrideSelect.empty();
 
-        if (!rotations.length) {
-            tbody.append(
-                $("<tr>").append(
-                    $("<td>")
-                        .attr("colspan", "9")
-                        .addClass("empty-cell")
-                        .text("No rotations")
-                )
+        rotations.forEach(function (rotation) {
+            if (!rotation.enabled) {
+                return;
+            }
+
+            const label = rotation.team_slug + " / " + rotation.name;
+
+            memberSelect.append(
+                $("<option>")
+                    .val(rotation.id)
+                    .text(label)
             );
 
-            $("#rotation-members-table")
-                .empty()
-                .append(
-                    $("<tr>").append(
-                        $("<td>")
-                            .attr("colspan", "6")
-                            .addClass("empty-cell")
-                            .text("No rotation selected")
-                    )
-                );
+            overrideSelect.append(
+                $("<option>")
+                    .val(rotation.id)
+                    .text(label)
+            );
+        });
 
+        if (savedOverrideRotationId) {
+            overrideSelect.val(String(savedOverrideRotationId));
+        }
+
+        renderRotationsTable();
+
+        if (selectedRotationDetailsId) {
+            const selected = findRotationInCache(selectedRotationDetailsId);
+
+            if (selected) {
+                renderRotationDetails(selected);
+            }
+        }
+
+        if (overrideSelect.val()) {
+            loadOverrides();
+        } else {
             $("#overrides-table")
                 .empty()
                 .append(
@@ -1479,152 +1555,22 @@ function refreshRotations(doneCallback) {
                             .text("No rotation selected")
                     )
                 );
-
-            if (typeof doneCallback === "function") {
-                doneCallback();
-            }
-
-            return;
-        }
-
-        rotations.forEach(function (rotation) {
-            const cadence = rotation.rotation_type === "custom"
-                ? "every " + rotation.interval_value + " " + rotation.interval_unit
-                : rotation.rotation_type;
-
-            const row = $("<tr>");
-
-            row.append(
-                $("<td>").append(
-                    $("<button>")
-                        .attr("type", "button")
-                        .addClass("name-button")
-                        .text('#' + rotation.id)
-                        .on("click", function () {
-                            renderRotationDetails(rotation);
-                        })
-                )
-            );
-            row.append($("<td>").text(rotation.team_slug));
-            row.append(
-                $("<td>").append(
-                    $("<button>")
-                        .attr("type", "button")
-                        .addClass("name-button")
-                        .text(rotation.name || "-")
-                        .on("click", function () {
-                            renderRotationDetails(rotation);
-                        })
-                )
-            );
-            row.append($("<td>").text(cadence));
-            row.append($("<td>").text(rotation.current_oncall || "-"));
-            row.append($("<td>").text(rotation.handoff_time || "-"));
-            row.append($("<td>").text(formatSeconds(rotation.reminder_interval_seconds)));
-            row.append($("<td>").append(renderStatusBadge(rotation.enabled)));
-
-            const actions = $("<td>").addClass("actions");
-
-            actions.append(
-                $("<button>")
-                    .attr("type", "button")
-                    .addClass("btn btn-small")
-                    .text("Edit")
-                    .on("click", function () {
-                        editRotation(rotation.id);
-                    })
-            );
-
-            makeIconButton({
-                icon: "fas fa-layer-group",
-                label: "Rotation layers",
-                onClick: function () {
-                    selectRotationLayers(rotation.id);
-                }
-            })
-
-            actions.append(
-                $("<button>")
-                    .attr("type", "button")
-                    .addClass("btn btn-small")
-                    .text("Overrides")
-                    .on("click", function () {
-                        selectOverrideRotation(rotation.id);
-                    })
-            );
-
-            actions.append(
-                $("<button>")
-                    .attr("type", "button")
-                    .addClass("btn btn-small")
-                    .text("Layers")
-                    .on("click", function () {
-                        selectRotationLayers(rotation.id);
-                    })
-            );
-
-            actions.append(
-                $("<button>")
-                    .attr("type", "button")
-                    .addClass("btn btn-danger btn-small")
-                    .text("Remove")
-                    .on("click", function () {
-                        deleteRotation(rotation.id);
-                    })
-            );
-
-            row.append(actions);
-            tbody.append(row);
-
-            if (rotation.enabled) {
-                const label = rotation.team_slug + " / " + rotation.name;
-
-                memberSelect.append(
-                    $("<option>")
-                        .val(rotation.id)
-                        .text(label)
-                );
-
-                overrideSelect.append(
-                    $("<option>")
-                        .val(rotation.id)
-                        .text(label)
-                );
-            }
-        });
-
-        // if (savedMemberRotationId) {
-        //     memberSelect.val(String(savedMemberRotationId));
-        // }
-
-        if (savedOverrideRotationId) {
-            overrideSelect.val(String(savedOverrideRotationId));
         }
 
         if (typeof doneCallback === "function") {
             doneCallback();
-            return;
-        }
-
-        // if (selectedRotationForMembers) {
-        //     loadRotationMembers(selectedRotationForMembers, selectedRotationNameForMembers);
-        // }
-
-        if (overrideSelect.val()) {
-            loadOverrides();
         }
     });
 }
 
 function updateRotationCadenceFields() {
-    /* Toggle rotation cadence fields. */
     const type = $("#rotation-type").val();
+
     $("#weekly-options").toggle(type === "weekly");
     $("#custom-interval-options").toggle(type === "custom");
 }
 
 function collectRotationPayload() {
-    /* Build rotation payload from form fields. */
     return {
         team_id: Number($("#rotation-team").val()),
         name: $("#rotation-name").val(),
@@ -1636,12 +1582,11 @@ function collectRotationPayload() {
         handoff_time: $("#rotation-handoff-time").val(),
         handoff_weekday: Number($("#rotation-weekday").val()),
         reminder_interval_seconds: reminderValueToSeconds(),
-        timezone: getTimezoneSelectValue("#rotation-timezone"),
+        timezone: getTimezoneSelectValue("#rotation-timezone")
     };
 }
 
 function saveRotation() {
-    /* Create or update a rotation. */
     const id = $("#rotation-id").val();
 
     if (id) {
@@ -1661,12 +1606,10 @@ function saveRotation() {
 }
 
 function editRotation(id) {
-    /* Load rotation data into the form. */
-    const rotation = rotationsCache.find(function (item) {
-        return item.id === id;
-    });
+    const rotation = findRotationInCache(id);
 
     if (!rotation) {
+        showAppError("Rotation was not found.");
         return;
     }
 
@@ -1685,33 +1628,63 @@ function editRotation(id) {
     $("#rotation-timezone").val(rotation.timezone || "UTC");
     updateRotationCadenceFields();
     openRotationFormModal();
+    initTimezoneSelect("#rotation-timezone", rotation.timezone || "UTC", "#rotation-form-modal");
+    setTimezoneSelectValue("#rotation-timezone", rotation.timezone || "UTC");
+}
 
-    initTimezoneSelect(
-        "#rotation-timezone",
-        rotation.timezone || "UTC",
-        "#rotation-form-modal"
-    );
+function setRotationEnabled(id, enabled) {
+    const title = enabled ? "Enable this rotation?" : "Disable this rotation?";
+    const message = enabled
+        ? "Enable this rotation and allow it to participate in on-call scheduling?"
+        : "Disable this rotation without deleting layers, members, overrides or route links?";
+    const confirmText = enabled ? "Enable rotation" : "Disable rotation";
 
-    setTimezoneSelectValue(
-        "#rotation-timezone",
-        rotation.timezone || "UTC"
-    );
+    showAppConfirm({
+        title: title,
+        message: message,
+        confirmText: confirmText,
+        confirmClass: enabled ? "btn-primary" : "btn-danger",
+    }).done(function () {
+        apiPut("/api/rotations/" + id + "/enabled", { enabled: enabled }, function (rotation) {
+            rememberRotationInCache(rotation);
+            refreshRotations(function () {
+                if (Number(selectedRotationDetailsId) === Number(id)) {
+                    renderRotationDetails(rotation);
+                }
+            });
+        });
+    });
+}
+
+function enableRotation(id) {
+    setRotationEnabled(id, true);
+}
+
+function disableRotation(id) {
+    setRotationEnabled(id, false);
 }
 
 function deleteRotation(id) {
-    /* Disable a rotation. */
     showAppConfirm({
-        title: "Disable this rotation?",
-        message: "Disable this rotation?",
-        confirmText: "Disable rotation?",
+        title: "Delete this rotation?",
+        message: "This will remove the rotation, delete its layers, members and overrides, and detach it from alert routes.",
+        confirmText: "Delete rotation",
         confirmClass: "btn-danger",
     }).done(function () {
-        apiDelete("/api/rotations/" + id, refreshRotations);
+        apiDelete("/api/rotations/" + id, function () {
+            refreshRotations();
+            if (Number(selectedRotationDetailsId) === Number(id)) {
+                selectedRotationDetailsId = null;
+                $("#rotation-details-subtitle").text("Select a rotation");
+                $("#rotation-details-body").html(
+                    "<p>Click a rotation name to inspect current on-call user, cadence, reminders and quick actions.</p>"
+                );
+            }
+        });
     });
 }
 
 function resetRotationForm() {
-    /* Reset rotation form. */
     $("#rotation-form-title").text("Create rotation");
     $("#rotation-id").val("");
     $("#rotation-name").val("");
@@ -1723,50 +1696,11 @@ function resetRotationForm() {
     $("#rotation-handoff-time").val("09:00");
     $("#rotation-weekday").val(0);
     setReminderFields(300);
-    // $("#rotation-timezone").val("UTC");
     updateRotationCadenceFields();
-    initTimezoneSelect(
-        "#rotation-timezone",
-        "UTC",
-        "#rotation-form-modal"
-    );
+    initTimezoneSelect("#rotation-timezone", "UTC", "#rotation-form-modal");
 }
-
-let rotationOverridesAfterChange = null;
-
-
-function findRotationInCache(rotationId) {
-    /*
-     * Return a rotation from local cache.
-     */
-    return rotationsCache.find(function (item) {
-        return Number(item.id) === Number(rotationId);
-    });
-}
-
-
-function rememberRotationInCache(rotation) {
-    /*
-     * Add or replace one rotation in rotationsCache.
-     */
-    const rotationId = Number(rotation.id);
-    const index = rotationsCache.findIndex(function (item) {
-        return Number(item.id) === rotationId;
-    });
-
-    if (index >= 0) {
-        rotationsCache[index] = rotation;
-        return;
-    }
-
-    rotationsCache.push(rotation);
-}
-
 
 function ensureOverrideRotationOption(rotation) {
-    /*
-     * Ensure the overrides modal rotation selector has the selected rotation.
-     */
     const select = $("#override-rotation");
     const rotationId = String(rotation.id);
 
@@ -1781,11 +1715,7 @@ function ensureOverrideRotationOption(rotation) {
     select.val(rotationId);
 }
 
-
 function loadRotationForOverride(rotationId, callback) {
-    /*
-     * Load rotation for override modal if it is not already cached.
-     */
     const cachedRotation = findRotationInCache(rotationId);
 
     if (cachedRotation) {
@@ -1804,12 +1734,7 @@ function loadRotationForOverride(rotationId, callback) {
     });
 }
 
-
 function selectOverrideRotation(rotationId, options) {
-    /*
-     * Select a rotation, load eligible users, prefill override fields
-     * and open the existing overrides modal.
-     */
     options = options || {};
 
     if (!rotationId) {
@@ -1818,42 +1743,51 @@ function selectOverrideRotation(rotationId, options) {
     }
 
     loadRotationForOverride(rotationId, function (rotation) {
-        rotationOverridesAfterChange = typeof options.afterChange === "function"
-            ? options.afterChange
-            : null;
-
+        rotationOverridesAfterChange = typeof options.afterChange === "function" ? options.afterChange : null;
         ensureOverrideRotationOption(rotation);
 
         fillRotationEligibleUserSelect("#override-user", rotation.id, function () {
             openAppModal("#rotation-overrides-modal");
-
             $("#override-rotation").val(String(rotation.id));
-
             applyOverridePrefill(options);
-
             loadOverrides();
         });
     });
 }
 
 function loadOverrides() {
-    /* Load overrides for the selected rotation. */
     const rotationId = $("#override-rotation").val();
     const tbody = $("#overrides-table");
 
     tbody.empty();
 
     if (!rotationId) {
-        tbody.append($("<tr>").append($("<td>").attr("colspan", "6").text("No rotation selected")));
+        tbody.append(
+            $("<tr>").append(
+                $("<td>")
+                    .attr("colspan", "6")
+                    .addClass("empty-cell")
+                    .text("No rotation selected")
+            )
+        );
         return;
     }
 
-    const rotation = rotationsCache.find(function (item) { return item.id === Number(rotationId); });
+    const rotation = findRotationInCache(rotationId);
+
     $("#overrides-title").text("Overrides" + (rotation ? ": " + rotation.name : ""));
 
     apiGet("/api/rotations/" + rotationId + "/overrides", function (overrides) {
+        overrides = asArray(overrides);
         if (!overrides.length) {
-            tbody.append($("<tr>").append($("<td>").attr("colspan", "6").text("No overrides")));
+            tbody.append(
+                $("<tr>").append(
+                    $("<td>")
+                        .attr("colspan", "6")
+                        .addClass("empty-cell")
+                        .text("No overrides")
+                )
+            );
             return;
         }
 
@@ -1866,20 +1800,26 @@ function loadOverrides() {
             row.append($("<td>").text(override.reason || "-"));
 
             const actions = $("<td>").addClass("actions");
-            actions.append($("<button>").attr("type", "button").addClass("btn btn-danger btn-small").text("Delete").on("click", function () {
-                deleteOverride(override.id);
-            }));
-            row.append(actions);
 
+            if (rotation && canActionObject(rotation, "write")) {
+                actions.append(
+                    $("<button>")
+                        .attr("type", "button")
+                        .addClass("btn btn-danger btn-small")
+                        .text("Delete")
+                        .on("click", function () {
+                            deleteOverride(override.id);
+                        })
+                );
+            }
+
+            row.append(actions);
             tbody.append(row);
         });
     });
 }
 
 function createOverride() {
-    /*
-     * Create a temporary rotation override.
-     */
     const rotationId = $("#override-rotation").val();
 
     if (!rotationId) {
@@ -1904,16 +1844,12 @@ function createOverride() {
     });
 }
 
-
 function deleteOverride(overrideId) {
-    /*
-     * Delete a rotation override.
-     */
     showAppConfirm({
-        title: "Disable this override?",
-        message: "Disable this override?",
-        confirmText: "Disable override?",
-        confirmClass: "btn-danger",
+        title: "Delete this override?",
+        message: "Delete this override?",
+        confirmText: "Delete override",
+        confirmClass: "btn-danger"
     }).done(function () {
         apiDelete("/api/rotations/overrides/" + overrideId, function () {
             loadOverrides();
@@ -1925,30 +1861,13 @@ function deleteOverride(overrideId) {
     });
 }
 
-$(document).on("change", "#rotation-type", updateRotationCadenceFields);
-
-$(document).on("change", "#override-rotation", function () {
-    const rotationId = $(this).val();
-
-    fillRotationEligibleUserSelect("#override-user", rotationId, loadOverrides);
-});
-$(document).on("click", "#save-rotation", saveRotation);
-$(document).on("click", "#reset-rotation-form", resetRotationForm);
-$(document).on("click", "#reload-rotations", refreshRotations);
-$(document).on("click", "#reload-overrides", loadOverrides);
-$(document).on("click", "#create-override", createOverride);
-
 function renderRotationsTable() {
-    /*
-     * Render rotations table using current filters.
-     */
     const tbody = $("#rotations-table");
     const rotations = getFilteredRotations();
 
     tbody.empty();
 
-    $("#rotations-filtered-count").text(rotations.length);
-    $("#rotations-total-count").text(rotationsCache.length);
+    renderRotationsInboxCounter(rotations, rotationsCache);
 
     if (!rotations.length) {
         tbody.append(
@@ -1966,7 +1885,6 @@ function renderRotationsTable() {
         tbody.append(renderRotationRow(rotation));
     });
 }
-
 
 function renderRotationRow(rotation) {
     /*
@@ -2009,144 +1927,129 @@ function renderRotationRow(rotation) {
             $("<td>").append(
                 $("<div>")
                     .addClass("person-inline")
-                    .append($("<div>").addClass("person-avatar").text(rotationInitials(currentUser)))
                     .append(
                         $("<div>")
-                            .append($("<div>").addClass("person-name").text(currentUser))
-                            .append($("<div>").addClass("person-meta").text("Currently on call"))
+                            .addClass("person-avatar")
+                            .text(rotationInitials(currentUser))
+                    )
+                    .append(
+                        $("<div>")
+                            .append(
+                                $("<div>")
+                                    .addClass("person-name")
+                                    .text(currentUser)
+                            )
+                            .append(
+                                $("<div>")
+                                    .addClass("person-meta")
+                                    .text("Currently on call")
+                            )
                     )
             )
         );
     } else {
-        row.append($("<td>").append($("<span>").addClass("rotation-empty-user").text("-")));
+        row.append(
+            $("<td>").append(
+                $("<span>")
+                    .addClass("rotation-empty-user")
+                    .text("-")
+            )
+        );
     }
 
     row.append($("<td>").text(rotation.handoff_time || "-"));
-    row.append($("<td>").text(formatSeconds(rotation.reminder_interval_seconds)));
+
+    row.append(
+        $("<td>").text(formatSeconds(rotation.reminder_interval_seconds))
+    );
 
     row.append(
         $("<td>").append(
-            renderStatusBadge(rotation.enabled, "Active", "Inactive")
+            renderRotationRuntimeStatusBadge(rotation)
         )
     );
 
-    const actions = $("<div>").addClass("table-actions");
-
-    actions.append(
-        $("<button>")
-            .attr("type", "button")
-            .addClass("btn btn-small")
-            .text("Edit")
-            .on("click", function () {
-                editRotation(rotation.id);
-            })
+    row.append(
+        $("<td>")
+            .addClass("actions-cell")
+            .append(
+                makeActionMenu({
+                    object: rotation,
+                    items: [
+                        {
+                            label: "Edit",
+                            icon: "fas fa-edit",
+                            required: "write",
+                            denyMessage: "Team manager role is required to edit this rotation.",
+                            onClick: function () {
+                                editRotation(rotation.id);
+                            }
+                        },
+                        {
+                            label: "Layers",
+                            icon: "fas fa-layer-group",
+                            required: "write",
+                            denyMessage: "Team manager role is required to manage rotation layers.",
+                            onClick: function () {
+                                selectRotationLayers(rotation.id);
+                            }
+                        },
+                        {
+                            label: "Overrides",
+                            icon: "fas fa-user-clock",
+                            required: "write",
+                            denyMessage: "Team manager role is required to manage rotation overrides.",
+                            onClick: function () {
+                                selectOverrideRotation(rotation.id);
+                            }
+                        },
+                        {
+                            label: rotation.enabled ? "Disable" : "Enable",
+                            icon: rotation.enabled ? "fas fa-pause" : "fas fa-play",
+                            required: "write",
+                            danger: rotation.enabled,
+                            denyMessage: "Team manager role is required to enable or disable this rotation.",
+                            onClick: function () {
+                                setRotationEnabled(rotation.id, !rotation.enabled);
+                            }
+                        },
+                        {
+                            label: "Delete",
+                            icon: "fas fa-trash",
+                            required: "delete",
+                            danger: true,
+                            denyMessage: "Delete permission is required to remove this rotation.",
+                            onClick: function () {
+                                deleteRotation(rotation.id);
+                            }
+                        }
+                    ]
+                })
+            )
     );
-
-    actions.append(
-        $("<button>")
-            .attr("type", "button")
-            .addClass("btn btn-small")
-            .text("Layers")
-            .on("click", function () {
-                selectRotationLayers(rotation.id);
-            })
-    );
-
-    actions.append(
-        $("<button>")
-            .attr("type", "button")
-            .addClass("btn btn-small")
-            .text("Overrides")
-            .on("click", function () {
-                selectOverrideRotation(rotation.id);
-            })
-    );
-
-    actions.append(
-        $("<button>")
-            .attr("type", "button")
-            .addClass("btn btn-danger btn-small")
-            .text("Disable")
-            .on("click", function () {
-                deleteRotation(rotation.id);
-            })
-    );
-
-    row.append($("<td>").addClass("actions-cell").append(actions));
 
     return row;
 }
 
-$(document).on("input", "#rotations-search", renderRotationsTable);
-$(document).on("change", "#rotations-team-filter, #rotations-status-filter", renderRotationsTable);
 function openRotationFormModal() {
-    /*
-     * Open rotation create/edit modal.
-     */
-    initTimezoneSelect(
-        "#rotation-timezone",
-        "UTC",
-        "#rotation-form-modal"
-    );
+    initTimezoneSelect("#rotation-timezone", "UTC", "#rotation-form-modal");
     openAppModal("#rotation-form-modal");
 }
 
 function openCreateRotationModal() {
-    /*
-     * Reset form and open modal in create mode.
-     */
     resetRotationForm();
     $("#rotation-form-title").text("Create rotation");
     openRotationFormModal();
 }
-$(document).on("click", "#open-rotation-create-modal", openCreateRotationModal);
-
-$(document).on("click", "#close-rotation-form-modal", closeAppModal);
-
-$(document).on("click", "#rotation-form-modal", function (event) {
-    if (event.target === this) {
-        closeAppModal("#rotation-form-modal");
-    }
-});
-
-$(document).on("keydown", function (event) {
-    if (event.key === "Escape" && $("#rotation-form-modal").hasClass("is-open")) {
-        closeAppModal("#rotation-form-modal");
-    }
-});
-
 
 function closeRotationOverridesModal() {
-    /*
-     * Close rotation overrides modal.
-     */
     closeAppModal("#rotation-overrides-modal");
     rotationOverridesAfterChange = null;
 }
 
-$(document).on("click", "#close-rotation-overrides-modal, #close-rotation-overrides-modal-footer", closeRotationOverridesModal);
-
-$(document).on("click", "#rotation-overrides-modal", function (event) {
-    if (event.target === this) {
-        closeRotationOverridesModal();
-    }
-});
-
-$(document).on("keydown", function (event) {
-    if (event.key !== "Escape") {
-        return;
-    }
-
-    if ($("#rotation-overrides-modal").hasClass("is-open")) {
-        closeRotationOverridesModal();
-    }
-});
 function getRotationCadence(rotation) {
-    /*
-     * Return human-readable rotation cadence.
-     */
     if (rotation.rotation_type === "custom") {
-        return (rotation.custom_days || 1) + "d";
+        return (rotation.custom_days || rotation.interval_value || 1) + "d";
     }
 
     if (rotation.rotation_type === "weekly") {
@@ -2161,20 +2064,13 @@ function getRotationCadence(rotation) {
 }
 
 function rotationDetailsItem(label, value) {
-    /*
-     * Render one details item.
-     */
     return $("<div>")
         .addClass("details-item")
         .append($("<div>").addClass("details-label").text(label))
         .append($("<div>").addClass("details-value").text(value || "-"));
 }
 
-
 function renderRotationDetails(rotation) {
-    /*
-     * Render selected rotation in right-side details panel.
-     */
     selectedRotationDetailsId = rotation.id;
 
     $("#rotation-details-subtitle").text(
@@ -2199,72 +2095,76 @@ function renderRotationDetails(rotation) {
             .append(rotationDetailsItem("Description", rotation.description))
     );
 
-    body.append(
-        $("<div>")
-            .addClass("details-actions")
-            .append(
-                makeIconButton({
-                    icon: "fas fa-edit",
-                    label: "Edit rotation",
-                    onClick: function () {
-                        editRotation(rotation.id);
-                    }
-                })
-            )
-            .append(
-                makeIconButton({
-                    icon: "fas fa-layer-group",
-                    label: "Rotation layers",
-                    onClick: function () {
-                        selectRotationLayers(rotation.id);
-                    }
-                })
-            )
-            .append(
-                makeIconButton({
-                    icon: "fas fa-user-clock",
-                    label: "Rotation overrides",
-                    onClick: function () {
-                        selectOverrideRotation(rotation.id);
-                    }
-                })
-            )
-            .append(
-                makeIconButton({
-                    icon: "fas fa-calendar-alt",
-                    label: "Open calendar",
-                    onClick: function () {
-                        navigate("/calendar?team_id=" + encodeURIComponent(rotation.team_id), true);
-                    }
-                })
-            )
-            .append(
-                makeIconButton({
-                    icon: "fas fa-pause",
-                    label: "Disable rotation",
-                    className: "btn-danger",
-                    onClick: function () {
-                        deleteRotation(rotation.id);
-                    }
-                })
-            )
+    const actions = $("<div>").addClass("details-actions");
+
+    appendIconActionIfAllowed(actions, rotation, {
+        required: "write",
+        icon: "fas fa-edit",
+        label: "Edit rotation",
+        onClick: function () {
+            editRotation(rotation.id);
+        }
+    });
+
+    appendIconActionIfAllowed(actions, rotation, {
+        required: "write",
+        icon: "fas fa-layer-group",
+        label: "Rotation layers",
+        onClick: function () {
+            selectRotationLayers(rotation.id);
+        }
+    });
+
+    appendIconActionIfAllowed(actions, rotation, {
+        required: "write",
+        icon: "fas fa-user-clock",
+        label: "Rotation overrides",
+        onClick: function () {
+            selectOverrideRotation(rotation.id);
+        }
+    });
+
+    actions.append(
+        makeIconButton({
+            icon: "fas fa-calendar-alt",
+            label: "Open calendar",
+            onClick: function () {
+                navigate("/calendar?team_id=" + encodeURIComponent(rotation.team_id), true);
+            }
+        })
     );
+
+    appendIconActionIfAllowed(actions, rotation, {
+        required: "disable",
+        icon: rotation.enabled ? "fas fa-pause" : "fas fa-play",
+        label: rotation.enabled ? "Disable rotation" : "Enable rotation",
+        className: rotation.enabled ? "btn-warning" : "btn-success",
+        onClick: function () {
+            setRotationEnabled(rotation.id, !rotation.enabled);
+        }
+    });
+    appendIconActionIfAllowed(actions, rotation, {
+        required: "delete",
+        icon: "fas fa-trash",
+        label: "Delete rotation",
+        className: "btn-danger",
+        onClick: function () {
+            deleteRotation(rotation.id);
+        }
+    });
+
+    body.append(actions);
 }
 
 function renderRotationsInboxCounter(filteredRotations, allRotations) {
-    /*
-     * Render "Showing X of Y rotations" counter.
-     */
     filteredRotations = Array.isArray(filteredRotations) ? filteredRotations : [];
     allRotations = Array.isArray(allRotations) ? allRotations : [];
 
     $("#rotations-filtered-count").text(filteredRotations.length);
     $("#rotations-total-count").text(allRotations.length);
 }
+
 function fillRotationEligibleUserSelect(selector, rotationId, callback) {
-    /*
-     * Fill user select with users eligible for this rotation.
-     */
     const select = $(selector);
     select.empty();
 
@@ -2278,13 +2178,11 @@ function fillRotationEligibleUserSelect(selector, rotationId, callback) {
         if (typeof callback === "function") {
             callback([]);
         }
-
         return;
     }
 
     apiGet("/api/rotations/" + rotationId + "/eligible-users", function (users) {
         users = asArray(users);
-
         select.empty();
 
         if (!users.length) {
@@ -2309,14 +2207,6 @@ function fillRotationEligibleUserSelect(selector, rotationId, callback) {
     });
 }
 function applyOverridePrefill(options) {
-    /*
-     * Apply optional override form prefill.
-     *
-     * This must be called after:
-     *   - override modal exists in DOM
-     *   - rotation select has the rotation option
-     *   - eligible users select is filled
-     */
     options = options || {};
 
     if (options.userId) {
@@ -2352,3 +2242,72 @@ function initLayerTimezoneSelects() {
         }
     });
 }
+$(document).on("click", "#add-layer-card", addLayerCard);
+$(document).on(
+    "click",
+    "#close-rotation-layers-modal, #close-rotation-layers-modal-footer",
+    closeRotationLayersModal
+);
+$(document).on("click", "#rotation-layers-modal", function (event) {
+    if (event.target === this) {
+        closeRotationLayersModal();
+    }
+});
+$(document).on("change", '[data-layer-field="rotation_type"]', function () {
+    const layerId = $(this).closest(".rotation-layer-card").attr("data-layer-id");
+    updateLayerCadenceVisibility(layerId);
+});
+$(document).on("keydown", function (event) {
+    if (event.key === "Escape" && $("#rotation-layers-modal").hasClass("is-open")) {
+        closeRotationLayersModal();
+    }
+});
+
+$(document).on("change", "#rotation-type", updateRotationCadenceFields);
+$(document).on("change", "#override-rotation", function () {
+    const rotationId = $(this).val();
+    fillRotationEligibleUserSelect("#override-user", rotationId, loadOverrides);
+});
+$(document).on("click", "#save-rotation", saveRotation);
+$(document).on("click", "#reset-rotation-form", resetRotationForm);
+$(document).on("click", "#reload-rotations", refreshRotations);
+$(document).on("click", "#reload-overrides", loadOverrides);
+$(document).on("click", "#create-override", createOverride);
+
+$(document).on("input", "#rotations-search", renderRotationsTable);
+$(document).on("change", "#rotations-team-filter, #rotations-status-filter", renderRotationsTable);
+
+$(document).on("click", "#open-rotation-create-modal", openCreateRotationModal);
+$(document).on("click", "#close-rotation-form-modal", function () {
+    closeAppModal("#rotation-form-modal");
+});
+$(document).on("click", "#rotation-form-modal", function (event) {
+    if (event.target === this) {
+        closeAppModal("#rotation-form-modal");
+    }
+});
+$(document).on("keydown", function (event) {
+    if (event.key === "Escape" && $("#rotation-form-modal").hasClass("is-open")) {
+        closeAppModal("#rotation-form-modal");
+    }
+});
+
+$(document).on(
+    "click",
+    "#close-rotation-overrides-modal, #close-rotation-overrides-modal-footer",
+    closeRotationOverridesModal
+);
+$(document).on("click", "#rotation-overrides-modal", function (event) {
+    if (event.target === this) {
+        closeRotationOverridesModal();
+    }
+});
+$(document).on("keydown", function (event) {
+    if (event.key !== "Escape") {
+        return;
+    }
+
+    if ($("#rotation-overrides-modal").hasClass("is-open")) {
+        closeRotationOverridesModal();
+    }
+});

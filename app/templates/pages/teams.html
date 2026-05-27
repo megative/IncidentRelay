@@ -23,7 +23,7 @@
       <div>
         <div class="summary-title">Escalation</div>
         <div id="teams-summary-escalation" class="summary-value">0</div>
-        <div class="summary-hint">Escalation enabled</div>
+        <div class="summary-hint">Simple rotation escalation</div>
       </div>
     </div>
 
@@ -161,7 +161,7 @@
             autocomplete="off"
           >
 
-          <label for="team-escalation-after">Escalate after reminders</label>
+          <label for="team-escalation-after">Simple escalation after reminders</label>
           <input
             id="team-escalation-after"
             class="input"
@@ -170,6 +170,9 @@
             step="1"
             value="2"
           >
+            <p class="help-text">
+                Used only by routes in Simple rotation mode. Routes with an escalation policy use policy rule delays instead.
+            </p>
 
           <label for="team-description">Description</label>
           <textarea
@@ -181,7 +184,7 @@
           <div class="form-check-row">
             <label class="md-checkbox">
               <input id="team-escalation-enabled" type="checkbox" checked>
-              <span>Escalation enabled</span>
+              <span>Simple rotation escalation</span>
             </label>
 
             <label class="md-checkbox">

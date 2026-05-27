@@ -168,7 +168,12 @@ def add_group_user(group_id):
     if error:
         return error
 
-    membership = groups_repo.add_user_to_group(payload.user_id, group_id, payload.role)
+    membership = groups_repo.add_user_to_group(
+        payload.user_id,
+        group_id,
+        payload.role,
+        active=payload.active,
+    )
     write_audit("group.user.add", object_type="group", object_id=group_id, group_id=group_id, data=payload.model_dump())
     return jsonify(serialize_user_group(membership)), 201
 

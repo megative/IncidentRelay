@@ -37,7 +37,17 @@ function dashboardActiveAlerts(alerts) {
         return alert.status === "firing" || alert.status === "acknowledged";
     });
 }
+function dashboardEscalationText(alert) {
+    if (alert.escalation_policy_name) {
+        const rule = alert.escalation_rule_position
+            ? " · rule #" + alert.escalation_rule_position
+            : "";
 
+        return "Policy: " + alert.escalation_policy_name + rule;
+    }
+
+    return "Rotation: " + (alert.rotation_name || "-");
+}
 function loadDashboard() {
     /*
      * Load dashboard page data.
@@ -112,7 +122,7 @@ function renderDashboardAlertRow(alert) {
         $("<td>")
             .addClass("overview-alert-title-cell")
             .append($("<div>").addClass("overview-alert-title").text(alert.title || "-"))
-            .append($("<div>").addClass("overview-alert-meta").text(alert.source || alert.route_name || "Alert"))
+            .append($("<div>").addClass("overview-alert-meta").text((alert.source || alert.route_name || "Alert") + " · " + dashboardEscalationText(alert)))
     );
     row.append(
         $("<td>").append(
@@ -195,7 +205,13 @@ function renderDashboardRecentAlerts(alerts) {
                 .append(
                     $("<span>")
                         .addClass("overview-list-subtitle")
-                        .text((alert.team_slug || "-") + " · " + severityLabel(alert.severity))
+                        .text(
+                            (alert.team_slug || "-") +
+                            " · " +
+                            severityLabel(alert.severity) +
+                            " · " +
+                            dashboardEscalationText(alert)
+                        )
                 )
         );
         item.append(

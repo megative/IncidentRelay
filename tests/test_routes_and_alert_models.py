@@ -10,6 +10,7 @@ from tests.factories import (
     create_rotation,
     create_team,
     create_user,
+    unique
 )
 
 
@@ -55,3 +56,82 @@ def test_alert_is_persisted_with_labels_and_payload(db):
     assert fetched.payload["source"] == "test"
     assert fetched.team == team
     assert fetched.route == route
+
+
+def test_update_route_rejects_unknown_rotation_id(client, admin_headers, db):
+    group = create_group(slug=unique("group"))
+    team = create_team(group=group, slug=unique("team"))
+    route = create_route(team=team)
+
+    response = client.put(
+        f"/api/routes/{route.id}",
+        json={
+            "team_id": team.id,
+            "name": route.name,
+            "source": route.source,
+            "rotation_id": 999999,
+            "escalation_policy_id": None,
+            "channel_ids": [],
+            "matchers": {},
+            "group_by": [],
+            "enabled": True,
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "rotation_not_found"
+
+
+def test_update_route_rejects_rotation_from_another_team(client, admin_headers, db):
+    group = create_group(slug=unique("group"))
+    team = create_team(group=group, slug=unique("team"))
+    other_team = create_team(group=group, slug=unique("other-team"))
+
+    route = create_route(team=team)
+    rotation = create_rotation(team=other_team)
+
+    response = client.put(
+        f"/api/routes/{route.id}",
+        json={
+            "team_id": team.id,
+            "name": route.name,
+            "source": route.source,
+            "rotation_id": rotation.id,
+            "escalation_policy_id": None,
+            "channel_ids": [],
+            "matchers": {},
+            "group_by": [],
+            "enabled": True,
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "rotation_team_mismatch"
+
+
+def test_create_route_with_duplicate_name_returns_conflict(client, admin_headers, db):
+    group = create_group(slug=unique("group"))
+    team = create_team(group=group, slug=unique("team"))
+
+    create_route(team=team, name="Primary route")
+
+    response = client.post(
+        "/api/routes",
+        json={
+            "team_id": team.id,
+            "name": "Primary route",
+            "source": "alertmanager",
+            "rotation_id": None,
+            "escalation_policy_id": None,
+            "channel_ids": [],
+            "matchers": {},
+            "group_by": [],
+            "enabled": True,
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 409
+    assert response.get_json()["error"] == "conflict"

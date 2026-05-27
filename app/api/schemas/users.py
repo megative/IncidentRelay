@@ -8,7 +8,7 @@ from app.api.schemas.limits import (
     ROLE_MAX_LENGTH,
     USERNAME_MAX_LENGTH,
     USERNAME_MIN_LENGTH,
-    validate_phone,
+    normalize_phone,
 )
 from app.api.schemas.roles import (
     GROUP_ASSIGNABLE_BY_USER_ADMIN_PATTERN,
@@ -51,7 +51,7 @@ class UserFieldsSchema(ApiModel):
     @classmethod
     def validate_phone_field(cls, value):
         """Validate user phone number."""
-        return validate_phone(value)
+        return normalize_phone(value)
 
 
 class UserCreateSchema(UserFieldsSchema):

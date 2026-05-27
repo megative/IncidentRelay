@@ -45,6 +45,7 @@ class TeamUserAddSchema(ApiModel):
         max_length=ROLE_MAX_LENGTH,
         pattern=TEAM_ROLE_PATTERN,
     )
+    active: bool = True
 
 
 class TeamUserUpdateSchema(ApiModel):

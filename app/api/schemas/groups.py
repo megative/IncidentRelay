@@ -59,6 +59,7 @@ class UserGroupAddSchema(ApiModel):
         max_length=ROLE_MAX_LENGTH,
         pattern=GROUP_ROLE_PATTERN,
     )
+    active: bool = True
 
 
 class UserGroupUpdateSchema(ApiModel):

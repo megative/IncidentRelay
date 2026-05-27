@@ -12,7 +12,8 @@ from app.api.openapi.endpoints import (
     users,
     version,
     groups,
-    sso
+    sso,
+    escalation_policies
 )
 from app.version import get_service_version
 
@@ -26,6 +27,7 @@ ENDPOINT_MODULES = [
     calendar,
     channels,
     routes,
+    escalation_policies,
     alerts,
     silences,
     integrations,

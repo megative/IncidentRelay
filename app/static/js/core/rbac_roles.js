@@ -231,14 +231,6 @@ function canManageUsersObject(item) {
     return teamRole === TEAM_MANAGER_ROLE;
 }
 
-function canEditTeam(team) {
-    /*
-     * Backward compatible alias for old page code.
-     * Prefer canWriteObject/canDeleteObject/canRespondObject in new code.
-     */
-    return canWriteObject(team);
-}
-
 function canActionObject(item, required) {
     const action = required || "write";
     if (action === "read") {
@@ -330,7 +322,6 @@ function getCurrentUserActiveGroupRole() {
 function hasCurrentUserGroupWriteAccess() {
     /*
      * Return true when the user is allowed to create operational objects.
-     * Viewer-only users must not see New/Create buttons.
      */
     if (!currentUser) {
         return false;
@@ -340,7 +331,7 @@ function hasCurrentUserGroupWriteAccess() {
     }
 
     return getCurrentUserGroups().some(function (group) {
-        return group.role === GROUP_VIEWER_ROLE || group.role === "viewer";
+        return group.role === GROUP_EDITOR_ROLE || group.role === GROUP_USER_ADMIN_ROLE;
     });
 }
 
@@ -408,63 +399,10 @@ function applyCreateButtonsVisibility() {
         "#open-rotation-create-modal",
         "#open-route-create-modal",
         "#open-channel-create-modal",
-        "#open-silence-create-modal"
+        "#open-silence-create-modal",
+        "#open-escalation-policy-create-modal"
     ].forEach(function (selector) {
         setElementAllowed(selector, allowed);
-    });
-}
-
-function getButtonText(button) {
-    return String($(button).text() || "").replace(/\s+/g, " ").trim().toLowerCase();
-}
-
-function isRotationsWriteButton(button) {
-    const text = getButtonText(button);
-    return [
-        "edit",
-        "edit rotation",
-        "layers",
-        "rotation layers",
-        "overrides",
-        "rotation overrides",
-        "disable",
-        "disable rotation",
-        "delete",
-        "remove",
-        "save",
-        "save layer",
-        "save restrictions",
-        "add user",
-        "+ add window",
-        "24/7",
-        "business hours",
-        "nights",
-        "weekend"
-    ].indexOf(text) !== -1;
-}
-
-function applyRotationsViewerUiState() {
-    /*
-     * Extra protection for rotations.js until all rotation renderers use permissions directly.
-     */
-    if (!isCurrentUserViewerOnly()) {
-        return;
-    }
-
-    [
-        "#open-rotation-create-modal",
-        "#save-rotation",
-        "#reset-rotation-form",
-        "#add-layer-card",
-        "#create-override"
-    ].forEach(function (selector) {
-        setElementAllowed(selector, false);
-    });
-
-    $("#view-rotations button").each(function () {
-        if (isRotationsWriteButton(this)) {
-            $(this).addClass("is-hidden").prop("disabled", true);
-        }
     });
 }
 
@@ -473,193 +411,4 @@ function applyRbacUiState() {
      * Re-apply role-aware visibility after navigation and page refreshes.
      */
     applyCreateButtonsVisibility();
-    applyRotationsViewerUiState();
-}
-
-function getRotationByIdFromCache(rotationId) {
-    if (!Array.isArray(window.rotationsCache)) {
-        return null;
-    }
-    return window.rotationsCache.find(function (item) {
-        return Number(item.id) === Number(rotationId);
-    }) || null;
-}
-
-function canWriteRotationById(rotationId) {
-    const rotation = getRotationByIdFromCache(rotationId);
-    if (rotation) {
-        return canWriteObject(rotation);
-    }
-    return !isCurrentUserViewerOnly();
-}
-
-function wrapFunction(name, wrapperFactory) {
-    const original = window[name];
-    if (typeof original !== "function" || original.__rbacWrapped) {
-        return;
-    }
-
-    const wrapped = wrapperFactory(original);
-    wrapped.__rbacWrapped = true;
-    window[name] = wrapped;
-}
-
-function filterRotationRowActions(row, rotation) {
-    if (!row || !row.find) {
-        return row;
-    }
-
-    const canWrite = canWriteObject(rotation);
-    const canDelete = canDeleteObject(rotation);
-
-    row.find("button").each(function () {
-        const text = getButtonText(this);
-        if ((text === "disable" || text === "remove" || text === "delete") && !canDelete) {
-            $(this).remove();
-            return;
-        }
-        if (["edit", "layers", "overrides", "rotation layers", "rotation overrides"].indexOf(text) !== -1 && !canWrite) {
-            $(this).remove();
-        }
-    });
-
-    return row;
-}
-
-function filterRotationDetailsActions(rotation) {
-    const canWrite = canWriteObject(rotation);
-    const canDelete = canDeleteObject(rotation);
-    const container = $("#rotation-details-body .details-actions");
-
-    container.find("button").each(function () {
-        const text = getButtonText(this);
-        if ((text === "disable rotation" || text === "delete" || text === "remove") && !canDelete) {
-            $(this).remove();
-            return;
-        }
-        if (["edit rotation", "rotation layers", "rotation overrides"].indexOf(text) !== -1 && !canWrite) {
-            $(this).remove();
-        }
-    });
-}
-
-function denyRbacAction(message) {
-    showAppError(message || "You do not have permission to perform this action.", "Access denied");
-}
-
-function installRbacUiPatches() {
-    /*
-     * Patch old renderers that still do not use permissions directly.
-     */
-    if (window.__incidentRelayRbacUiPatchesInstalled) {
-        return;
-    }
-    window.__incidentRelayRbacUiPatchesInstalled = true;
-
-    wrapFunction("renderRotationRow", function (original) {
-        return function (rotation) {
-            return filterRotationRowActions(original.apply(this, arguments), rotation);
-        };
-    });
-
-    wrapFunction("renderRotationDetails", function (original) {
-        return function (rotation) {
-            const result = original.apply(this, arguments);
-            filterRotationDetailsActions(rotation);
-            return result;
-        };
-    });
-
-    wrapFunction("editRotation", function (original) {
-        return function (rotationId) {
-            if (!canWriteRotationById(rotationId)) {
-                denyRbacAction("Team manager role is required to edit this rotation.");
-                return;
-            }
-            return original.apply(this, arguments);
-        };
-    });
-
-    wrapFunction("selectRotationLayers", function (original) {
-        return function (rotationId) {
-            if (!canWriteRotationById(rotationId)) {
-                denyRbacAction("Team manager role is required to manage rotation layers.");
-                return;
-            }
-            return original.apply(this, arguments);
-        };
-    });
-
-    wrapFunction("selectOverrideRotation", function (original) {
-        return function (rotationId) {
-            if (!canWriteRotationById(rotationId)) {
-                denyRbacAction("Team manager role is required to manage rotation overrides.");
-                return;
-            }
-            return original.apply(this, arguments);
-        };
-    });
-
-    wrapFunction("deleteRotation", function (original) {
-        return function (rotationId) {
-            if (!canWriteRotationById(rotationId)) {
-                denyRbacAction("Team manager role is required to disable this rotation.");
-                return;
-            }
-            return original.apply(this, arguments);
-        };
-    });
-
-    wrapFunction("saveRotation", function (original) {
-        return function () {
-            const rotationId = $("#rotation-id").val();
-            if (rotationId && !canWriteRotationById(rotationId)) {
-                denyRbacAction("Team manager role is required to save this rotation.");
-                return;
-            }
-            if (!rotationId && !currentUserCanCreateUiObjects()) {
-                denyRbacAction("Write role is required to create rotations.");
-                return;
-            }
-            return original.apply(this, arguments);
-        };
-    });
-
-    wrapFunction("openCreateRotationModal", function (original) {
-        return function () {
-            if (!currentUserCanCreateUiObjects()) {
-                denyRbacAction("Write role is required to create rotations.");
-                return;
-            }
-            return original.apply(this, arguments);
-        };
-    });
-
-    wrapFunction("addLayerCard", function (original) {
-        return function () {
-            if (!canWriteRotationById(window.selectedRotationForLayers)) {
-                denyRbacAction("Team manager role is required to create rotation layers.");
-                return;
-            }
-            return original.apply(this, arguments);
-        };
-    });
-
-    wrapFunction("createOverride", function (original) {
-        return function () {
-            const rotationId = $("#override-rotation").val();
-            if (!canWriteRotationById(rotationId)) {
-                denyRbacAction("Team manager role is required to create rotation overrides.");
-                return;
-            }
-            return original.apply(this, arguments);
-        };
-    });
-
-    const observer = new MutationObserver(function () {
-        applyRbacUiState();
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-
-    applyRbacUiState();
 }

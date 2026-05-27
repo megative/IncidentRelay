@@ -2,10 +2,16 @@ let routesCache = [];
 let selectedRouteDetailsId = null;
 let routesSortState = createTableSortState("id", "desc");
 const routesSortColumns = {
-    name: { path: "name", type: "text", defaultDirection: "asc" },
-    team: { path: "team_slug", type: "text", defaultDirection: "asc" },
-    source: { path: "source", type: "text", defaultDirection: "asc" },
-    rotation: { path: "rotation_name", type: "text", defaultDirection: "asc" },
+    name: {path: "name", type: "text", defaultDirection: "asc"},
+    team: {path: "team_slug", type: "text", defaultDirection: "asc"},
+    source: {path: "source", type: "text", defaultDirection: "asc"},
+    rotation: {
+        value: function (route) {
+            return route.escalation_policy_name || route.rotation_name || "";
+        },
+        type: "text",
+        defaultDirection: "asc"
+    },
     channels: {
         value: function (route) {
             return asArray(route.channels).map(function (channel) {
@@ -15,9 +21,30 @@ const routesSortColumns = {
         type: "text",
         defaultDirection: "asc",
     },
-    enabled: { path: "enabled", type: "boolean", defaultDirection: "desc" },
+    enabled: {path: "enabled", type: "boolean", defaultDirection: "desc"},
 };
+function getRouteEscalationLabel(route) {
+    if (route.escalation_policy_name) {
+        return "Policy: " + route.escalation_policy_name;
+    }
 
+    if (route.rotation_name) {
+        return "Rotation: " + route.rotation_name;
+    }
+
+    return "-";
+}
+function getRouteTeamEscalationLabel(route) {
+    if (route.escalation_policy_name) {
+        return "Ignored for policy mode";
+    }
+
+    if (route.team_escalation_enabled) {
+        return "After " + (route.team_escalation_after_reminders || 0) + " reminders";
+    }
+
+    return "Disabled";
+}
 function loadRoutes() {
     fillTeamSelect("#route-team", false, loadRouteDependencies);
     initRoutesTableSorting();
@@ -93,15 +120,20 @@ function refreshRoutes() {
 
 function renderRoutesSummary(routes) {
     routes = asArray(routes);
-    const enabled = routes.filter(function (route) { return !!route.enabled; }).length;
-    const withRotation = routes.filter(function (route) {
-        return !!route.rotation_id || !!route.rotation_name;
+
+    const enabled = routes.filter(function (route) {
+        return !!route.enabled;
+    }).length;
+
+    const withEscalation = routes.filter(function (route) {
+        return !!route.rotation_id || !!route.rotation_name ||
+            !!route.escalation_policy_id || !!route.escalation_policy_name;
     }).length;
 
     $("#routes-summary-total").text(routes.length);
     $("#routes-summary-enabled").text(enabled);
     $("#routes-summary-disabled").text(routes.length - enabled);
-    $("#routes-summary-rotation").text(withRotation);
+    $("#routes-summary-rotation").text(withEscalation);
 }
 
 function fillRouteSourceFilter(routes) {
@@ -136,6 +168,7 @@ function getRouteSearchText(route) {
         route.name,
         route.source,
         route.rotation_name,
+        route.escalation_policy_name,
         route.intake_token_prefix,
         route.enabled ? "enabled" : "disabled",
         channels,
@@ -188,7 +221,7 @@ function renderRouteRow(route) {
     );
     row.append($("<td>").append($("<span>").addClass("route-pill").text(route.team_slug || "-")));
     row.append($("<td>").text(route.source || "-"));
-    row.append($("<td>").text(route.rotation_name || "-"));
+    row.append($("<td>").text(getRouteEscalationLabel(route)));
     row.append($("<td>").append(renderRouteChannels(channels)));
     row.append($("<td>").append($("<span>").addClass("token-pill").text(route.intake_token_prefix || "-")));
     row.append($("<td>").append(renderStatusBadge(route.enabled, "Enabled", "Disabled")));
@@ -209,46 +242,56 @@ function renderRouteChannels(channels) {
 }
 
 function renderRouteActions(route) {
-    const actions = $("<div>").addClass("table-actions");
-
-    appendActionIfAllowed(actions, route, {
-        required: "write",
-        text: "Edit",
-        className: "btn btn-small",
-        onClick: function () {
-            editRoute(route.id);
-        },
-    });
-    appendActionIfAllowed(actions, route, {
-        required: "write",
-        text: "Regenerate token",
-        className: "btn btn-small",
-        onClick: function () {
-            regenerateRouteToken(route.id);
-        },
-    });
-    appendActionIfAllowed(actions, route, {
-        required: "write",
-        text: route.enabled ? "Disable" : "Enable",
-        className: route.enabled ? "btn btn-warning btn-small" : "btn btn-success btn-small",
-        onClick: function () {
-            if (route.enabled) {
-                disableRoute(route);
-            } else {
-                enableRoute(route);
+    /*
+     * Render route row actions as a shared three-dots menu.
+     */
+    return makeActionMenu({
+        object: route,
+        items: [
+            {
+                label: "Edit",
+                icon: "fas fa-edit",
+                required: "write",
+                denyMessage: "Team manager role is required to edit this route.",
+                onClick: function () {
+                    editRoute(route.id);
+                }
+            },
+            {
+                label: "Regenerate token",
+                icon: "fas fa-sync-alt",
+                required: "write",
+                denyMessage: "Team manager role is required to regenerate route tokens.",
+                onClick: function () {
+                    regenerateRouteToken(route.id);
+                }
+            },
+            {
+                label: route.enabled ? "Disable" : "Enable",
+                icon: route.enabled ? "fas fa-pause" : "fas fa-play",
+                required: "write",
+                danger: route.enabled,
+                denyMessage: "Team manager role is required to enable or disable this route.",
+                onClick: function () {
+                    if (route.enabled) {
+                        disableRoute(route);
+                    } else {
+                        enableRoute(route);
+                    }
+                }
+            },
+            {
+                label: "Delete",
+                icon: "fas fa-trash",
+                required: "delete",
+                danger: true,
+                denyMessage: "Delete permission is required to delete this route.",
+                onClick: function () {
+                    deleteRoute(route);
+                }
             }
-        },
+        ]
     });
-    appendActionIfAllowed(actions, route, {
-        required: "delete",
-        text: "Delete",
-        className: "btn btn-danger btn-small",
-        onClick: function () {
-            deleteRoute(route);
-        },
-    });
-
-    return actions;
 }
 
 function routeDetailsItem(label, value) {
@@ -278,7 +321,8 @@ function renderRouteDetails(route) {
             .append(routeDetailsItem("Name", route.name))
             .append(routeDetailsItem("Team", route.team_slug))
             .append(routeDetailsItem("Source", route.source))
-            .append(routeDetailsItem("Rotation", route.rotation_name))
+            .append(routeDetailsItem("Escalation", getRouteEscalationLabel(route)))
+            .append(routeDetailsItem("Team escalation", getRouteTeamEscalationLabel(route)))
             .append(routeDetailsItem("Channels", asArray(route.channels).map(function (channel) {
                 return channel.name;
             }).join(", ") || "-"))
@@ -359,11 +403,19 @@ function restoreRouteDetails() {
 }
 
 function collectRoutePayload() {
+    const mode = $("#route-escalation-mode").val() || "rotation";
+    const usePolicy = mode === "policy";
+
     return {
         team_id: Number($("#route-team").val()),
         name: $("#route-name").val(),
         source: $("#route-source").val(),
-        rotation_id: $("#route-rotation").val() ? Number($("#route-rotation").val()) : null,
+        rotation_id: !usePolicy && $("#route-rotation").val()
+            ? Number($("#route-rotation").val())
+            : null,
+        escalation_policy_id: usePolicy && $("#route-escalation-policy").val()
+            ? Number($("#route-escalation-policy").val())
+            : null,
         channel_ids: ($("#route-channels").val() || []).map(Number),
         matchers: parseJsonInput("#route-matchers", {}),
         group_by: parseJsonInput("#route-group-by", []),
@@ -418,10 +470,17 @@ function editRoute(id) {
     $("#route-enabled").prop("checked", !!route.enabled);
 
     loadRouteDependencies(function () {
+        const usePolicy = !!route.escalation_policy_id;
+
+        $("#route-escalation-mode").val(usePolicy ? "policy" : "rotation");
         $("#route-rotation").val(route.rotation_id || "");
+        $("#route-escalation-policy").val(route.escalation_policy_id || "");
+
         $("#route-channels").val(asArray(route.channels).map(function (channel) {
             return String(channel.id);
         }));
+
+        updateRouteEscalationModeUi();
     });
 
     openAppModal("#route-form-modal");
@@ -493,6 +552,9 @@ function resetRouteForm() {
     $("#route-enabled").prop("checked", true);
     $("#route-rotation").val("");
     $("#route-channels").val([]);
+    $("#route-escalation-mode").val("rotation");
+    $("#route-escalation-policy").val("");
+    updateRouteEscalationModeUi();
 }
 
 function showRouteToken(token) {
@@ -585,6 +647,7 @@ function getFilteredRoutes() {
 $(document).on("change", "#route-team", function () {
     loadRouteDependencies();
 });
+$(document).on("change", "#route-escalation-mode", updateRouteEscalationModeUi);
 $(document).on("input", "#routes-search", renderRoutesTable);
 $(document).on("change", "#routes-source-filter, #routes-status-filter", renderRoutesTable);
 $(document).on("click", "#open-route-create-modal", openCreateRouteModal);
@@ -621,3 +684,117 @@ $(document).on("keydown", function (event) {
 $(document).on("click", "#format-route-matchers", function () {
     formatJsonTextarea("#route-matchers", {}, "Alert filters JSON");
 });
+function loadRouteDependencies(callback) {
+    const teamId = $("#route-team").val();
+    const rotationSelect = $("#route-rotation");
+    const channelSelect = $("#route-channels");
+    const policySelect = $("#route-escalation-policy");
+
+    rotationSelect.empty();
+    channelSelect.empty();
+    policySelect.empty();
+
+    rotationSelect.append($("<option>").val("").text("No rotation"));
+    policySelect.append($("<option>").val("").text("No policy"));
+
+    if (!teamId) {
+        updateRouteEscalationModeUi();
+
+        if (typeof callback === "function") {
+            callback();
+        }
+
+        return;
+    }
+
+    let rotationsLoaded = false;
+    let channelsLoaded = false;
+    let policiesLoaded = false;
+
+    function finishWhenReady() {
+        if (!rotationsLoaded || !channelsLoaded || !policiesLoaded) {
+            return;
+        }
+
+        updateRouteEscalationModeUi();
+
+        if (typeof callback === "function") {
+            callback();
+        }
+    }
+
+    apiGet("/api/rotations?team_id=" + encodeURIComponent(teamId), function (rotations) {
+        rotationSelect.empty();
+        rotationSelect.append($("<option>").val("").text("No rotation"));
+
+        asArray(rotations).forEach(function (rotation) {
+            if (!rotation.enabled) {
+                return;
+            }
+
+            rotationSelect.append(
+                $("<option>")
+                    .val(String(rotation.id))
+                    .text(rotation.name)
+            );
+        });
+
+        rotationsLoaded = true;
+        finishWhenReady();
+    });
+
+    apiGet("/api/channels?team_id=" + encodeURIComponent(teamId), function (channels) {
+        channelSelect.empty();
+
+        asArray(channels).forEach(function (channel) {
+            if (!channel.enabled) {
+                return;
+            }
+
+            channelSelect.append(
+                $("<option>")
+                    .val(String(channel.id))
+                    .text(channel.name + " (" + channel.channel_type + ")")
+            );
+        });
+
+        channelsLoaded = true;
+        finishWhenReady();
+    });
+
+    apiGet("/api/escalation-policies?team_id=" + encodeURIComponent(teamId), function (policies) {
+        policySelect.empty();
+        policySelect.append($("<option>").val("").text("No policy"));
+
+        asArray(policies).forEach(function (policy) {
+            if (!policy.enabled) {
+                return;
+            }
+
+            policySelect.append(
+                $("<option>")
+                    .val(String(policy.id))
+                    .text(policy.name)
+            );
+        });
+
+        policiesLoaded = true;
+        finishWhenReady();
+    });
+}
+
+function updateRouteEscalationModeUi() {
+    const mode = $("#route-escalation-mode").val() || "rotation";
+    const usePolicy = mode === "policy";
+
+    $("#route-rotation")
+        .prop("disabled", usePolicy)
+        .closest(".form-group")
+        .toggleClass("is-muted", usePolicy);
+
+    $("#route-escalation-policy")
+        .prop("disabled", !usePolicy);
+
+    $("#route-policy-group").toggleClass("is-hidden", !usePolicy);
+}
+$(document).on("change", "#route-escalation-mode", updateRouteEscalationModeUi);

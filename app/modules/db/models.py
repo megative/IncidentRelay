@@ -250,6 +250,57 @@ class NotificationChannel(SoftDeleteModel):
         )
 
 
+class EscalationPolicy(SoftDeleteModel):
+    """Escalation policy for a team."""
+
+    id = AutoField()
+    team = ForeignKeyField(Team, backref="escalation_policies", on_delete="CASCADE")
+    name = CharField()
+    description = TextField(null=True)
+    enabled = BooleanField(default=True)
+    repeat_count = IntegerField(default=0)
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "escalation_policy"
+        indexes = (
+            (("team", "name"), True),
+        )
+
+
+class EscalationPolicyRule(BaseModel):
+    """One escalation policy level."""
+
+    id = AutoField()
+    policy = ForeignKeyField(EscalationPolicy, backref="rules", on_delete="CASCADE")
+    position = IntegerField()
+    delay_seconds = IntegerField(default=300)
+    target_type = CharField()
+    target_rotation = ForeignKeyField(
+        Rotation,
+        null=True,
+        backref="escalation_policy_rules",
+        on_delete="SET NULL",
+    )
+    target_user = ForeignKeyField(
+        User,
+        null=True,
+        backref="escalation_policy_rules",
+        on_delete="SET NULL",
+    )
+    enabled = BooleanField(default=True)
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "escalation_policy_rule"
+        indexes = (
+            (("policy", "position"), True),
+            (("policy", "enabled"), False),
+        )
+
+
 class AlertRoute(SoftDeleteModel):
     """Route incoming alerts to a team, rotation and channels."""
 
@@ -258,6 +309,12 @@ class AlertRoute(SoftDeleteModel):
     name = CharField()
     source = CharField()
     rotation = ForeignKeyField(Rotation, backref="alert_routes", null=True, on_delete="SET NULL")
+    escalation_policy = ForeignKeyField(
+        EscalationPolicy,
+        backref="alert_routes",
+        null=True,
+        on_delete="SET NULL",
+    )
     matchers = JSONTextField(null=True)
     group_by = JSONTextField(null=True)
     intake_token_prefix = CharField(null=True, index=True)
@@ -291,6 +348,21 @@ class Alert(BaseModel):
     team = ForeignKeyField(Team, null=True, backref="alerts", on_delete="SET NULL")
     route = ForeignKeyField(AlertRoute, null=True, backref="alerts", on_delete="SET NULL")
     rotation = ForeignKeyField(Rotation, null=True, backref="alerts", on_delete="SET NULL")
+    escalation_policy = ForeignKeyField(
+        EscalationPolicy,
+        null=True,
+        backref="alerts",
+        on_delete="SET NULL",
+    )
+    escalation_rule = ForeignKeyField(
+        EscalationPolicyRule,
+        null=True,
+        backref="alerts",
+        on_delete="SET NULL",
+    )
+    next_escalation_at = DateTimeField(null=True, index=True)
+    last_escalated_at = DateTimeField(null=True)
+    escalation_repeat_count = IntegerField(default=0)
     assignee = ForeignKeyField(User, null=True, backref="assigned_alerts", on_delete="SET NULL")
     source = CharField()
     external_id = CharField(null=True)

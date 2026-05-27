@@ -46,45 +46,6 @@ function upperCaseFirst(value) {
     return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function injectAppUxStyles() {
-    /*
-     * Add small reusable UX styles from JS so this patch does not have to
-     * replace the large shared CSS bundle.
-     */
-    if (document.getElementById("app-ux-scroll-styles")) {
-        return;
-    }
-
-    const style = document.createElement("style");
-    style.id = "app-ux-scroll-styles";
-    style.textContent = [
-        "@keyframes app-scroll-highlight {",
-        "  0% { box-shadow: 0 0 0 0 rgba(74, 144, 226, 0.45); border-color: var(--primary, #4a90e2); background: #f8fbff; }",
-        "  70% { box-shadow: 0 0 0 8px rgba(74, 144, 226, 0); }",
-        "  100% { box-shadow: inherit; }",
-        "}",
-        ".app-scroll-highlight { animation: app-scroll-highlight 1.45s ease-out; }",
-        ".app-sticky-x-scroll {",
-        "  position: fixed;",
-        "  left: 0;",
-        "  right: auto;",
-        "  bottom: 0;",
-        "  height: 18px;",
-        "  overflow-x: auto;",
-        "  overflow-y: hidden;",
-        "  z-index: 2500;",
-        "  background: rgba(244, 246, 248, 0.96);",
-        "  border-top: 1px solid var(--border, #dfe4ea);",
-        "  box-shadow: 0 -6px 18px rgba(20, 30, 45, 0.08);",
-        "}",
-        ".app-sticky-x-scroll.is-hidden { display: none !important; }",
-        ".app-sticky-x-scroll-inner { height: 1px; }",
-        "body.has-app-sticky-x-scroll { padding-bottom: 18px; }"
-    ].join("\n");
-
-    document.head.appendChild(style);
-}
-
 function findScrollableParent(element, boundary) {
     /*
      * Return the nearest vertical scroll container between element and boundary.
@@ -505,7 +466,6 @@ function scheduleStickyTableScrollbars() {
 }
 
 function initStickyTableScrollbars() {
-    injectAppUxStyles();
     ensureStickyTableScrollbar();
 
     $(window).on("resize.appStickyXScroll scroll.appStickyXScroll", scheduleStickyTableScrollbars);
@@ -569,7 +529,6 @@ function initAppUxNavigationHelpers() {
 }
 
 $(document).ready(function () {
-    injectAppUxStyles();
     initAppUxNavigationHelpers();
     initStickyTableScrollbars();
     initDetailsAutoHighlight();

@@ -91,17 +91,22 @@ def update_group(group_id, data):
     return group
 
 
-def add_user_to_group(user_id, group_id, role=GROUP_VIEWER_ROLE):
+def add_user_to_group(user_id, group_id, role=GROUP_VIEWER_ROLE, active=True):
     """Add a user to a group."""
     membership, created = UserGroup.get_or_create(
         user=user_id,
         group=group_id,
-        defaults={"role": role},
+        defaults={
+            "role": role,
+            "active": active,
+        },
     )
+
     if not created:
         membership.role = role
-        membership.active = True
+        membership.active = active
         membership.save()
+
     return membership
 
 

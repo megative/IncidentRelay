@@ -10,6 +10,7 @@ from app.login import create_access_token
 from app.modules.db import groups_repo, users_repo
 from app.modules.db.models import SsoGroupMapping, SsoIdentity, User, UserGroup
 from app.settings import Config
+from app.api.schemas.limits import normalize_phone
 
 
 class SsoLoginError(Exception):
@@ -293,6 +294,10 @@ def _fill_missing_user_fields(user, provider, claims):
         update_data["display_name"] = display_name
 
     if phone and not user.phone:
+        try:
+            phone = normalize_phone(phone)
+        except ValueError:
+            phone = None
         update_data["phone"] = phone
 
     if update_data:

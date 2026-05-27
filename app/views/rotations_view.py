@@ -13,6 +13,7 @@ from app.api.schemas.rotations import (
     RotationLayerMemberAddSchema,
     RotationLayerMemberUpdateSchema,
     RotationLayerRestrictionsReplaceSchema,
+    RotationEnabledUpdateSchema
 )
 from app.modules.db import rotations_repo, teams_repo
 from app.services.audit import write_audit
@@ -145,25 +146,56 @@ def update_rotation(rotation_id):
             "handoff_time": payload.handoff_time,
             "handoff_weekday": payload.handoff_weekday,
             "timezone": payload.timezone,
+            "enabled": payload.enabled,
         },
     )
     write_audit("rotation.update", object_type="rotation", object_id=rotation.id, team_id=rotation.team.id, data=payload.model_dump(mode="json"))
     return jsonify(serialize_rotation(rotation, get_current_oncall_user(rotation)))
 
 
-@rotations_bp.route("/<int:rotation_id>", methods=["DELETE"])
-def delete_rotation(rotation_id):
-    """
-    Disable a rotation.
-    """
+@rotations_bp.route("/<int:rotation_id>/enabled", methods=["PUT"])
+def set_rotation_enabled(rotation_id):
+    """Enable or disable a rotation without deleting its schedule data."""
+    payload, error = validate_body(RotationEnabledUpdateSchema)
+    if error:
+        return error
 
     current_rotation = rotations_repo.get_rotation(rotation_id)
     error = require_team_write(current_rotation.team_id)
     if error:
         return error
-    rotation = rotations_repo.disable_rotation(rotation_id)
-    write_audit("rotation.disable", object_type="rotation", object_id=rotation.id, team_id=rotation.team.id)
+
+    rotation = rotations_repo.set_rotation_enabled(rotation_id, payload.enabled)
+
+    write_audit(
+        "rotation.enable" if payload.enabled else "rotation.disable",
+        object_type="rotation",
+        object_id=rotation.id,
+        team_id=rotation.team.id,
+        data={"enabled": payload.enabled},
+    )
+
     return jsonify(serialize_rotation(rotation, get_current_oncall_user(rotation)))
+
+
+@rotations_bp.route("/<int:rotation_id>", methods=["DELETE"])
+def delete_rotation(rotation_id):
+    """Remove a rotation and detach related route references."""
+    current_rotation = rotations_repo.get_rotation(rotation_id)
+    error = require_team_write(current_rotation.team_id)
+    if error:
+        return error
+
+    rotation = rotations_repo.soft_delete_rotation(rotation_id)
+
+    write_audit(
+        "rotation.delete",
+        object_type="rotation",
+        object_id=rotation.id,
+        team_id=rotation.team.id,
+    )
+
+    return jsonify({"deleted": True, "id": rotation.id})
 
 
 @rotations_bp.route("/<int:rotation_id>/members", methods=["GET"])

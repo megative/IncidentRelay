@@ -30,15 +30,6 @@ function resetAppDialog() {
         .text("OK");
 }
 
-
-function closeAppDialog() {
-    /*
-     * Close global dialog.
-     */
-    $("#app-dialog-modal").addClass("is-hidden");
-}
-
-
 function showAppDialog(options) {
     /*
      * Show global application dialog.
@@ -49,13 +40,12 @@ function showAppDialog(options) {
     const deferred = $.Deferred();
     const opts = options || {};
     const type = opts.type || "info";
+    const dialog = $("#app-dialog-modal");
 
     resetAppDialog();
 
-    $("#app-dialog-modal")
-        .addClass("app-dialog-" + type)
-        .removeClass("is-hidden")
-        .css("z-index", getNextAppOverlayZIndex());
+    dialog.addClass("app-dialog-" + type);
+    openAppModal(dialog);
 
     $("#app-dialog-title").text(opts.title || "Message");
     $("#app-dialog-subtitle").text(opts.subtitle || "");
@@ -75,14 +65,14 @@ function showAppDialog(options) {
     }
 
     $("#app-dialog-confirm").off("click.appDialog").on("click.appDialog", function () {
-        closeAppDialog();
+        closeAppModal("#app-dialog-modal");
         deferred.resolve();
     });
 
     $("#app-dialog-cancel, #app-dialog-close")
         .off("click.appDialog")
         .on("click.appDialog", function () {
-            closeAppDialog();
+            closeAppModal("#app-dialog-modal");
             deferred.reject();
         });
 
@@ -162,11 +152,17 @@ $(document).on("click", "#app-dialog-modal", function (event) {
     /*
      * Close dialog when clicking outside the modal dialog.
      */
-    if (event.target === this) {
-        $("#app-dialog-cancel").trigger("click");
+    if (event.target !== this) {
+        return;
     }
-});
 
+    if ($(this).hasClass("is-hidden")) {
+        return;
+    }
+
+    event.stopImmediatePropagation();
+    $("#app-dialog-cancel").trigger("click");
+});
 
 $(document).on("keydown", function (event) {
     /*
@@ -176,9 +172,14 @@ $(document).on("keydown", function (event) {
         return;
     }
 
-    if (!$("#app-dialog-modal").hasClass("is-hidden")) {
-        $("#app-dialog-cancel").trigger("click");
+    const dialog = $("#app-dialog-modal");
+
+    if (!dialog.length || dialog.hasClass("is-hidden")) {
+        return;
     }
+
+    event.stopImmediatePropagation();
+    $("#app-dialog-cancel").trigger("click");
 });
 function formatJsonTextarea(selector, fallbackValue, label) {
     const $field = $(selector);

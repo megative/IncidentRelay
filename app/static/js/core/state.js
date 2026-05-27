@@ -6,6 +6,7 @@ const routes = {
     "/rotations": { page: "rotations", title: "Rotations", subtitle: "Manage on-call rotations", load: function () { loadRotations(); } },
     "/calendar": { page: "calendar", title: "Calendar", subtitle: "On-call calendar by team", load: function () { loadCalendar(); } },
     "/routes": { page: "routes", title: "Routes", subtitle: "Connect alert sources, rotations and channels", load: function () { loadRoutes(); } },
+    "/escalation-policies": { page: "escalation-policies", title: "Escalation Policies", subtitle: "Define alert escalation chains by team", load: function () { loadEscalationPolicies(); } },
     "/channels": { page: "channels", title: "Channels", subtitle: "Notification channels", load: function () { loadChannels(); } },
     "/silences": { page: "silences", title: "Silences", subtitle: "Mute alerts by matchers", load: function () { loadSilences(); } },
     "/teams": { page: "teams", title: "Teams", subtitle: "Independent duty teams", load: function () { loadTeams(); } },

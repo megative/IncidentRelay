@@ -1,4 +1,5 @@
 from flask import Flask
+from peewee import DoesNotExist, IntegrityError
 
 from app.settings import Config
 from app.db import init_database
@@ -9,6 +10,7 @@ from app.views.alerts_view import alerts_bp
 from app.views.auth_view import auth_bp
 from app.views.calendar_view import calendar_bp
 from app.views.channels_view import channels_bp
+from app.views.escalation_policies_view import escalation_policies_bp
 from app.views.docs_view import docs_bp
 from app.views.groups_view import groups_bp
 from app.views.profile_view import profile_bp
@@ -22,6 +24,7 @@ from app.views.users_view import users_bp
 from app.views.version_view import version_bp
 from app.views.sso_admin_view import sso_admin_bp
 from app.views.sso_auth_view import sso_auth_bp
+from app.services.db_errors import handle_integrity_error, handle_not_found_error
 
 
 def create_app():
@@ -32,6 +35,9 @@ def create_app():
     flask_app = Flask(__name__)
     flask_app.config.from_object(Config)
     setup_json_logging(flask_app)
+
+    flask_app.register_error_handler(IntegrityError, handle_integrity_error)
+    flask_app.register_error_handler(DoesNotExist, handle_not_found_error)
 
     db = init_database()
 
@@ -81,6 +87,7 @@ def register_blueprints(flask_app):
     flask_app.register_blueprint(alerts_bp, url_prefix="/api/alerts")
     flask_app.register_blueprint(channels_bp, url_prefix="/api/channels")
     flask_app.register_blueprint(routes_bp, url_prefix="/api/routes")
+    flask_app.register_blueprint(escalation_policies_bp, url_prefix="/api/escalation-policies")
     flask_app.register_blueprint(silences_bp, url_prefix="/api/silences")
     flask_app.register_blueprint(integrations_bp, url_prefix="/api/integrations")
     flask_app.register_blueprint(sso_admin_bp, url_prefix="/api/admin/sso")

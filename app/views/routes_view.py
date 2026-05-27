@@ -1,7 +1,8 @@
 from flask import Blueprint, jsonify, request
+from peewee import DoesNotExist
 
 from app.api.schemas.routes import RouteChannelsReplaceSchema, RouteCreateSchema, RouteUpdateSchema
-from app.modules.db import routes_repo, channels_repo
+from app.modules.db import routes_repo, channels_repo, rotations_repo
 from app.services.auth import create_raw_token, hash_token
 from app.services.audit import write_audit
 from app.services.rbac import get_allowed_team_ids, require_team_read, require_team_write
@@ -12,23 +13,114 @@ from app.services.validation import validate_body
 routes_bp = Blueprint("routes_api", __name__)
 
 
+
+
+def validate_route_rotation(team_id, rotation_id):
+    """Ensure selected rotation exists and belongs to the route team."""
+    if not rotation_id:
+        return None
+
+    try:
+        rotation = rotations_repo.get_rotation(rotation_id)
+    except DoesNotExist:
+        return jsonify({
+            "error": "rotation_not_found",
+            "message": "Rotation was not found",
+            "rotation_id": rotation_id,
+        }), 400
+
+    if rotation.team_id != team_id:
+        return jsonify({
+            "error": "rotation_team_mismatch",
+            "message": "Rotation does not belong to route team",
+            "rotation_id": rotation_id,
+            "rotation_team_id": rotation.team_id,
+            "team_id": team_id,
+        }), 400
+
+    return None
+
+
+def validate_route_escalation_policy(team_id, escalation_policy_id):
+    """Ensure selected escalation policy exists and belongs to the route team."""
+    if not escalation_policy_id:
+        return None
+
+    try:
+        policy = escalation_policies_repo.get_policy(escalation_policy_id)
+    except DoesNotExist:
+        return jsonify({
+            "error": "escalation_policy_not_found",
+            "message": "Escalation policy was not found",
+            "escalation_policy_id": escalation_policy_id,
+        }), 400
+
+    if policy.team_id != team_id:
+        return jsonify({
+            "error": "escalation_policy_team_mismatch",
+            "message": "Escalation policy does not belong to route team",
+            "escalation_policy_id": escalation_policy_id,
+            "policy_team_id": policy.team_id,
+            "team_id": team_id,
+        }), 400
+
+    return None
+
+
 def validate_route_channels(team_id, channel_ids):
-    """
-    Ensure all route channels belong to the same team as the route.
-    """
+    """Ensure all route channels exist and belong to the same team as the route."""
     for channel_id in channel_ids:
-        channel = channels_repo.get_channel(channel_id)
+        try:
+            channel = channels_repo.get_channel(channel_id)
+        except DoesNotExist:
+            return jsonify({
+                "error": "channel_not_found",
+                "message": "Channel was not found",
+                "channel_id": channel_id,
+            }), 400
 
         if channel.team_id != team_id:
             return jsonify({
-                "error": "Channel does not belong to route team",
+                "error": "channel_team_mismatch",
+                "message": "Channel does not belong to route team",
                 "channel_id": channel_id,
+                "channel_team_id": channel.team_id,
                 "team_id": team_id,
             }), 400
 
         error = require_team_write(channel.team_id)
         if error:
             return error
+
+    return None
+
+
+def validate_route_rotation(team_id, rotation_id):
+    """Ensure selected rotation exists and belongs to the route team."""
+    if not rotation_id:
+        return None
+
+    try:
+        rotation = rotations_repo.get_rotation(rotation_id)
+    except DoesNotExist:
+        return jsonify({
+            "error": "rotation_not_found",
+            "message": "Rotation was not found",
+            "rotation_id": rotation_id,
+        }), 400
+
+    if rotation.team_id != team_id:
+        return jsonify({
+            "error": "rotation_team_mismatch",
+            "message": "Rotation does not belong to route team",
+            "rotation_id": rotation_id,
+            "rotation_team_id": rotation.team_id,
+            "team_id": team_id,
+        }), 400
+
+    error = require_team_write(rotation.team_id)
+    if error:
+        return error
 
     return None
 
@@ -84,6 +176,18 @@ def create_route():
     channel_error = validate_route_channels(payload.team_id, payload.channel_ids)
     if channel_error:
         return channel_error
+
+    rotation_error = validate_route_rotation(payload.team_id, payload.rotation_id)
+    if rotation_error:
+        return rotation_error
+
+    policy_error = validate_route_escalation_policy(payload.team_id, payload.escalation_policy_id)
+    if policy_error:
+        return policy_error
+
+    rotation_error = validate_route_rotation(payload.team_id, payload.rotation_id)
+    if rotation_error:
+        return rotation_error
 
     raw_token = create_raw_token()
 
@@ -141,6 +245,10 @@ def update_route(route_id):
     if channel_error:
         return channel_error
 
+    rotation_error = validate_route_rotation(payload.team_id, payload.rotation_id)
+    if rotation_error:
+        return rotation_error
+
     route = routes_repo.update_route(
         route_id,
         {
@@ -148,6 +256,7 @@ def update_route(route_id):
             "name": payload.name,
             "source": payload.source,
             "rotation": payload.rotation_id,
+            "escalation_policy": payload.escalation_policy_id,
             "matchers": payload.matchers,
             "group_by": payload.group_by,
             "enabled": payload.enabled,

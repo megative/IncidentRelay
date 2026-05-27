@@ -194,38 +194,38 @@ function renderSilenceRow(silence) {
 }
 
 function renderSilenceActions(silence) {
-    const actions = $("<div>").addClass("table-actions");
-
-    appendActionIfAllowed(actions, silence, {
-        required: "write",
-        text: "Edit",
-        className: "btn btn-small",
-        onClick: function () {
-            editSilence(silence.id);
-        },
+    /*
+     * Render silence row actions as a shared three-dots menu.
+     */
+    return makeActionMenu({
+        object: silence,
+        items: [
+            {
+                label: "Edit",
+                icon: "fas fa-edit",
+                required: "write",
+                denyMessage: "Team manager role is required to edit this silence.",
+                onClick: function () {
+                    editSilence(silence.id);
+                }
+            },
+            {
+                label: silence.enabled ? "Disable" : "Enable",
+                icon: silence.enabled ? "fas fa-pause" : "fas fa-play",
+                required: "write",
+                danger: silence.enabled,
+                hidden: !silence.enabled && typeof enableSilence !== "function",
+                denyMessage: "Team manager role is required to enable or disable this silence.",
+                onClick: function () {
+                    if (silence.enabled) {
+                        disableSilence(silence.id);
+                    } else if (typeof enableSilence === "function") {
+                        enableSilence(silence.id);
+                    }
+                }
+            }
+        ]
     });
-
-    if (silence.enabled) {
-        appendActionIfAllowed(actions, silence, {
-            required: "write",
-            text: "Disable",
-            className: "btn btn-danger btn-small",
-            onClick: function () {
-                disableSilence(silence.id);
-            },
-        });
-    } else if (typeof enableSilence === "function") {
-        appendActionIfAllowed(actions, silence, {
-            required: "write",
-            text: "Enable",
-            className: "btn btn-success btn-small",
-            onClick: function () {
-                enableSilence(silence.id);
-            },
-        });
-    }
-
-    return actions;
 }
 
 function silenceDetailsItem(label, value) {

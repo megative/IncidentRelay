@@ -176,3 +176,9 @@ class RotationLayerRestrictionsReplaceSchema(ApiModel):
     """Validate replacing layer restrictions."""
 
     restrictions: list[RotationLayerRestrictionSchema] = Field(default_factory=list)
+
+
+class RotationEnabledUpdateSchema(ApiModel):
+    """Validate rotation enabled/disabled update."""
+
+    enabled: bool

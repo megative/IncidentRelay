@@ -219,7 +219,7 @@ function renderTeamRow(team) {
             $("<span>")
                 .addClass("status-pill")
                 .addClass(team.escalation_enabled ? "status-enabled" : "status-disabled")
-                .text(team.escalation_enabled ? "after " + (team.escalation_after_reminders || 0) : "Disabled")
+                .text(team.escalation_enabled ? "simple after " + (team.escalation_after_reminders || 0) : "Disabled")
         )
     );
     row.append($("<td>").append(renderStatusBadge(team.active, "Active", "Inactive")));
@@ -229,58 +229,51 @@ function renderTeamRow(team) {
 
 function renderTeamActions(team) {
     /*
-     * Render team actions.
+     * Render team row actions as a shared three-dots menu.
      */
-    const actions = $("<div>").addClass("table-actions");
-
-    appendActionIfAllowed(actions, team, {
-        required: "write",
-        className: "btn btn-small",
-        text: "Edit",
-        onClick: function () {
-            editTeam(team.id);
-        },
-    });
-
-    appendActionIfAllowed(actions, team, {
-        required: "manage_users",
-        className: "btn btn-small",
-        text: "Members",
-        onClick: function () {
-            openTeamMembers(team.id, team.name);
-        },
-    });
-
-    if (team.active) {
-        appendActionIfAllowed(actions, team, {
-            required: "write",
-            className: "btn btn-warning btn-small",
-            text: "Disable",
-            onClick: function () {
-                setTeamActive(team, false);
+    return makeActionMenu({
+        object: team,
+        items: [
+            {
+                label: "Edit",
+                icon: "fas fa-edit",
+                required: "write",
+                denyMessage: "Team manager role is required to edit this team.",
+                onClick: function () {
+                    editTeam(team.id);
+                }
             },
-        });
-    } else {
-        appendActionIfAllowed(actions, team, {
-            required: "write",
-            className: "btn btn-success btn-small",
-            text: "Enable",
-            onClick: function () {
-                setTeamActive(team, true);
+            {
+                label: "Members",
+                icon: "fas fa-users",
+                required: "manage_users",
+                denyMessage: "Team manager role is required to manage team members.",
+                onClick: function () {
+                    openTeamMembers(team.id, team.name);
+                }
             },
-        });
-    }
-
-    appendActionIfAllowed(actions, team, {
-        required: "delete",
-        className: "btn btn-danger btn-small",
-        text: "Remove",
-        onClick: function () {
-            removeTeam(team);
-        },
+            {
+                label: team.active ? "Disable" : "Enable",
+                icon: team.active ? "fas fa-pause" : "fas fa-play",
+                required: "write",
+                danger: team.active,
+                denyMessage: "Team manager role is required to enable or disable this team.",
+                onClick: function () {
+                    setTeamActive(team, !team.active);
+                }
+            },
+            {
+                label: "Remove",
+                icon: "fas fa-trash",
+                required: "delete",
+                danger: true,
+                denyMessage: "Delete permission is required to remove this team.",
+                onClick: function () {
+                    removeTeam(team);
+                }
+            }
+        ]
     });
-
-    return actions;
 }
 
 function teamDetailsItem(label, value) {
@@ -309,8 +302,18 @@ function renderTeamDetails(team) {
             .append(teamDetailsItem("Slug", team.slug))
             .append(teamDetailsItem("Group", team.group_slug))
             .append(teamDetailsItem("Description", team.description))
-            .append(teamDetailsItem("Escalation", team.escalation_enabled ? "Enabled" : "Disabled"))
-            .append(teamDetailsItem("Escalate after reminders", team.escalation_after_reminders || 0))
+            .append(teamDetailsItem(
+                "Simple rotation escalation",
+                team.escalation_enabled ? "Enabled" : "Disabled"
+            ))
+            .append(teamDetailsItem(
+                "Simple escalation after reminders",
+                team.escalation_after_reminders || 0
+            ))
+            .append(teamDetailsItem(
+                "Policy mode",
+                "Routes with an escalation policy use policy rule delays instead"
+            ))
             .append(teamDetailsItem("Status", team.active ? "Active" : "Inactive"))
     );
 
@@ -432,7 +435,6 @@ function renderTeamMemberRow(member) {
      */
     const row = $("<tr>");
     const selectedTeam = getSelectedTeamForMembers();
-    const canManageMembers = selectedTeam ? canManageUsersObject(selectedTeam) : false;
 
     row.append($("<td>").text(member.user_id));
     row.append($("<td>").text(member.username));
@@ -445,51 +447,54 @@ function renderTeamMemberRow(member) {
                 .text(RbacRoles.teamLabel(member.role))
         )
     );
-    row.append($("<td>").append(renderStatusBadge(member.active, "Enabled", "Disabled")));
 
-    const actions = $("<div>").addClass("table-actions");
-    if (canManageMembers) {
-        actions.append(
-            $("<button>")
-                .attr("type", "button")
-                .addClass("btn btn-small")
-                .text("Edit")
-                .on("click", function () {
-                    editTeamMember(member);
+    row.append(
+        $("<td>").append(
+            renderStatusBadge(member.active, "Enabled", "Disabled")
+        )
+    );
+
+    row.append(
+        $("<td>")
+            .addClass("actions-cell")
+            .append(
+                makeActionMenu({
+                    object: selectedTeam,
+                    items: [
+                        {
+                            label: "Edit",
+                            icon: "fas fa-edit",
+                            required: "manage_users",
+                            denyMessage: "Team manager role is required to edit team members.",
+                            onClick: function () {
+                                editTeamMember(member);
+                            }
+                        },
+                        {
+                            label: member.active ? "Disable" : "Enable",
+                            icon: member.active ? "fas fa-pause" : "fas fa-play",
+                            required: "manage_users",
+                            danger: member.active,
+                            denyMessage: "Team manager role is required to enable or disable team members.",
+                            onClick: function () {
+                                setTeamMemberActive(member, !member.active);
+                            }
+                        },
+                        {
+                            label: "Remove",
+                            icon: "fas fa-trash",
+                            required: "manage_users",
+                            danger: true,
+                            denyMessage: "Team manager role is required to remove team members.",
+                            onClick: function () {
+                                removeTeamMember(member.id);
+                            }
+                        }
+                    ]
                 })
-        );
-        if (member.active) {
-            actions.append(
-                $("<button>")
-                    .attr("type", "button")
-                    .addClass("btn btn-warning btn-small")
-                    .text("Disable")
-                    .on("click", function () {
-                        setTeamMemberActive(member, false);
-                    })
-            );
-        } else {
-            actions.append(
-                $("<button>")
-                    .attr("type", "button")
-                    .addClass("btn btn-small")
-                    .text("Enable")
-                    .on("click", function () {
-                        setTeamMemberActive(member, true);
-                    })
-            );
-        }
-        actions.append(
-            $("<button>")
-                .attr("type", "button")
-                .addClass("btn btn-danger btn-small")
-                .text("Remove")
-                .on("click", function () {
-                    removeTeamMember(member.id);
-                })
-        );
-    }
-    row.append($("<td>").addClass("actions-cell").append(actions));
+            )
+    );
+
     return row;
 }
 
@@ -558,6 +563,7 @@ function saveTeamUser() {
         {
             user_id: Number($("#team-member-user").val()),
             role: $("#team-member-role").val(),
+            active: $("#team-member-active").is(":checked"),
         },
         function () {
             resetTeamMemberForm();

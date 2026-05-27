@@ -14,6 +14,7 @@ class RouteBaseSchema(ApiModel):
     name: str = Field(min_length=2, max_length=120)
     source: str = Field(pattern=r"^(alertmanager|zabbix|webhook)$")
     rotation_id: int | None = Field(default=None, ge=1)
+    escalation_policy_id: int | None = Field(default=None, ge=1)
     channel_ids: List[int] = Field(default_factory=list)
     matchers: Dict[str, Any] = Field(default_factory=dict)
     group_by: List[str] = Field(default_factory=list)

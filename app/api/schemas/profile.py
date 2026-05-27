@@ -9,7 +9,7 @@ from app.api.schemas.limits import (
     PHONE_MAX_LENGTH,
     TOKEN_NAME_MAX_LENGTH,
     TOKEN_NAME_MIN_LENGTH,
-    validate_phone,
+    normalize_phone,
 )
 
 
@@ -42,7 +42,7 @@ class ProfileUpdateSchema(ApiModel):
     @classmethod
     def validate_phone_field(cls, value):
         """Validate profile phone number."""
-        return validate_phone(value)
+        return normalize_phone(value)
 
 
 class ProfileTokenCreateSchema(ApiModel):

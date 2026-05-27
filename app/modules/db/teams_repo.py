@@ -147,17 +147,26 @@ def get_user_team_role(user_id, team_id):
     return membership.role if membership else None
 
 
-def add_user_to_team(team_id, user_id, role=TEAM_VIEWER_ROLE):
-    """Add a user to a team."""
+def add_user_to_team(team_id, user_id, role=TEAM_VIEWER_ROLE, active=True):
+    """Add a user to a team or update existing membership."""
     membership, created = TeamUser.get_or_create(
         team=team_id,
         user=user_id,
-        defaults={"role": role},
+        defaults={
+            "role": role,
+            "active": active,
+        },
     )
     if not created:
         membership.role = role
-        membership.active = True
+        membership.active = active
         membership.save()
+    if not active:
+        deactivate_user_in_team_rotations(
+            team_id=membership.team.id,
+            user_id=membership.user.id,
+        )
+
     return membership
 
 

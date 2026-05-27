@@ -19,7 +19,7 @@
     <script src="/static/js/vendor/select2.min.js"></script>
 </head>
 <body class="md-theme">
-<div class="layout">
+<section class="layout">
     <aside id="app-sidebar" class="sidebar">
         <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
             <symbol id="icon-overview" viewBox="0 0 24 24">
@@ -119,6 +119,11 @@
             <span class="menu-text">Routes</span>
         </a>
 
+        <a class="menu-link" href="/escalation-policies" data-page="escalation-policies">
+            <span>↗</span>
+            Escalation Policies
+        </a>
+
         <a href="/channels" data-page="channels" class="menu-link" title="Channels">
             <svg class="menu-icon"><use href="#icon-channels"></use></svg>
             <span class="menu-text">Channels</span>
@@ -189,6 +194,7 @@
             <div id="view-rotations" class="view">{% include "pages/rotations.html" %}</div>
             <div id="view-calendar" class="view">{% include "pages/calendar.html" %}</div>
             <div id="view-routes" class="view">{% include "pages/routes.html" %}</div>
+            <div id="view-escalation-policies" class="view">{% include "pages/escalation_policies.html" %}</div>
             <div id="view-channels" class="view">{% include "pages/channels.html" %}</div>
             <div id="view-silences" class="view">{% include "pages/silences.html" %}</div>
             <div id="view-teams" class="view">{% include "pages/teams.html" %}</div>
@@ -198,6 +204,7 @@
             <div id="view-profile" class="view">{% include "pages/profile.html" %}</div>
         </section>
         {% include 'pages/include/alerts_modal.html' %}
+        {% include 'pages/include/rotation_overrides_modal.html' %}
         <div id="app-dialog-modal" class="app-modal is-hidden" role="dialog" aria-modal="true">
             <div class="app-modal-dialog app-modal-dialog-small">
             <div class="app-modal-header">
@@ -249,17 +256,18 @@
 <script src="/static/js/sidebar.js"></script>
 <script src="/static/js/components/alerts_summary_grid.js"></script>
 <script src="/static/js/components/buttons.js"></script>
+<script src="{{ url_for('static', filename='js/components/action_menu.js') }}"></script>
 <script src="/static/js/pages/alerts.js"></script>
 <script src="/static/js/pages/rotations.js"></script>
 <script src="/static/js/pages/calendar.js"></script>
 <script src="/static/js/pages/routes.js"></script>
+<script src="{{ url_for('static', filename='js/pages/escalation_policies.js') }}"></script>
 <script src="/static/js/pages/channels.js"></script>
 <script src="/static/js/pages/silences.js"></script>
 <script src="/static/js/pages/teams.js"></script>
 <script src="/static/js/pages/admin_users.js"></script>
 <script src="/static/js/pages/groups.js"></script>
 <script src="/static/js/pages/profile.js"></script>
-{#<script src="/static/js/pages/login.js"></script>#}
 <script src="/static/js/pages/sso.js"></script>
 </body>
 </html>
