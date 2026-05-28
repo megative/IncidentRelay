@@ -5,46 +5,6 @@ function closeAppActionMenus() {
         .attr("aria-expanded", "false");
 }
 
-function makeActionMenuItem(item) {
-    const options = item || {};
-
-    if (options.hidden) {
-        return null;
-    }
-
-    const button = $("<button>")
-        .attr("type", "button")
-        .addClass("app-action-menu-item")
-        .toggleClass("is-danger", !!options.danger)
-        .toggleClass("is-disabled", !!options.disabled)
-        .prop("disabled", !!options.disabled)
-        .append(
-            $("<span>")
-                .addClass("app-action-menu-icon")
-                .append(
-                    $("<i>")
-                        .addClass(options.icon || "fas fa-circle")
-                        .attr("aria-hidden", "true")
-                )
-        )
-        .append(
-            $("<span>")
-                .addClass("app-action-menu-label")
-                .text(options.label || "Action")
-        );
-
-    if (typeof options.onClick === "function" && !options.disabled) {
-        button.on("click", function (event) {
-            event.preventDefault();
-            event.stopPropagation();
-            closeAppActionMenus();
-            options.onClick(event);
-        });
-    }
-
-    return button;
-}
-
 function isActionMenuItemAllowed(menuObject, item) {
     const options = item || {};
 

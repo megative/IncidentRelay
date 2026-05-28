@@ -7,13 +7,12 @@ function selectedTeamNumber() {
 
 function setSelectedTeamId(teamId, triggerChange) {
     const select = $("#global-team-filter");
-    const value = teamId ? String(teamId) : "";
 
     if (!select.length) {
         return;
     }
 
-    select.val(value);
+    select.val(teamId ? String(teamId) : "");
 
     if (triggerChange) {
         select.trigger("change");

@@ -18,32 +18,6 @@ from app.services.validation import validate_body
 routes_bp = Blueprint("routes_api", __name__)
 
 
-def validate_route_rotation(team_id, rotation_id):
-    """Ensure selected rotation exists and belongs to the route team."""
-    if not rotation_id:
-        return None
-
-    try:
-        rotation = rotations_repo.get_rotation(rotation_id)
-    except DoesNotExist:
-        return jsonify({
-            "error": "rotation_not_found",
-            "message": "Rotation was not found",
-            "rotation_id": rotation_id,
-        }), 400
-
-    if rotation.team_id != team_id:
-        return jsonify({
-            "error": "rotation_team_mismatch",
-            "message": "Rotation does not belong to route team",
-            "rotation_id": rotation_id,
-            "rotation_team_id": rotation.team_id,
-            "team_id": team_id,
-        }), 400
-
-    return None
-
-
 def validate_route_escalation_policy(team_id, escalation_policy_id):
     """Ensure selected escalation policy exists, is enabled and belongs to the route team."""
     if not escalation_policy_id:
@@ -205,10 +179,6 @@ def create_route():
     policy_error = validate_route_escalation_policy(payload.team_id, payload.escalation_policy_id)
     if policy_error:
         return policy_error
-
-    rotation_error = validate_route_rotation(payload.team_id, payload.rotation_id)
-    if rotation_error:
-        return rotation_error
 
     raw_token = create_raw_token()
 

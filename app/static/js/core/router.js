@@ -167,7 +167,7 @@ $(document).ready(function () {
     }
 
     $("#global-team-filter").on("change", function () {
-        navigate(currentAppUrlWithoutTeamScope(), false);
+        navigate(currentAppUrlWithoutTeamScope(), true);
         applyRbacUiState();
     });
 

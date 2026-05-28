@@ -288,11 +288,10 @@ function getCalendarQueryRotationId() {
 }
 
 
-function setCalendarQueryTeamId(teamId, rotationId) {
+function setCalendarQueryTeamId(teamId, rotationId, replace) {
     /*
      * Update browser URL for team/rotation calendar without leaving the SPA.
      */
-
     const params = new URLSearchParams();
 
     if (teamId) {
@@ -305,8 +304,13 @@ function setCalendarQueryTeamId(teamId, rotationId) {
 
     const query = params.toString();
     const path = query ? "/calendar?" + query : "/calendar";
+    const state = { path: path };
+    if (replace) {
+        history.replaceState(state, "", path);
+        return;
+    }
 
-    history.pushState({ path: path }, "", path);
+    history.pushState(state, "", path);
 }
 
 
@@ -652,8 +656,7 @@ function refreshCalendar() {
 
                     syncSelectedRotationCalendar(visibleCalendars);
                     updateCalendarRotationFilter(visibleCalendars);
-
-                    setCalendarQueryTeamId(calendarSelectedTeamId, calendarSelectedRotationId);
+                    setCalendarQueryTeamId(calendarSelectedTeamId, calendarSelectedRotationId, true);
 
                     updateCalendarTitle();
 
@@ -1171,8 +1174,8 @@ function openCalendarTeam(teamId, rotationId) {
     calendarMode = "month";
 
     setSelectedTeamId(calendarSelectedTeamId, false);
+    setCalendarQueryTeamId(calendarSelectedTeamId, calendarSelectedRotationId, false);
 
-    setCalendarQueryTeamId(calendarSelectedTeamId, calendarSelectedRotationId);
     setMonthCalendarRange(new Date());
     refreshCalendar();
 }
@@ -1450,27 +1453,10 @@ $(document).on("change", "#calendar-rotation-filter", function () {
     calendarSelectedTeamId = getCalendarSelectedTeamId();
     calendarSelectedRotationId = value ? Number(value) : null;
 
-    setCalendarQueryTeamId(calendarSelectedTeamId, calendarSelectedRotationId);
+    setCalendarQueryTeamId(calendarSelectedTeamId, calendarSelectedRotationId, true);
     updateCalendarTitle();
     renderCalendarMonth();
     renderCalendarDetailsEmpty();
-});
-function currentAppUrlWithoutGlobalTeamOwnedParams() {
-    const url = new URL(currentAppUrl(), window.location.origin);
-    const routePath = normalizeAppRoutePath(url.pathname);
-
-    if (routePath === "/calendar") {
-        url.searchParams.delete("team_id");
-        url.searchParams.delete("rotation_id");
-    }
-
-    const query = url.searchParams.toString();
-    return url.pathname + (query ? "?" + query : "") + url.hash;
-}
-
-$("#global-team-filter").on("change", function () {
-    navigate(currentAppUrlWithoutGlobalTeamOwnedParams(), false);
-    applyRbacUiState();
 });
 
 
