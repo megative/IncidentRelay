@@ -694,9 +694,20 @@ def serialize_sso_group_mapping(mapping):
 
 def serialize_service_link(link, current_user=None):
     """Serialize a service link."""
+    service = link.service
+    team = service.team if service else None
+
     data = {
         "id": link.id,
-        "service_id": link.service_id,
+
+        "service_id": service.id if service else link.service_id,
+        "service_name": service.name if service else None,
+        "service_slug": service.slug if service else None,
+
+        "team_id": team.id if team else None,
+        "team_name": team.name if team else None,
+        "team_slug": team.slug if team else None,
+
         "link_type": link.link_type,
         "label": link.label,
         "url": link.url,
@@ -707,14 +718,29 @@ def serialize_service_link(link, current_user=None):
         "updated_at": serialize_utc_datetime(link.updated_at),
     }
 
-    return attach_team_permissions(data, link.service.team_id, current_user)
+    return attach_team_permissions(
+        data,
+        team.id if team else None,
+        current_user,
+    )
 
 
 def serialize_service_runbook(runbook, current_user=None):
     """Serialize a service runbook."""
+    service = runbook.service
+    team = service.team if service else None
+
     data = {
         "id": runbook.id,
-        "service_id": runbook.service_id,
+
+        "service_id": service.id if service else runbook.service_id,
+        "service_name": service.name if service else None,
+        "service_slug": service.slug if service else None,
+
+        "team_id": team.id if team else None,
+        "team_name": team.name if team else None,
+        "team_slug": team.slug if team else None,
+
         "title": runbook.title,
         "description": runbook.description,
         "url": runbook.url,
@@ -726,7 +752,11 @@ def serialize_service_runbook(runbook, current_user=None):
         "updated_at": serialize_utc_datetime(runbook.updated_at),
     }
 
-    return attach_team_permissions(data, runbook.service.team_id, current_user)
+    return attach_team_permissions(
+        data,
+        team.id if team else None,
+        current_user,
+    )
 
 
 def serialize_service_dependency(dependency, current_user=None):

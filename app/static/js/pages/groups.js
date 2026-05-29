@@ -108,65 +108,50 @@ function renderGroupStatus(active) {
 }
 
 function renderGroupActions(group) {
-    const actions = $("<div>").addClass("actions");
-
-    actions.append(
-        $("<button>")
-            .attr("type", "button")
-            .addClass("btn btn-small")
-            .text(canEditGroup(group) ? "Edit" : "Details")
-            .on("click", function () {
-                openExistingGroupModal(group);
-            })
-    );
-
-    actions.append(
-        $("<button>")
-            .attr("type", "button")
-            .addClass("btn btn-small")
-            .text("Members")
-            .on("click", function () {
-                openExistingGroupModal(group);
-            })
-    );
-
-    if (canEditGroup(group)) {
-        if (group.active) {
-            actions.append(
-                $("<button>")
-                    .attr("type", "button")
-                    .addClass("btn btn-warning btn-small")
-                    .text("Disable")
-                    .on("click", function () {
-                        setGroupActive(group, false);
-                    })
-            );
-        } else {
-            actions.append(
-                $("<button>")
-                    .attr("type", "button")
-                    .addClass("btn btn-success btn-small")
-                    .text("Enable")
-                    .on("click", function () {
-                        setGroupActive(group, true);
-                    })
-            );
-        }
-    }
-
-    if (isGlobalAdminUser()) {
-        actions.append(
-            $("<button>")
-                .attr("type", "button")
-                .addClass("btn btn-danger btn-small")
-                .text("Delete")
-                .on("click", function () {
+    /*
+     * Render group row actions as a shared three-dots menu.
+     */
+    return makeActionMenu({
+        object: group,
+        items: [
+            {
+                label: canEditGroup(group) ? "Edit" : "Details",
+                icon: canEditGroup(group) ? "fas fa-edit" : "fas fa-eye",
+                onClick: function () {
+                    openExistingGroupModal(group);
+                }
+            },
+            {
+                label: "Members",
+                icon: "fas fa-users",
+                onClick: function () {
+                    openExistingGroupModal(group);
+                }
+            },
+            {
+                label: group.active ? "Disable" : "Enable",
+                icon: group.active ? "fas fa-pause" : "fas fa-play",
+                danger: group.active,
+                visible: function () {
+                    return canEditGroup(group);
+                },
+                onClick: function () {
+                    setGroupActive(group, !group.active);
+                }
+            },
+            {
+                label: "Delete",
+                icon: "fas fa-trash",
+                danger: true,
+                visible: function () {
+                    return isGlobalAdminUser();
+                },
+                onClick: function () {
                     deleteGroup(group);
-                })
-        );
-    }
-
-    return actions;
+                }
+            }
+        ]
+    });
 }
 function getSelectedGroupForMembers() {
     /*

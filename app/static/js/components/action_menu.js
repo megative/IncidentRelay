@@ -234,20 +234,20 @@
             .toggleClass("is-danger", !!callMaybe(item.danger, object));
 
         if (icon) {
-    if (/^(fa|fas|far|fab|fal|fad)\s/.test(icon)) {
-        button.append(
-            $("<i>")
-                .addClass("app-action-menu-icon " + icon)
-                .attr("aria-hidden", "true")
-        );
-    } else {
-        button.append(
-            $("<span>")
-                .addClass("app-action-menu-icon")
-                .text(icon)
-        );
-    }
-}
+            if (/^(fa|fas|far|fab|fal|fad)\s/.test(icon)) {
+                button.append(
+                    $("<i>")
+                        .addClass("app-action-menu-icon " + icon)
+                        .attr("aria-hidden", "true")
+                );
+            } else {
+                button.append(
+                    $("<span>")
+                        .addClass("app-action-menu-icon")
+                        .text(icon)
+                );
+            }
+        }
 
         button.append(
             $("<span>")
@@ -311,7 +311,7 @@
         });
 
         if (!list.children().length) {
-            toggle.prop("disabled", true);
+            return $();
         }
 
         toggle.on("click", function (event) {

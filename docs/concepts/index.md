@@ -1,6 +1,6 @@
 # Main Concepts
 
-IncidentRelay is built from a small set of concepts:
+IncidentRelay resources are organized around groups, teams, services, rotations, routes and channels.
 
 | Concept           | Description                                                                    |
 |-------------------|--------------------------------------------------------------------------------|
@@ -9,7 +9,8 @@ IncidentRelay is built from a small set of concepts:
 | Team              | Operational unit inside a group                                                |
 | Rotation          | On-call schedule for a team                                                    |
 | Route             | Incoming alert routing rule with its own intake token                          |
-| Escalation policy | Escalation policy                                                                               |
+| Service | Logical affected system such as API, database, queue, website or infrastructure component |
+| Escalation policy | Escalation policy                                                               |
 | Channel           | Outgoing notification destination                                              |
 | Alert             | Alert created or updated by an incoming integration                            |
 | Silence           | Temporary rule that suppresses notifications for matching new alerts           |
@@ -23,3 +24,4 @@ Recommended reading order:
 4. [Channels](channels.md)
 5. [Reminders and Escalations](reminders-and-escalations.md)
 6. [Escalation policy](escalation-policies.md)
+7. [Service](service.md)

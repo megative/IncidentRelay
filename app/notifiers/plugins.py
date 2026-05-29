@@ -4,6 +4,12 @@ import requests
 
 from app.notifiers.base import BaseNotifier
 from app.services.links import build_alert_web_url
+from app.services.service_context import (
+    get_alert_service_links,
+    get_alert_service_runbooks,
+    link_display_label,
+    runbook_display_label,
+)
 
 logger = logging.getLogger("oncall.alerts")
 
@@ -74,6 +80,24 @@ class IncomingWebhookNotifier(BaseNotifier):
                     if getattr(alert, "service", None)
                     else None
                 ),
+                "service_links": [
+                    {
+                        "id": link.id,
+                        "type": link.link_type,
+                        "label": link_display_label(link),
+                        "url": link.url,
+                    }
+                    for link in get_alert_service_links(alert)
+                ],
+                "service_runbooks": [
+                    {
+                        "id": runbook.id,
+                        "title": runbook_display_label(runbook),
+                        "url": runbook.url,
+                        "severity": runbook.severity,
+                    }
+                    for runbook in get_alert_service_runbooks(alert)
+                ],
             },
             timeout=10,
         )

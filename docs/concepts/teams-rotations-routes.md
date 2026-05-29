@@ -8,7 +8,14 @@ description: How teams, layered rotations and alert routes work together
 IncidentRelay routes alerts through teams, rotations, layers and notification channels.
 
 ```text
-Incoming alert -> Route -> Team -> Rotation -> Final schedule -> On-call user -> Channels
+Incoming alert
+  -> Route
+  -> Service
+  -> Team
+  -> Rotation / Escalation policy
+  -> Final schedule
+  -> On-call user
+  -> Channels
 ```
 
 ## Team
@@ -30,6 +37,31 @@ team: infra
 ```
 
 Teams define ownership and escalation behavior. Users must be active team members before they can be added to rotation layers.
+
+## Service
+
+A service is a logical affected system owned by a team.
+
+Example:
+
+```text
+Team: Infrastructure
+Service: RabbitMQ Cloud
+Service slug: rabbitmq-cloud
+Type: queue
+Environment: production
+Criticality: critical
+```
+
+Services help group alerts by the system that is broken, not only by the route that received the alert.
+
+A service can have:
+
+links to dashboards, logs, traces and repositories;
+runbooks;
+dependencies;
+status and impact analytics;
+optional default rotation or escalation policy.
 
 ## Rotation
 
@@ -139,7 +171,9 @@ Window: 2026-05-25 12:00 -> 2026-05-26 12:00
 
 ## Route
 
-A route connects incoming alerts to a team, optional rotation and notification channels.
+A route can have a default service. This is useful when all alerts entering the route belong to the same logical system.
+
+If one route receives alerts for multiple systems, configure service match rules. A service match rule can use alert labels, annotations or payload fields to attach the alert to the right service.
 
 Example:
 

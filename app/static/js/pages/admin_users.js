@@ -177,63 +177,66 @@ function renderAdminUserMessengers(user) {
 }
 
 function renderAdminUserActions(user) {
-  const actions = $("<div>").addClass("actions");
+  /*
+   * Render user row actions as a shared three-dots menu.
+   */
+  const isSelf = isCurrentAdminUser(user);
+  const isGlobalAdmin = !!(currentUser && currentUser.is_admin);
 
-  actions.append(
-      $("<button>")
-          .attr("type", "button")
-          .addClass("btn btn-small")
-          .text("Edit")
-          .on("click", function () {
-            openExistingAdminUserModal(user);
-          })
-  );
+  const items = [
+    {
+      label: "Edit",
+      icon: "fas fa-edit",
+      visible: function () {
+        return typeof hasGroupUserAdminAccess === "function"
+            ? hasGroupUserAdminAccess()
+            : isGlobalAdmin;
+      },
+      onClick: function () {
+        openExistingAdminUserModal(user);
+      }
+    },
+    {
+      label: user.active ? "Disable" : "Enable",
+      icon: user.active ? "fas fa-pause" : "fas fa-play",
+      danger: user.active,
+      visible: function () {
+        return isGlobalAdmin && !isSelf;
+      },
+      onClick: function () {
+        setAdminUserActive(user, !user.active);
+      }
+    },
+    {
+      label: "Remove",
+      icon: "fas fa-trash",
+      danger: true,
+      visible: function () {
+        return isGlobalAdmin && !isSelf;
+      },
+      onClick: function () {
+        removeAdminUser(user);
+      }
+    }
+  ];
 
-  if (!isGlobalAdminUser()) {
-    return actions;
-  }
+  const menu = makeActionMenu({
+    object: user,
+    items: items
+  });
 
-  if (isCurrentAdminUser(user)) {
-    actions.append(
+  if (isSelf && isGlobalAdmin) {
+    const wrapper = $("<div>").addClass("table-actions");
+    wrapper.append(menu);
+    wrapper.append(
         $("<span>")
             .addClass("details-meta")
             .text("Current user")
     );
-    return actions;
+    return wrapper;
   }
 
-  if (user.active) {
-    actions.append(
-        $("<button>")
-            .attr("type", "button")
-            .addClass("btn btn-warning btn-small")
-            .text("Disable")
-            .on("click", function () {
-              setAdminUserActive(user, false);
-            })
-    );
-  } else {
-    actions.append(
-        $("<button>")
-            .attr("type", "button")
-            .addClass("btn btn-success btn-small")
-            .text("Enable")
-            .on("click", function () {
-              setAdminUserActive(user, true);
-            })
-    );
-  }
-  actions.append(
-      $("<button>")
-          .attr("type", "button")
-          .addClass("btn btn-danger btn-small")
-          .text("Remove")
-          .on("click", function () {
-            removeAdminUser(user);
-          })
-  );
-
-  return actions;
+  return menu;
 }
 
 function openNewAdminUserModal() {
@@ -247,6 +250,7 @@ function openNewAdminUserModal() {
   $("#admin-user-modal-title").text("New user");
   $("#admin-user-modal-subtitle").text("Create local user account.");
   $("#admin-user-password").attr("placeholder", "Password");
+  applyAdminUserRoleFieldAccess(null);
   openAppModal("#admin-user-modal");
 }
 
@@ -261,6 +265,7 @@ function openExistingAdminUserModal(user) {
   $("#admin-user-password").attr("placeholder", "Leave empty to keep current password");
   applyAdminUserSelfProtection(user);
   applyAdminUserFormPermissions(user);
+  applyAdminUserRoleFieldAccess(user);
   openAppModal("#admin-user-modal");
 }
 
@@ -440,6 +445,7 @@ function resetAdminUserForm() {
   $("#admin-user-password").val("");
   $("#admin-user-is-admin").prop("checked", false);
   $("#admin-user-active").prop("checked", true).prop("disabled", false);
+  applyAdminUserRoleFieldAccess(null);
   $("#admin-user-active-help").text("");
   $("#admin-user-group").val("");
   fillAdminUserRoleSelect();
@@ -570,6 +576,31 @@ function applyAdminUserFormPermissions(user) {
         $("#admin-user-is-admin").prop("checked", false);
         $("#admin-user-active-help").text(
             "Group admins cannot globally enable or disable user accounts. Use group membership status on the Groups page."
+        );
+        return;
+    }
+
+    $("#admin-user-active-help").text(
+        isSelf
+            ? "You cannot disable your own account. Ask another global administrator to do it."
+            : ""
+    );
+}
+function applyAdminUserRoleFieldAccess(user) {
+    /*
+     * Group user admins can edit user profile data, but cannot assign
+     * global admin role or globally enable/disable users.
+     */
+    const isGlobalAdmin = !!(currentUser && currentUser.is_admin);
+    const isSelf = isCurrentAdminUser(user);
+
+    $("#admin-user-is-admin").prop("disabled", !isGlobalAdmin);
+    $("#admin-user-active").prop("disabled", !isGlobalAdmin || isSelf);
+
+    if (!isGlobalAdmin) {
+        $("#admin-user-is-admin").prop("checked", false);
+        $("#admin-user-active-help").text(
+            "Only global administrators can change global admin flag or global active status."
         );
         return;
     }

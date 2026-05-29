@@ -509,14 +509,21 @@ function renderLayerSettingsEditor(layer) {
             .text("Configure handoff time, timezone and priority for this layer.")
     );
 
-    const grid = $("<div>").addClass("app-form-grid");
+    const grid = $("<div>").addClass("layer-settings-grid");
 
-    grid.append(layerTextField(layer.id, "name", "Name", layer.name || ""));
-    grid.append(layerNumberField(layer.id, "priority", "Priority", layer.priority || 0, 0));
+    grid.append(
+        layerTextField(layer.id, "name", "Name", layer.name || "")
+            .addClass("layer-settings-col-4")
+    );
+
+    grid.append(
+        layerNumberField(layer.id, "priority", "Priority", layer.priority || 0, 0)
+            .addClass("layer-settings-col-2")
+    );
 
     grid.append(
         $("<div>")
-            .addClass("app-field app-form-wide")
+            .addClass("app-field layer-settings-col-6")
             .append($("<label>").text("Description"))
             .append(
                 $("<textarea>")
@@ -529,7 +536,7 @@ function renderLayerSettingsEditor(layer) {
 
     grid.append(
         $("<div>")
-            .addClass("app-field")
+            .addClass("app-field layer-settings-col-3")
             .append($("<label>").text("Schedule starts at"))
             .append(
                 $("<input>")
@@ -542,7 +549,7 @@ function renderLayerSettingsEditor(layer) {
 
     grid.append(
         $("<div>")
-            .addClass("app-field")
+            .addClass("app-field layer-settings-col-3")
             .append($("<label>").text("Cadence"))
             .append(
                 $("<select>")
@@ -557,26 +564,7 @@ function renderLayerSettingsEditor(layer) {
 
     grid.append(
         $("<div>")
-            .addClass("app-field layer-weekly-options")
-            .append($("<label>").text("Weekly handoff day"))
-            .append(
-                $("<select>")
-                    .addClass("input")
-                    .attr("data-layer-field", "handoff_weekday")
-                    .append($("<option>").val("0").text("Monday"))
-                    .append($("<option>").val("1").text("Tuesday"))
-                    .append($("<option>").val("2").text("Wednesday"))
-                    .append($("<option>").val("3").text("Thursday"))
-                    .append($("<option>").val("4").text("Friday"))
-                    .append($("<option>").val("5").text("Saturday"))
-                    .append($("<option>").val("6").text("Sunday"))
-                    .val(String(layer.handoff_weekday === null || layer.handoff_weekday === undefined ? 0 : layer.handoff_weekday))
-            )
-    );
-
-    grid.append(
-        $("<div>")
-            .addClass("app-field")
+            .addClass("app-field layer-settings-col-2")
             .append($("<label>").text("Handoff time"))
             .append(
                 $("<input>")
@@ -589,7 +577,30 @@ function renderLayerSettingsEditor(layer) {
 
     grid.append(
         $("<div>")
-            .addClass("app-field layer-custom-options")
+            .addClass("app-field layer-weekly-options layer-settings-col-4")
+            .append($("<label>").text("Weekly handoff day"))
+            .append(
+                $("<select>")
+                    .addClass("input")
+                    .attr("data-layer-field", "handoff_weekday")
+                    .append($("<option>").val("0").text("Monday"))
+                    .append($("<option>").val("1").text("Tuesday"))
+                    .append($("<option>").val("2").text("Wednesday"))
+                    .append($("<option>").val("3").text("Thursday"))
+                    .append($("<option>").val("4").text("Friday"))
+                    .append($("<option>").val("5").text("Saturday"))
+                    .append($("<option>").val("6").text("Sunday"))
+                    .val(String(
+                        layer.handoff_weekday === null || layer.handoff_weekday === undefined
+                            ? 0
+                            : layer.handoff_weekday
+                    ))
+            )
+    );
+
+    grid.append(
+        $("<div>")
+            .addClass("app-field layer-custom-options layer-settings-col-2")
             .append($("<label>").text("Every"))
             .append(
                 $("<input>")
@@ -603,7 +614,7 @@ function renderLayerSettingsEditor(layer) {
 
     grid.append(
         $("<div>")
-            .addClass("app-field layer-custom-options")
+            .addClass("app-field layer-custom-options layer-settings-col-2")
             .append($("<label>").text("Unit"))
             .append(
                 $("<select>")
@@ -617,21 +628,23 @@ function renderLayerSettingsEditor(layer) {
             )
     );
 
-    grid.append(layerTimezoneField(layer.id, layer.timezone || "UTC"));
+    grid.append(
+        layerTimezoneField(layer.id, layer.timezone || "UTC")
+            .addClass("layer-settings-col-6")
+    );
 
     grid.append(
         $("<div>")
-            .addClass("app-field")
+            .addClass("app-field layer-settings-col-6")
             .append(
                 $("<label>")
-                    .addClass("app-switch")
+                    .addClass("layer-settings-checkbox")
                     .append(
                         $("<input>")
                             .attr("type", "checkbox")
                             .attr("data-layer-field", "enabled")
                             .prop("checked", layer.enabled !== false)
                     )
-                    .append($("<span>").addClass("app-switch-ui"))
                     .append(
                         $("<span>")
                             .append($("<strong>").text("Enabled"))
@@ -699,7 +712,8 @@ function renderLayerMembersEditor(layer) {
             .text("Users rotate in position order: 0, 1, 2 and so on.")
     );
 
-    const addRow = $("<div>").addClass("layer-member-add-row");
+    const addRow = $("<div>").addClass("layer-member-add-grid");
+
     const userSelect = $("<select>")
         .addClass("input")
         .attr("data-layer-member-user", layer.id);
@@ -767,7 +781,6 @@ function renderLayerMembersEditor(layer) {
     }
 
     section.append(list);
-
     return section;
 }
 

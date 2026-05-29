@@ -17,6 +17,7 @@ Monitoring system
   -> Incoming integration endpoint
   -> Route intake token
   -> Route match
+  -> Service
   -> Team and rotation
   -> Notification channels
   -> ACK / Resolve
@@ -170,12 +171,15 @@ Useful pages:
 10. Assign team roles: viewer, responder, manager
 11. Create a rotation
 12. Add rotation members
-13. Create notification channels
-14. Create a route and attach channels
-15. Copy the route intake token
-16. Configure Alertmanager, Zabbix or webhook sender
-17. Send a test alert
-18. Acknowledge or resolve the alert
+13. Create a service
+14. Add service links and runbooks
+15. Create notification channels
+16. Create a route and attach channels
+17. Select a default service or configure service match rules
+18. Copy the route intake token
+19. Configure Alertmanager, Zabbix or webhook sender
+20. Send a test alert
+21. Acknowledge or resolve the alert
 ```
 
 Read more: [First Login and Setup](getting-started/first-login.md).

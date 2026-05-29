@@ -125,11 +125,9 @@ Timezone: UTC or your team timezone
 Reminder interval: 300 seconds
 ```
 
-A rotation is the calendar object used by routes and alerts.
+A rotation is the calendar object used by routes, services and alerts.
 
-When a rotation is created, IncidentRelay creates a `Default layer` inside it.
-
-If `Add all active team members to this rotation` is enabled, all active team members are added to the default layer in team order.
+When a rotation is created, IncidentRelay creates a `Default layer` inside it. If `Add all active team members to this rotation` is enabled, all active team members are added to the default layer in team order.
 
 ## Step 7. Configure rotation layers
 
@@ -187,7 +185,46 @@ The calendar uses the final schedule:
 override > highest-priority active layer > no assignment
 ```
 
-## Step 9. Create a notification channel
+## Step 9. Create a service
+
+Open:
+
+```text
+Services
+```
+
+Create a service:
+
+```text
+Team: infra
+Slug: rabbitmq-cloud
+Name: RabbitMQ Cloud
+Type: queue
+Environment: production
+Criticality: critical
+Tier: tier_1
+Status: operational
+```
+
+A service describes the affected system. Routes receive alerts, but services explain what system is broken.
+
+Optional but recommended service context:
+
+```text
+Dashboard link: https://grafana.example.com/d/rabbitmq-cloud
+Logs link: https://logs.example.com/rabbitmq-cloud
+Runbook: https://docs.example.com/runbooks/rabbitmq
+```
+
+Service links are stable URLs for the whole service. Runbooks can be generic for the whole service or matched to a specific alert.
+
+Display order in the UI and notifications:
+
+```text
+name -> slug -> "-"
+```
+
+## Step 10. Create a notification channel
 
 Open:
 
@@ -208,14 +245,14 @@ Create a channel, for example Mattermost Bot API mode:
 Type: mattermost
 Mode: Bot API with buttons and message updates
 Mattermost URL: https://mattermost.example.com
-Bot token: <token>
-Channel ID: <channel-id>
+Bot token:
+Channel ID:
 Callback secret: optional
 ```
 
 Channels do not have alert intake tokens. They only define where notifications are sent.
 
-## Step 10. Create a route
+## Step 11. Create a route
 
 Open:
 
@@ -229,6 +266,7 @@ Create a route:
 Team: infra
 Source: alertmanager
 Rotation: infra-primary
+Default service: RabbitMQ Cloud
 Channels: infra-mattermost
 Matchers JSON: {"labels": {"team": "infra"}}
 Group by JSON: ["alertname", "instance"]
@@ -238,7 +276,23 @@ Copy the route intake token after creating the route.
 
 If a route token is lost, open Routes and click `Regenerate token` next to the route.
 
-## Step 11. Send a test alert
+Use `Default service` when all alerts that enter the route belong to one logical system.
+
+If one route receives alerts for multiple systems, create service match rules. Example RabbitMQ service match rule:
+
+```json
+{
+  "labels": {
+    "job": "RabbitMQ",
+    "rabbitmq": {
+      "op": "regex",
+      "value": "^rabbitmq-cloud$"
+    }
+  }
+}
+```
+
+## Step 12. Send a test alert
 
 Example Alertmanager request:
 
@@ -252,19 +306,38 @@ curl -X POST http://127.0.0.1:8080/api/integrations/alertmanager \
       {
         "status": "firing",
         "labels": {
-          "alertname": "DiskFull",
+          "alertname": "RabbitMQClusterPartition",
           "severity": "critical",
           "team": "infra",
-          "instance": "host1"
+          "job": "RabbitMQ",
+          "rabbitmq": "rabbitmq-cloud",
+          "instance": "rabbit-1"
         },
         "annotations": {
-          "summary": "Disk is full",
-          "description": "/var is 95% full"
+          "summary": "RabbitMQ cluster partition detected",
+          "description": "Erlang distribution link is not healthy"
         },
-        "fingerprint": "disk-full-host1-var"
+        "fingerprint": "rabbitmq-cloud-partition-rabbit-1"
       }
     ]
   }'
 ```
 
-Open `Alerts` and verify that the alert was routed to the expected team and on-call user.
+Open `Alerts` and verify that the alert was routed to the expected team, service and on-call user.
+
+## Step 13. Acknowledge or resolve the alert
+
+Open:
+
+```text
+Alerts
+```
+
+Use:
+
+```text
+Acknowledge
+Resolve
+```
+
+When the alert is attached to a service, alert details and notifications can include service links and matching runbooks.

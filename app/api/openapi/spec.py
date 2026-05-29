@@ -13,7 +13,8 @@ from app.api.openapi.endpoints import (
     version,
     groups,
     sso,
-    escalation_policies
+    escalation_policies,
+    services
 )
 from app.version import get_service_version
 
@@ -33,7 +34,8 @@ ENDPOINT_MODULES = [
     integrations,
     profile,
     groups,
-    sso
+    sso,
+    services,
 ]
 
 
@@ -56,7 +58,7 @@ def build_openapi_spec():
             "version": get_service_version(),
             "description": (
                 "API-first on-call management service. The API manages teams, users, "
-                "rotations, alert routes, notification channels, silences, "
+                "rotations, alert routes, services, notification channels, silences, "
                 "incoming webhooks and alert acknowledgement workflow."
             ),
         },

@@ -24,6 +24,33 @@ Source: zabbix
 
 Attach at least one notification channel and copy the route intake token into the Zabbix media type or webhook configuration.
 
+## Service assignment
+
+After a route matches the incoming alert, IncidentRelay can attach the alert to a service.
+
+There are two ways:
+
+1. Select a default service on the route.
+2. Configure service match rules.
+
+Use a default service when all alerts through the route belong to the same system.
+
+Use service match rules when one route receives alerts for multiple systems.
+
+Example service match rule:
+
+```json
+{
+  "labels": {
+    "service": "cpu",
+    "environment": {
+      "op": "regex",
+      "value": "^(prod|production)$"
+    }
+  }
+}
+```
+
 ## Payload example
 
 ```json
@@ -45,7 +72,9 @@ Attach at least one notification channel and copy the route intake token into th
 
 ## Required payload content
 
-A Zabbix payload should contain enough data to identify and describe an alert. Empty JSON objects should be rejected by validation.
+A Zabbix payload should contain enough data to identify and describe an alert.
+
+Empty JSON objects should be rejected by validation.
 
 Useful fields:
 

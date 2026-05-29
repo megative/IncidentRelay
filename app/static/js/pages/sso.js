@@ -204,67 +204,64 @@ function renderSsoProviderRow(provider) {
 }
 
 function renderSsoProviderActions(provider) {
-  const actions = $("<div>").addClass("table-actions");
-
-  actions.append(
-      $("<button>")
-          .attr("type", "button")
-          .addClass("btn btn-small")
-          .text("Mappings")
-          .on("click", function () {
-            openSsoMappingsModal(provider);
-          })
-  );
-
-  actions.append(
-      $("<button>")
-          .attr("type", "button")
-          .addClass("btn btn-small")
-          .text("Edit")
-          .on("click", function () {
-            openExistingSsoProviderModal(provider);
-          })
-  );
-
-  actions.append(
-      $("<a>")
-          .addClass("btn btn-secondary btn-small")
-          .attr("href", "/api/auth/sso/" + encodeURIComponent(provider.slug) + "/login")
-          .attr("target", "_blank")
-          .text("Test")
-  );
-
-  if (provider.protocol === "saml") {
-    actions.append(
-        $("<a>")
-            .addClass("btn btn-secondary btn-small")
-            .attr("href", "/api/auth/sso/" + encodeURIComponent(provider.slug) + "/metadata")
-            .attr("target", "_blank")
-            .text("Metadata")
-    );
-  }
-
-  actions.append(
-      $("<button>")
-          .attr("type", "button")
-          .addClass(provider.enabled ? "btn btn-small btn-warning" : "btn btn-small btn-primary")
-          .text(provider.enabled ? "Disable" : "Enable")
-          .on("click", function () {
-            toggleSsoProviderEnabled(provider);
-          })
-  );
-
-  actions.append(
-      $("<button>")
-          .attr("type", "button")
-          .addClass("btn btn-danger btn-small")
-          .text("Delete")
-          .on("click", function () {
-            deleteSsoProvider(provider);
-          })
-  );
-
-  return actions;
+  return makeActionMenu({
+    object: provider,
+    items: [
+      {
+        label: "Mappings",
+        icon: "fas fa-project-diagram",
+        onClick: function () {
+          openSsoMappingsModal(provider);
+        }
+      },
+      {
+        label: "Edit",
+        icon: "fas fa-edit",
+        onClick: function () {
+          openExistingSsoProviderModal(provider);
+        }
+      },
+      {
+        label: "Test",
+        icon: "fas fa-external-link-alt",
+        onClick: function () {
+          window.open(
+              "/api/auth/sso/" + encodeURIComponent(provider.slug) + "/login",
+              "_blank"
+          );
+        }
+      },
+      {
+        label: "Metadata",
+        icon: "fas fa-file-code",
+        visible: function () {
+          return provider.protocol === "saml";
+        },
+        onClick: function () {
+          window.open(
+              "/api/auth/sso/" + encodeURIComponent(provider.slug) + "/metadata",
+              "_blank"
+          );
+        }
+      },
+      {
+        label: provider.enabled ? "Disable" : "Enable",
+        icon: provider.enabled ? "fas fa-pause" : "fas fa-play",
+        danger: provider.enabled,
+        onClick: function () {
+          toggleSsoProviderEnabled(provider);
+        }
+      },
+      {
+        label: "Delete",
+        icon: "fas fa-trash",
+        danger: true,
+        onClick: function () {
+          deleteSsoProvider(provider);
+        }
+      }
+    ]
+  });
 }
 
 function openSsoMappingsModal(provider) {
@@ -344,66 +341,70 @@ function renderSsoMappings() {
 
 function renderSsoMappingCard(mapping) {
   const card = $("<div>")
-    .addClass("stack-card")
-    .toggleClass("row-disabled", !mapping.active);
+      .addClass("stack-card")
+      .toggleClass("row-disabled", !mapping.active);
 
   card.append(
-    $("<div>")
-      .addClass("stack-card-header")
-      .append(
-        $("<div>")
-          .addClass("stack-card-title")
+      $("<div>")
+          .addClass("stack-card-header")
           .append(
-            $("<div>")
-              .addClass("stack-card-title-main")
-              .text(mapping.external_group)
+              $("<div>")
+                  .addClass("stack-card-title")
+                  .append(
+                      $("<div>")
+                          .addClass("stack-card-title-main")
+                          .text(mapping.external_group)
+                  )
+                  .append(
+                      $("<div>")
+                          .addClass("stack-card-title-sub")
+                          .text(
+                              (mapping.group_name || mapping.group_slug || "Group") +
+                              " · " +
+                              (mapping.group_role || "viewer")
+                          )
+                  )
           )
           .append(
-            $("<div>")
-              .addClass("stack-card-title-sub")
-              .text(
-                (mapping.group_name || mapping.group_slug || "Group") +
-                  " · " +
-                  (mapping.group_role || "viewer")
-              )
+              $("<div>")
+                  .addClass("stack-card-actions")
+                  .append(renderSsoMappingActions(mapping))
           )
-      )
-      .append(
-        $("<div>")
-          .addClass("stack-card-actions")
-          .append(
-            $("<button>")
-              .attr("type", "button")
-              .addClass("btn btn-small")
-              .text("Edit")
-              .on("click", function () {
-                openExistingSsoMappingModal(mapping);
-              })
-          )
-          .append(
-            $("<button>")
-              .attr("type", "button")
-              .addClass("btn btn-danger btn-small")
-              .text("Delete")
-              .on("click", function () {
-                deleteSsoMapping(mapping);
-              })
-          )
-      )
   );
 
   card.append(
-    $("<div>")
-      .addClass("summary-mini-grid")
-      .append(renderSsoMiniItem("IncidentRelay group", mapping.group_name || mapping.group_slug))
-      .append(renderSsoMiniItem("Role", mapping.group_role || "viewer"))
-      .append(renderSsoMiniItem("Priority", mapping.priority))
-      .append(renderSsoMiniItem("Status", mapping.active ? "Enabled" : "Disabled"))
+      $("<div>")
+          .addClass("summary-mini-grid")
+          .append(renderSsoMiniItem("IncidentRelay group", mapping.group_name || mapping.group_slug))
+          .append(renderSsoMiniItem("Role", mapping.group_role || "viewer"))
+          .append(renderSsoMiniItem("Priority", mapping.priority))
+          .append(renderSsoMiniItem("Status", mapping.active ? "Enabled" : "Disabled"))
   );
 
   return card;
 }
-
+function renderSsoMappingActions(mapping) {
+  return makeActionMenu({
+    object: mapping,
+    items: [
+      {
+        label: "Edit",
+        icon: "fas fa-edit",
+        onClick: function () {
+          openExistingSsoMappingModal(mapping);
+        }
+      },
+      {
+        label: "Delete",
+        icon: "fas fa-trash",
+        danger: true,
+        onClick: function () {
+          deleteSsoMapping(mapping);
+        }
+      }
+    ]
+  });
+}
 function renderSsoMiniItem(label, value) {
   return $("<div>")
     .addClass("summary-mini-item")

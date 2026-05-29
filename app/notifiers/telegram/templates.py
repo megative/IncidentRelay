@@ -2,10 +2,47 @@ from html import escape
 from typing import Any
 
 from app.settings import Config
+from app.services.service_context import (
+    get_alert_service_links,
+    get_alert_service_runbooks,
+    link_display_label,
+    runbook_display_label,
+)
 
 
 MAX_TELEGRAM_MESSAGE_LENGTH = 4096
 MAX_ALERT_MESSAGE_LENGTH = 1600
+
+
+def _service_context_lines(alert: Any) -> list[str]:
+    """Return Telegram HTML lines with service links and runbooks."""
+    lines = []
+
+    links = get_alert_service_links(alert)
+    if links:
+        lines.append("")
+        lines.append("<b>Links:</b>")
+        for link in links:
+            label = _html(link_display_label(link))
+            url = _attr(getattr(link, "url", None), "")
+            if url:
+                lines.append(f'• <a href="{url}">{label}</a>')
+            else:
+                lines.append(f"• {label}")
+
+    runbooks = get_alert_service_runbooks(alert)
+    if runbooks:
+        lines.append("")
+        lines.append("<b>Runbooks:</b>")
+        for runbook in runbooks:
+            label = _html(runbook_display_label(runbook))
+            url = _attr(getattr(runbook, "url", None), "")
+            if url:
+                lines.append(f'• <a href="{url}">{label}</a>')
+            else:
+                lines.append(f"• {label}")
+
+    return lines
 
 
 def _raw(value: Any, default: str = "-") -> str:
@@ -236,15 +273,30 @@ def format_telegram_alert_message(
 
     lines.extend(
         [
-            f"<b>Team:</b> {_team_name(alert)}",
             f"Team: {_team_name(alert)}",
             f"Service: {_service_name(alert)}",
             f"Status: {_html(getattr(alert, 'status', None))}",
-            f"<b>Status:</b> {_html(getattr(alert, 'status', None))}",
-            f"<b>Severity:</b> {_html(getattr(alert, 'severity', None))}",
-            f"<b>Assignee:</b> {_person_name(getattr(alert, 'assignee', None))}",
-            f"<b>Source:</b> {_html(getattr(alert, 'source', None))}",
-            f"<b>Alert ID:</b> <code>#{_html(getattr(alert, 'id', None))}</code>",
+            f"Severity: {_html(getattr(alert, 'severity', None))}",
+            f"Assignee: {_person_name(getattr(alert, 'assignee', None))}",
+            f"Source: {_html(getattr(alert, 'source', None))}",
+            f"Alert ID: #{_html(getattr(alert, 'id', None))}",
+        ]
+    )
+
+    lines.extend(_service_context_lines(alert))
+
+    lines.extend(
+        [
+            "",
+            "<b>Message:</b>",
+            f"<blockquote>{_trim_html(getattr(alert, 'message', None))}</blockquote>",
+        ]
+    )
+
+    lines.extend(_service_context_lines(alert))
+
+    lines.extend(
+        [
             "",
             "<b>Message:</b>",
             f"<blockquote>{_trim_html(getattr(alert, 'message', None))}</blockquote>",

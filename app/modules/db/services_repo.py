@@ -234,7 +234,10 @@ def list_service_links(service_id=None, service_ids=None):
     """Return service links."""
     query = (
         ServiceLink
-        .select()
+        .select(ServiceLink, Service, Team)
+        .join(Service)
+        .switch(Service)
+        .join(Team)
         .where(ServiceLink.deleted == False)
     )
 
@@ -259,7 +262,10 @@ def list_service_runbooks(service_id=None, service_ids=None):
     """Return service runbooks."""
     query = (
         ServiceRunbook
-        .select()
+        .select(ServiceRunbook, Service, Team)
+        .join(Service)
+        .switch(Service)
+        .join(Team)
         .where(ServiceRunbook.deleted == False)
     )
 

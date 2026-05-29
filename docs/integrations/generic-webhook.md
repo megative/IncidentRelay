@@ -24,6 +24,35 @@ Source: webhook
 
 Attach at least one notification channel and copy the route intake token into the sender.
 
+## Service assignment
+
+After a route matches the incoming alert, IncidentRelay can attach the alert to a service.
+
+There are two ways:
+
+1. Select a default service on the route.
+2. Configure service match rules.
+
+Use a default service when all alerts through the route belong to the same system.
+
+Use service match rules when one route receives alerts for multiple systems.
+
+Example service match rule:
+
+```json
+{
+  "labels": {
+    "service": "api",
+    "environment": {
+      "op": "regex",
+      "value": "^(prod|production)$"
+    }
+  }
+}
+```
+
+This can attach matching alerts to an `API` or `Billing API` service.
+
 ## Payload example
 
 ```json

@@ -4,6 +4,11 @@ from html import escape
 from string import Formatter
 
 from app.modules.common import SafeFormatDict
+from app.services.service_context import (
+    format_service_links_html,
+    format_service_runbooks_html,
+    service_display_name,
+)
 
 EMAIL_HTML_TEMPLATE_MAX_LENGTH = 20000
 
@@ -15,9 +20,12 @@ EMAIL_TEMPLATE_PLACEHOLDERS = (
     "severity",
     "status",
     "team",
+    "service",
     "assignee",
     "source",
     "alert_url",
+    "service_links",
+    "service_runbooks",
 )
 
 DEFAULT_EMAIL_HTML_TEMPLATE = """<!doctype html>
@@ -48,6 +56,18 @@ DEFAULT_EMAIL_HTML_TEMPLATE = """<!doctype html>
                   <a href="{alert_url}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:11px 16px;border-radius:9px;font-weight:600;">Open alert</a>
                 </p>
               </td>
+            </tr>
+            <tr>
+                <td>Service</td>
+                <td>{service}</td>
+            </tr>
+            <tr>
+                <td>Links</td>
+                <td>{service_links}</td>
+            </tr>
+            <tr>
+                <td>Runbooks</td>
+                <td>{service_runbooks}</td>
             </tr>
             <tr>
               <td style="padding:16px 26px;background:#f8fafc;color:#64748b;font-size:12px;">
@@ -113,6 +133,9 @@ def build_email_template_context(alert, text, event_type="notification"):
         assignee=_escape_value(assignee_name),
         source=_escape_value(getattr(alert, "source", None)),
         alert_url=_escape_value(alert_url, "#"),
+        service=_escape_value(service_display_name(alert)),
+        service_links=format_service_links_html(alert),
+        service_runbooks=format_service_runbooks_html(alert),
     )
 
 

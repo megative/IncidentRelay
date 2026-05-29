@@ -10,6 +10,7 @@ Common examples:
 
 - duplicate group slug;
 - duplicate team slug;
+- duplicate service slug inside the same team;
 - duplicate channel name inside the same team.
 
 ## Empty body returns unclear validation error
@@ -32,7 +33,9 @@ Check:
 
 ## Voice call fails with missing phone
 
-Voice call sends to the assigned user's profile phone number. Set `phone` on the assigned user.
+Voice call sends to the assigned user's profile phone number.
+
+Set `phone` on the assigned user.
 
 ## Telegram token error
 
@@ -47,3 +50,78 @@ If the token is invalid, fix the channel config or disable the channel.
 ## Reminders are duplicated
 
 Check that only one scheduler process is running and that scheduler is not started inside every web worker.
+
+## Alert is not visible
+
+Check:
+
+1. The correct route intake token was used.
+2. The endpoint matches the route source.
+3. Route matchers match alert labels.
+4. The group is active.
+5. The team is active.
+6. The UI active group is correct.
+7. `All my groups` is selected when the alert can belong to another accessible group.
+8. `routing_error` in the integration response.
+9. JSON logs by `error_id` if the server returned one.
+
+## Alert has no service
+
+If an alert is created but service is empty:
+
+1. Check that the route has a default service.
+2. Check that a service match rule exists.
+3. Check that the service match rule is enabled.
+4. Check that the rule is scoped to the correct route, or has no route scope.
+5. Check that labels, annotations or payload fields match the rule.
+6. Check that the service and owning team are enabled.
+
+Example Alertmanager service match rule:
+
+```json
+{
+  "labels": {
+    "job": "RabbitMQ",
+    "rabbitmq": {
+      "op": "regex",
+      "value": "^rabbitmq-cloud$"
+    }
+  }
+}
+```
+
+## Service links or runbooks are not shown in notifications
+
+Check:
+
+1. The alert has `service_id`.
+2. The service link or runbook is enabled.
+3. The service link or runbook is not deleted.
+4. The runbook matchers are empty, or they match the alert labels/annotations/payload.
+5. The notification formatter supports service context for the selected channel.
+
+Runbook matcher behavior:
+
+```text
+empty matchers -> generic runbook for all alerts of the service
+matchers set   -> only matching alerts
+```
+
+## Service, team or group name shows as `-`
+
+Display code should use this order:
+
+```text
+name -> slug -> "-"
+```
+
+For links and runbooks, make sure serializers include:
+
+```text
+service_id
+service_name
+service_slug
+team_id
+team_name
+team_slug
+```

@@ -67,6 +67,27 @@ ROUTE_SCHEMA = {
         "name": {"type": "string", "example": "infra-alertmanager"},
         "source": {"type": "string", "enum": ["alertmanager", "zabbix", "webhook"]},
         "rotation_id": {"type": "integer", "nullable": True, "description": "Rotation that receives alerts for this route."},
+        "service_id": {
+            "type": "integer",
+            "nullable": True,
+            "minimum": 1,
+            "description": (
+                "Default service associated with this route. "
+                "Service match rules can override it for individual alerts."
+            ),
+        },
+        "service_name": {
+            "type": "string",
+            "nullable": True,
+            "readOnly": True,
+            "description": "Human-readable default service name.",
+        },
+        "service_slug": {
+            "type": "string",
+            "nullable": True,
+            "readOnly": True,
+            "description": "Default service slug.",
+        },
         "channel_ids": {"type": "array", "items": {"type": "integer"}, "description": "Notification channels used by this route."},
         "matchers": {
             "type": "object",

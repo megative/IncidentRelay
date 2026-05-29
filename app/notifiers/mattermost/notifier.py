@@ -5,6 +5,10 @@ import requests
 from app import Config
 from app.notifiers.plugins import IncomingWebhookNotifier, alert_service_label
 from app.services.links import build_alert_web_url
+from app.services.service_context import (
+    format_service_links_markdown,
+    format_service_runbooks_markdown,
+)
 
 
 class MattermostNotifier(IncomingWebhookNotifier):
@@ -151,7 +155,12 @@ class MattermostNotifier(IncomingWebhookNotifier):
             if alert.assignee
             else "-"
         )
-        team = alert.team.slug if alert.team else "-"
+        team = (
+            alert.team.name
+            or alert.team.slug
+            if alert.team
+            else "-"
+        )
         alert_url = build_alert_web_url(alert)
         fields = [
             {"short": True, "title": "Team", "value": team},
@@ -162,6 +171,25 @@ class MattermostNotifier(IncomingWebhookNotifier):
             {"short": True, "title": "Source", "value": alert.source},
             {"short": True, "title": "Alert ID", "value": str(alert.id)},
         ]
+        service_links = format_service_links_markdown(alert)
+        if service_links:
+            fields.append(
+                {
+                    "short": False,
+                    "title": "Links",
+                    "value": service_links,
+                }
+            )
+
+        service_runbooks = format_service_runbooks_markdown(alert)
+        if service_runbooks:
+            fields.append(
+                {
+                    "short": False,
+                    "title": "Runbooks",
+                    "value": service_runbooks,
+                }
+            )
         if alert_url:
             fields.append({
                 "short": False,

@@ -24,6 +24,35 @@ Source: alertmanager
 
 Attach at least one notification channel and copy the route intake token into Alertmanager webhook configuration.
 
+## Service assignment
+
+After a route matches the incoming alert, IncidentRelay can attach the alert to a service.
+
+There are two ways:
+
+1. Select a default service on the route.
+2. Configure service match rules.
+
+Use a default service when all alerts through the route belong to the same system.
+
+Use service match rules when one route receives alerts for multiple systems.
+
+Example service match rule for RabbitMQ:
+
+```json
+{
+  "labels": {
+    "job": "RabbitMQ",
+    "rabbitmq": {
+      "op": "regex",
+      "value": "^rabbitmq-cloud$"
+    }
+  }
+}
+```
+
+This can attach matching alerts to the `RabbitMQ Cloud` service.
+
 ## Payload example
 
 ```json
@@ -33,16 +62,18 @@ Attach at least one notification channel and copy the route intake token into Al
     {
       "status": "firing",
       "labels": {
-        "alertname": "DiskFull",
+        "alertname": "RabbitMQClusterPartition",
         "severity": "critical",
-        "instance": "host1",
-        "team": "infra"
+        "instance": "rabbit-1",
+        "team": "infra",
+        "job": "RabbitMQ",
+        "rabbitmq": "rabbitmq-cloud"
       },
       "annotations": {
-        "summary": "Disk is full",
-        "description": "/var is 95% full"
+        "summary": "RabbitMQ cluster partition detected",
+        "description": "Erlang distribution link is not healthy"
       },
-      "fingerprint": "disk-full-host1-var"
+      "fingerprint": "rabbitmq-cloud-partition-rabbit-1"
     }
   ]
 }
@@ -63,4 +94,6 @@ Attach at least one notification channel and copy the route intake token into Al
 
 ## Resolve events
 
-Use the same fingerprint and grouping data for resolved events. That lets IncidentRelay update the existing alert instead of creating a new one.
+Use the same fingerprint and grouping data for resolved events.
+
+That lets IncidentRelay update the existing alert instead of creating a new one.

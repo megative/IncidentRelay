@@ -1322,15 +1322,42 @@ def list_service_impact():
     if error:
         return error
 
-    service_ids = [service.id for service in services]
-    if not service_ids:
+    requested_service_ids = [service.id for service in services]
+    if not requested_service_ids:
         return jsonify([])
 
     days = request.args.get("days", default=30, type=int)
     days = max(1, min(days or 30, 365))
 
+    dependencies = services_repo.list_service_dependencies(
+        service_ids=requested_service_ids,
+    )
+
+    impact_services_by_id = {
+        service.id: service
+        for service in services
+    }
+
+    for dependency in dependencies:
+        if not dependency.enabled:
+            continue
+
+        target = dependency.depends_on_service
+        if not target or not target.enabled:
+            continue
+
+        # Dependency impact must include upstream alert impact even when
+        # the request is filtered by a single downstream service.
+        error = require_team_read(target.team_id)
+        if error:
+            continue
+
+        impact_services_by_id[target.id] = target
+
+    impact_service_ids = list(impact_services_by_id.keys())
+
     alert_impact = _build_alert_impact_by_service(
-        service_ids,
+        impact_service_ids,
         days=days,
     )
 
@@ -1339,15 +1366,10 @@ def list_service_impact():
             service,
             alert_impact,
         )
-        for service in services
+        for service in impact_services_by_id.values()
     }
 
-    dependencies = services_repo.list_service_dependencies(
-        service_ids=service_ids,
-    )
-
     dependencies_by_service = {}
-
     for dependency in dependencies:
         dependencies_by_service.setdefault(
             dependency.service_id,
@@ -1362,7 +1384,10 @@ def list_service_impact():
             rows_by_service,
         )
 
-    result = list(rows_by_service.values())
+    result = [
+        rows_by_service[service.id]
+        for service in services
+    ]
 
     result.sort(
         key=lambda row: (

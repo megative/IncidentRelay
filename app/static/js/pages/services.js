@@ -264,7 +264,7 @@ function renderServiceDetails(service) {
     selectedServiceDetailsId = service.id;
 
     $("#service-details-subtitle").text(
-        (service.team_slug || service.team_name || "-") + " / " + (service.status || "unknown")
+        (service.team_name || service.team_slug || "-") + " / " + (service.status || "unknown")
     );
 
     const body = $("#service-details-body");
@@ -275,7 +275,7 @@ function renderServiceDetails(service) {
             .addClass("details-list")
             .append(serviceDetailsItem("Name", service.name))
             .append(serviceDetailsItem("Slug", service.slug))
-            .append(serviceDetailsItem("Team", service.team_slug || service.team_name))
+            .append(serviceDetailsItem("Team", service.team_name || service.team_slug))
             .append(serviceDetailsItem("Type", service.service_type))
             .append(serviceDetailsItem("Environment", service.environment))
             .append(serviceDetailsItem("Criticality", service.criticality))
@@ -367,7 +367,7 @@ function fillServiceSelect(selectSelector, selectedId) {
             $("<option>")
                 .val(String(service.id))
                 .text(
-                    (service.team_slug || service.team_name || "-")
+                    (service.team_name || service.team_slug || "-")
                     + " / "
                     + service.name
                     + " ("
@@ -773,7 +773,7 @@ function renderAllServiceLinksTable() {
                         .append($("<div>").addClass("row-subtitle").text(link.url || ""))
                 )
                 .append($("<td>").text(link.service_name || link.service_slug || "-"))
-                .append($("<td>").text(link.team_slug || link.team_name || "-"))
+                .append($("<td>").text(link.team_name || link.team_slug || "-"))
                 .append($("<td>").text(link.link_type || "-"))
                 .append($("<td>").text(link.priority || 0))
                 .append($("<td>").append(renderStatusBadge(link.enabled, "Enabled", "Disabled")))
@@ -839,7 +839,7 @@ function renderAllServiceRunbooksTable() {
                         .append($("<div>").addClass("row-subtitle").text(runbook.description || runbook.url || ""))
                 )
                 .append($("<td>").text(runbook.service_name || runbook.service_slug || "-"))
-                .append($("<td>").text(runbook.team_slug || runbook.team_name || "-"))
+                .append($("<td>").text(runbook.team_name || runbook.team_slug || "-"))
                 .append($("<td>").text(runbook.severity || "-"))
                 .append($("<td>").text(runbook.priority || 0))
                 .append($("<td>").append(renderStatusBadge(runbook.enabled, "Enabled", "Disabled")))

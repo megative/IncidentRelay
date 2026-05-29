@@ -390,20 +390,28 @@ function setElementAllowed(selector, allowed) {
 
 function applyCreateButtonsVisibility() {
     /*
-     * Hide top-level New/Create buttons for viewer-only users.
+     * Hide top-level New/Create buttons according to current user role.
      */
-    const allowed = currentUserCanCreateUiObjects();
+    const canCreateOperationalObjects = currentUserCanCreateUiObjects();
+    const isGlobalAdmin = !!(currentUser && currentUser.is_admin);
+    const canManageUsers = typeof hasGroupUserAdminAccess === "function"
+        ? hasGroupUserAdminAccess()
+        : isGlobalAdmin;
 
     [
         "#open-team-create-modal",
         "#open-rotation-create-modal",
         "#open-route-create-modal",
         "#open-channel-create-modal",
-        "#open-silence-create-modal",
-        "#open-escalation-policy-create-modal"
+        "#open-silence-create-modal"
     ].forEach(function (selector) {
-        setElementAllowed(selector, allowed);
+        setElementAllowed(selector, canCreateOperationalObjects);
     });
+
+    setElementAllowed("#new-admin-user", canManageUsers);
+    setElementAllowed("#new-group", isGlobalAdmin);
+    setElementAllowed("#open-sso-provider-create-modal", isGlobalAdmin);
+    setElementAllowed("#add-sso-mapping", isGlobalAdmin);
 }
 
 function applyRbacUiState() {

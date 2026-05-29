@@ -17,6 +17,7 @@ from app.modules.db.models import (
     UserGroup,
     EscalationPolicy,
     EscalationPolicyRule,
+    Service
 )
 
 _counter = 0
@@ -154,6 +155,7 @@ def create_route(
     escalation_policy=None,
     matchers: dict | None = None,
     group_by: list[str] | None = None,
+    service: Service | None = None,
 ) -> AlertRoute:
     return AlertRoute.create(
         team=team,
@@ -166,6 +168,7 @@ def create_route(
         group_by=group_by or [],
         intake_token_prefix="test-prefix" if token_hash else None,
         intake_token_hash=token_hash,
+        service=service,
     )
 
 
@@ -246,3 +249,37 @@ def create_escalation_policy_rule(
         enabled=enabled,
     )
 
+
+def create_service(
+    team: Team,
+    name: str | None = None,
+    slug: str | None = None,
+    *,
+    service_type: str = "other",
+    environment: str = "production",
+    criticality: str = "medium",
+    tier: str = "tier_3",
+    status: str = "operational",
+    enabled: bool = True,
+) -> Service:
+    service_name = name or unique("Service")
+    service_slug = slug or unique("service")
+
+    return Service.create(
+        group=team.group,
+        team=team,
+        slug=service_slug,
+        name=service_name,
+        service_type=service_type,
+        environment=environment,
+        criticality=criticality,
+        tier=tier,
+        status=status,
+        status_source="manual",
+        labels={},
+        tags=[],
+        metadata={},
+        enabled=enabled,
+        public=False,
+        public_order=100,
+    )
