@@ -196,6 +196,120 @@ def serialize_channel_short(channel):
     }
 
 
+def serialize_service_short(service):
+    """Serialize a compact service object."""
+    if not service:
+        return None
+
+    return {
+        "id": service.id,
+        "slug": service.slug,
+        "name": service.name,
+        "status": service.status,
+        "criticality": service.criticality,
+        "environment": service.environment,
+        "enabled": service.enabled,
+    }
+
+
+def serialize_service(service, current_user=None):
+    """Serialize a service."""
+    team = service.team if service.team_id else None
+    group = service.group if service.group_id else None
+
+    data = {
+        "id": service.id,
+        "group_id": group.id if group else None,
+        "group_slug": group.slug if group else None,
+        "group_name": group.name if group else None,
+        "team_id": team.id if team else None,
+        "team_slug": team.slug if team else None,
+        "team_name": team.name if team else None,
+
+        "slug": service.slug,
+        "name": service.name,
+        "description": service.description,
+
+        "service_type": service.service_type,
+        "environment": service.environment,
+        "criticality": service.criticality,
+        "tier": service.tier,
+
+        "status": service.status,
+        "status_source": service.status_source,
+        "status_message": service.status_message,
+        "status_updated_at": serialize_utc_datetime(service.status_updated_at),
+
+        "default_rotation_id": (
+            service.default_rotation.id
+            if getattr(service, "default_rotation_id", None)
+            else None
+        ),
+        "default_rotation_name": (
+            service.default_rotation.name
+            if getattr(service, "default_rotation_id", None)
+            else None
+        ),
+        "default_escalation_policy_id": (
+            service.default_escalation_policy.id
+            if getattr(service, "default_escalation_policy_id", None)
+            else None
+        ),
+        "default_escalation_policy_name": (
+            service.default_escalation_policy.name
+            if getattr(service, "default_escalation_policy_id", None)
+            else None
+        ),
+
+        "labels": service.labels or {},
+        "tags": service.tags or [],
+        "metadata": service.metadata or {},
+
+        "enabled": service.enabled,
+        "public": service.public,
+        "public_name": service.public_name,
+        "public_description": service.public_description,
+        "public_order": service.public_order,
+
+        "created_at": serialize_utc_datetime(service.created_at),
+        "updated_at": serialize_utc_datetime(service.updated_at),
+    }
+
+    return attach_team_permissions(data, service.team_id, current_user)
+
+
+def serialize_service_match_rule(rule, current_user=None):
+    """Serialize a service match rule."""
+    service = rule.service if rule.service_id else None
+    route = rule.route if getattr(rule, "route_id", None) else None
+    team = rule.team if rule.team_id else None
+
+    data = {
+        "id": rule.id,
+        "team_id": team.id if team else None,
+        "team_slug": team.slug if team else None,
+        "team_name": team.name if team else None,
+
+        "route_id": route.id if route else None,
+        "route_name": route.name if route else None,
+
+        "service_id": service.id if service else None,
+        "service_slug": service.slug if service else None,
+        "service_name": service.name if service else None,
+
+        "position": rule.position,
+        "name": rule.name,
+        "description": rule.description,
+        "matchers": rule.matchers or {},
+        "enabled": rule.enabled,
+
+        "created_at": serialize_utc_datetime(rule.created_at),
+        "updated_at": serialize_utc_datetime(rule.updated_at),
+    }
+
+    return attach_team_permissions(data, rule.team_id, current_user)
+
+
 def serialize_route(route, current_user=None):
     """
     Serialize an alert route.
@@ -224,6 +338,9 @@ def serialize_route(route, current_user=None):
         "intake_token_prefix": route.intake_token_prefix,
         "has_intake_token": bool(route.intake_token_hash),
         "channels": channels,
+        "service_id": route.service.id if getattr(route, "service_id", None) else None,
+        "service_name": route.service.name if getattr(route, "service_id", None) else None,
+        "service_slug": route.service.slug if getattr(route, "service_id", None) else None,
     }
 
     return attach_team_permissions(data, route.team.id, current_user)
@@ -276,6 +393,7 @@ def serialize_alert(
     team = alert.team
     route = alert.route
     rotation = alert.rotation
+    service = alert.service if getattr(alert, "service_id", None) else None
     escalation_policy = (
         alert.escalation_policy
         if getattr(alert, "escalation_policy_id", None)
@@ -333,6 +451,14 @@ def serialize_alert(
         "team_escalation_enabled": team.escalation_enabled if team else None,
         "team_escalation_after_reminders": (team.escalation_after_reminders if team else None),
         "resolved_at": serialize_utc_datetime(alert.resolved_at),
+        "service_id": service.id if service else None,
+        "service_slug": service.slug if service else None,
+        "service_name": service.name if service else None,
+        "service_status": service.status if service else None,
+        "service_criticality": service.criticality if service else None,
+        "service_environment": service.environment if service else None,
+        "service": serialize_service_short(service),
+        "service_tier": service.tier if service else None,
     }
 
     if route:
@@ -353,6 +479,30 @@ def serialize_alert(
         data["route"]["escalation_mode"] = (
             "policy" if getattr(route, "escalation_policy_id", None) else "rotation"
         )
+        data["route"]["service_id"] = (
+            route.service.id if getattr(route, "service_id", None) else None
+        )
+        data["route"]["service_name"] = (
+            route.service.name if getattr(route, "service_id", None) else None
+        )
+        data["route"]["service_slug"] = (
+            route.service.slug if getattr(route, "service_id", None) else None
+        )
+
+    if service:
+        data["service"] = {
+            "id": service.id,
+            "name": service.name,
+            "slug": service.slug,
+            "status": service.status,
+            "criticality": service.criticality,
+            "environment": service.environment,
+            "tier": service.tier,
+            "enabled": service.enabled,
+            "team_id": service.team.id if service.team else None,
+            "team_slug": service.team.slug if service.team else None,
+            "team_name": service.team.name if service.team else None,
+        }
 
     if rotation:
         data["rotation"] = {
@@ -540,3 +690,75 @@ def serialize_sso_group_mapping(mapping):
         "created_at": mapping.created_at.isoformat() if mapping.created_at else None,
         "updated_at": mapping.updated_at.isoformat() if mapping.updated_at else None,
     }
+
+
+def serialize_service_link(link, current_user=None):
+    """Serialize a service link."""
+    data = {
+        "id": link.id,
+        "service_id": link.service_id,
+        "link_type": link.link_type,
+        "label": link.label,
+        "url": link.url,
+        "description": link.description,
+        "priority": link.priority,
+        "enabled": link.enabled,
+        "created_at": serialize_utc_datetime(link.created_at),
+        "updated_at": serialize_utc_datetime(link.updated_at),
+    }
+
+    return attach_team_permissions(data, link.service.team_id, current_user)
+
+
+def serialize_service_runbook(runbook, current_user=None):
+    """Serialize a service runbook."""
+    data = {
+        "id": runbook.id,
+        "service_id": runbook.service_id,
+        "title": runbook.title,
+        "description": runbook.description,
+        "url": runbook.url,
+        "severity": runbook.severity,
+        "matchers": runbook.matchers or {},
+        "priority": runbook.priority,
+        "enabled": runbook.enabled,
+        "created_at": serialize_utc_datetime(runbook.created_at),
+        "updated_at": serialize_utc_datetime(runbook.updated_at),
+    }
+
+    return attach_team_permissions(data, runbook.service.team_id, current_user)
+
+
+def serialize_service_dependency(dependency, current_user=None):
+    """Serialize a service dependency."""
+    service = dependency.service
+    depends_on = dependency.depends_on_service
+
+    data = {
+        "id": dependency.id,
+
+        "service_id": service.id,
+        "service_name": service.name,
+        "service_slug": service.slug,
+        "team_id": service.team.id if service.team else None,
+        "team_name": service.team.name if service.team else None,
+        "team_slug": service.team.slug if service.team else None,
+
+        "depends_on_service_id": depends_on.id,
+        "depends_on_service_name": depends_on.name,
+        "depends_on_service_slug": depends_on.slug,
+        "depends_on_service_status": depends_on.status,
+
+        "depends_on_team_id": depends_on.team.id if depends_on.team else None,
+        "depends_on_team_name": depends_on.team.name if depends_on.team else None,
+        "depends_on_team_slug": depends_on.team.slug if depends_on.team else None,
+
+        "dependency_type": dependency.dependency_type,
+        "criticality": dependency.criticality,
+        "description": dependency.description,
+        "enabled": dependency.enabled,
+        "created_at": serialize_utc_datetime(dependency.created_at),
+        "updated_at": serialize_utc_datetime(dependency.updated_at),
+    }
+
+    return attach_team_permissions(data, service.team_id, current_user)

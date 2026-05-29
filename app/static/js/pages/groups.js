@@ -108,52 +108,65 @@ function renderGroupStatus(active) {
 }
 
 function renderGroupActions(group) {
-    /*
-     * Render group row actions as a shared three-dots menu.
-     */
-    return makeActionMenu({
-        object: group,
-        items: [
-            {
-                label: "Edit",
-                icon: "fas fa-edit",
-                required: "write",
-                denyMessage: "Group admin role is required to edit this group.",
-                onClick: function () {
-                    openExistingGroupModal(group);
-                }
-            },
-            {
-                label: "Members",
-                icon: "fas fa-users",
-                required: "manage_users",
-                denyMessage: "Group admin role is required to manage group members.",
-                onClick: function () {
-                    openExistingGroupModal(group);
-                }
-            },
-            {
-                label: group.active ? "Disable" : "Enable",
-                icon: group.active ? "fas fa-pause" : "fas fa-play",
-                required: "write",
-                danger: group.active,
-                denyMessage: "Group admin role is required to enable or disable this group.",
-                onClick: function () {
-                    setGroupActive(group, !group.active);
-                }
-            },
-            {
-                label: "Delete",
-                icon: "fas fa-trash",
-                required: "delete",
-                danger: true,
-                denyMessage: "Delete permission is required to delete this group.",
-                onClick: function () {
+    const actions = $("<div>").addClass("actions");
+
+    actions.append(
+        $("<button>")
+            .attr("type", "button")
+            .addClass("btn btn-small")
+            .text(canEditGroup(group) ? "Edit" : "Details")
+            .on("click", function () {
+                openExistingGroupModal(group);
+            })
+    );
+
+    actions.append(
+        $("<button>")
+            .attr("type", "button")
+            .addClass("btn btn-small")
+            .text("Members")
+            .on("click", function () {
+                openExistingGroupModal(group);
+            })
+    );
+
+    if (canEditGroup(group)) {
+        if (group.active) {
+            actions.append(
+                $("<button>")
+                    .attr("type", "button")
+                    .addClass("btn btn-warning btn-small")
+                    .text("Disable")
+                    .on("click", function () {
+                        setGroupActive(group, false);
+                    })
+            );
+        } else {
+            actions.append(
+                $("<button>")
+                    .attr("type", "button")
+                    .addClass("btn btn-success btn-small")
+                    .text("Enable")
+                    .on("click", function () {
+                        setGroupActive(group, true);
+                    })
+            );
+        }
+    }
+
+    if (isGlobalAdminUser()) {
+        actions.append(
+            $("<button>")
+                .attr("type", "button")
+                .addClass("btn btn-danger btn-small")
+                .text("Delete")
+                .on("click", function () {
                     deleteGroup(group);
-                }
-            }
-        ]
-    });
+                })
+        );
+    }
+
+    return actions;
 }
 function getSelectedGroupForMembers() {
     /*
@@ -188,6 +201,7 @@ function openExistingGroupModal(group) {
    */
   ensureGroupScopedUserCreatePanel();
   fillGroupForm(group);
+  applyGroupFormPermissions(group);
   resetGroupMemberForm();
   resetGroupScopedUserCreateForm();
   setGroupMemberControlsEnabled(true);
@@ -200,7 +214,19 @@ function openExistingGroupModal(group) {
   openAppModal("#group-modal");
   loadGroupMembers(group.id, selectedGroupNameForMembers);
 }
+function applyGroupFormPermissions(group) {
+    const canEdit = canEditGroup(group);
+    const canManageUsers = canManageGroupUsers(group);
 
+    $("#group-slug").prop("disabled", !canEdit);
+    $("#group-name").prop("disabled", !canEdit);
+    $("#group-description").prop("disabled", !canEdit);
+    $("#group-active").prop("disabled", !canEdit);
+    $("#save-group").prop("disabled", !canEdit);
+
+    setGroupMemberControlsEnabled(canManageUsers);
+    setGroupScopedUserCreateControlsEnabled(canManageUsers);
+}
 function fillGroupForm(group) {
   /*
    * Fill group form with existing group data.
@@ -226,46 +252,60 @@ function buildGroupPayload(activeOverride) {
 }
 
 function saveGroup() {
-  /*
-   * Create or update a group.
-   */
-  const data = buildGroupPayload();
-  const groupId = $("#group-id").val();
-  if (!data.slug || !data.name) {
-    showAppError("Slug and name are required");
-    return;
-  }
-  if (groupId) {
-    apiPut("/api/groups/" + groupId, data, function (group) {
-      const updatedGroup = group || {
-        id: Number(groupId),
-        slug: data.slug,
-        name: data.name,
-        description: data.description,
-        active: data.active,
-      };
-      selectedGroupForMembers = updatedGroup.id;
-      selectedGroupNameForMembers = updatedGroup.name || updatedGroup.slug;
-      $("#group-modal-subtitle").text(selectedGroupNameForMembers);
-      $("#group-members-title").text("Group members: " + selectedGroupNameForMembers);
-      setGroupMemberControlsEnabled(true);
-      setGroupScopedUserCreateControlsEnabled(true);
-      loadGroups();
+    /*
+     * Create or update a group.
+     */
+    const data = buildGroupPayload();
+    const groupId = $("#group-id").val();
+    if (!data.slug || !data.name) {
+        showAppError("Slug and name are required");
+        return;
+    }
+    if (groupId) {
+        const group = groupsCache.find(function (item) {
+            return Number(item.id) === Number(groupId);
+        });
+
+        if (group && !canEditGroup(group)) {
+            showAppError("Group editor or group admin role is required for this group.");
+            return;
+        }
+
+        apiPut("/api/groups/" + groupId, data, function (group) {
+            const updatedGroup = group || {
+                id: Number(groupId),
+                slug: data.slug,
+                name: data.name,
+                description: data.description,
+                active: data.active,
+            };
+
+            selectedGroupForMembers = updatedGroup.id;
+            selectedGroupNameForMembers = updatedGroup.name || updatedGroup.slug;
+
+            $("#group-modal-subtitle").text(selectedGroupNameForMembers);
+            $("#group-members-title").text("Group members: " + selectedGroupNameForMembers);
+
+            setGroupMemberControlsEnabled(true);
+            setGroupScopedUserCreateControlsEnabled(true);
+
+            loadGroups();
+        });
+
+        return;
+    }
+    apiPost("/api/groups", data, function (group) {
+        $("#group-id").val(group.id);
+        selectedGroupForMembers = group.id;
+        selectedGroupNameForMembers = group.name || group.slug || ("Group #" + group.id);
+        $("#group-modal-title").text("Group details");
+        $("#group-modal-subtitle").text(selectedGroupNameForMembers);
+        $("#group-members-title").text("Group members: " + selectedGroupNameForMembers);
+        setGroupMemberControlsEnabled(true);
+        setGroupScopedUserCreateControlsEnabled(true);
+        loadGroups();
+        loadGroupMembers(group.id, selectedGroupNameForMembers);
     });
-    return;
-  }
-  apiPost("/api/groups", data, function (group) {
-    $("#group-id").val(group.id);
-    selectedGroupForMembers = group.id;
-    selectedGroupNameForMembers = group.name || group.slug || ("Group #" + group.id);
-    $("#group-modal-title").text("Group details");
-    $("#group-modal-subtitle").text(selectedGroupNameForMembers);
-    $("#group-members-title").text("Group members: " + selectedGroupNameForMembers);
-    setGroupMemberControlsEnabled(true);
-    setGroupScopedUserCreateControlsEnabled(true);
-    loadGroups();
-    loadGroupMembers(group.id, selectedGroupNameForMembers);
-  });
 }
 
 function setGroupActive(group, active) {
@@ -316,21 +356,20 @@ function fillGroupMemberUserSelect() {
 }
 
 function setGroupMemberControlsEnabled(enabled) {
-  /*
-   * Enable or disable member management controls.
-   */
-  $("#group-member-user").prop("disabled", !enabled);
-  $("#group-member-role").prop("disabled", !enabled);
-  $("#group-member-active").prop("disabled", !enabled);
-  $("#save-group-member").prop("disabled", !enabled);
-  $("#reset-group-member-form").prop("disabled", !enabled);
-  $("#reload-group-members").prop("disabled", !enabled);
-  $("#group-member-help").text(
-    enabled
-      ? "Global admins can add existing users. Group Admins should use Create user in group."
-      : "Save the group first, then add members."
-  );
-  RbacRoles.fillGroupSelect("#group-member-role", $("#group-member-role").val())
+    $("#group-member-user").prop("disabled", !enabled);
+    $("#group-member-role").prop("disabled", !enabled);
+    $("#group-member-active").prop("disabled", !enabled);
+    $("#save-group-member").prop("disabled", !enabled);
+    $("#reset-group-member-form").prop("disabled", !enabled);
+    $("#reload-group-members").prop("disabled", !enabled);
+
+    $("#group-member-help").text(
+        enabled
+            ? "Add an existing user to this group or update group membership."
+            : "Save or select a group before adding members."
+    );
+
+    RbacRoles.fillGroupSelect("#group-member-role", $("#group-member-role").val());
 }
 
 function loadGroupMembers(groupId, groupName) {
@@ -454,7 +493,7 @@ function editGroupMember(member) {
   $("#group-member-form-title").text("Edit group membership #" + member.id);
   $("#group-membership-id").val(member.id);
   $("#group-member-user").val(String(member.user_id)).prop("disabled", true);
-  RbacRoles.fillGroupSelect("#group-member-role", member.role);
+  fillAssignableGroupRoleSelect("#group-member-role", member.role);
   $("#group-member-active").prop("checked", !!member.active);
 }
 
@@ -465,7 +504,7 @@ function resetGroupMemberForm() {
   $("#group-member-form-title").text("Add existing user to group");
   $("#group-membership-id").val("");
   $("#group-member-user").prop("disabled", !selectedGroupForMembers);
-  RbacRoles.fillGroupSelect("#group-member-role", GROUP_VIEWER_ROLE);
+  fillAssignableGroupRoleSelect("#group-member-role", GROUP_VIEWER_ROLE);
   $("#group-member-active").prop("checked", true);
   setGroupMemberControlsEnabled(!!selectedGroupForMembers);
 }
@@ -574,7 +613,7 @@ function resetGroupScopedUserCreateForm() {
   $("#group-create-user-email").val("");
   $("#group-create-user-phone").val("");
   $("#group-create-user-password").val("");
-  RbacRoles.fillGroupSelect("#group-create-user-role", GROUP_VIEWER_ROLE);
+  fillAssignableGroupRoleSelect("#group-create-user-role", GROUP_VIEWER_ROLE);
 }
 
 function setGroupScopedUserCreateControlsEnabled(enabled) {
@@ -686,4 +725,30 @@ function deleteGroup(group) {
       loadGroups();
     });
   });
+}
+
+function canEditGroup(group) {
+    return isGlobalAdminUser()
+        || !!(group.permissions && group.permissions.can_write);
+}
+
+function canManageGroupUsers(group) {
+    return isGlobalAdminUser()
+        || !!(group.permissions && group.permissions.can_manage_users);
+}
+
+function fillAssignableGroupRoleSelect(selector, selectedValue) {
+    if (isGlobalAdminUser()) {
+        RbacRoles.fillGroupSelect(selector, selectedValue);
+        return;
+    }
+
+    RbacRoles.fillSelect(
+        selector,
+        GROUP_ROLES.filter(function (role) {
+            return role.value !== GROUP_USER_ADMIN_ROLE;
+        }),
+        selectedValue || GROUP_VIEWER_ROLE,
+        GROUP_VIEWER_ROLE
+    );
 }

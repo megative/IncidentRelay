@@ -1,0 +1,665 @@
+  <div class="first-div-page-layout services-page page-stack">
+    <div class="summary-grid">
+      <div class="summary-card summary-primary">
+        <div class="summary-icon">▦</div>
+        <div>
+          <div class="summary-title">Services</div>
+          <div id="services-summary-total" class="summary-value">0</div>
+          <div class="summary-hint">Current scope</div>
+        </div>
+      </div>
+
+      <div class="summary-card summary-success">
+        <div class="summary-icon">✓</div>
+        <div>
+          <div class="summary-title">Operational</div>
+          <div id="services-summary-operational" class="summary-value">0</div>
+          <div class="summary-hint">Healthy services</div>
+        </div>
+      </div>
+
+      <div class="summary-card summary-muted">
+        <div class="summary-icon">!</div>
+        <div>
+          <div class="summary-title">Degraded</div>
+          <div id="services-summary-degraded" class="summary-value">0</div>
+          <div class="summary-hint">Degraded or outage</div>
+        </div>
+      </div>
+
+      <div class="summary-card summary-info">
+        <div class="summary-icon">★</div>
+        <div>
+          <div class="summary-title">Critical</div>
+          <div id="services-summary-critical" class="summary-value">0</div>
+          <div class="summary-hint">Critical services</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="services-page-tabs" class="page-tabs">
+      <button class="page-tab is-active" type="button" data-services-tab="services">Services</button>
+      <button class="page-tab" type="button" data-services-tab="links">
+        Links <span id="services-links-count" class="page-tab-count">0</span>
+      </button>
+      <button class="page-tab" type="button" data-services-tab="runbooks">
+        Runbooks <span id="services-runbooks-count" class="page-tab-count">0</span>
+      </button>
+      <button class="page-tab" type="button" data-services-tab="dependencies">
+        Dependencies <span id="services-dependencies-count" class="page-tab-count">0</span>
+      </button>
+        <button class="page-tab" type="button" data-services-tab="impact">
+          Impact
+          <span id="services-impact-count" class="page-tab-count">0</span>
+        </button>
+        <button class="page-tab" type="button" data-services-tab="analytics">
+          Analytics
+        </button>
+    </div>
+
+    <div id="services-page-layout" class="page-layout-grid">
+      <section class="card page-layout-main">
+        <div id="services-tab-services" class="services-tab-panel">
+          <div class="card-header">
+            <div>
+              <h2>Services</h2>
+              <div class="card-subtitle">
+                Showing <span id="services-filtered-count">0</span>
+                of <span id="services-total-count">0</span> services
+              </div>
+            </div>
+
+            <div class="card-header-actions">
+              <button id="open-service-create-modal" type="button" class="btn btn-primary">New service</button>
+              <button id="reload-services" type="button" class="btn">Reload</button>
+            </div>
+          </div>
+
+          <div class="page-toolbar is-flush-top">
+            <div class="page-toolbar-search">
+              <span class="page-toolbar-search-icon">⌕</span>
+              <input id="services-search" class="input" type="search" placeholder="Search services..." autocomplete="off">
+            </div>
+
+            <select id="services-status-filter" class="input page-toolbar-filter">
+              <option value="">All statuses</option>
+              <option value="operational">Operational</option>
+              <option value="degraded">Degraded</option>
+              <option value="partial_outage">Partial outage</option>
+              <option value="major_outage">Major outage</option>
+              <option value="maintenance">Maintenance</option>
+              <option value="disabled">Disabled</option>
+              <option value="unknown">Unknown</option>
+            </select>
+
+            <select id="services-criticality-filter" class="input page-toolbar-filter">
+              <option value="">All criticalities</option>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+
+          <div class="table-wrapper">
+            <table id="services-table-view" class="data-table sortable-table">
+              <thead>
+                <tr>
+                  <th>Service</th>
+                  <th>Team</th>
+                  <th>Status</th>
+                  <th>Criticality</th>
+                  <th>Environment</th>
+                  <th>Defaults</th>
+                  <th class="actions-th">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="services-table">
+                <tr><td colspan="7" class="empty-cell">No services loaded</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="services-tab-links" class="services-tab-panel" style="display: none;">
+          <div class="card-header">
+            <div>
+              <h2>Service links</h2>
+              <div class="card-subtitle">Dashboards, logs, documentation and repositories.</div>
+            </div>
+            <div class="card-header-actions">
+              <button id="open-service-link-create-modal" type="button" class="btn btn-primary">New link</button>
+              <button id="reload-service-context" type="button" class="btn">Reload</button>
+            </div>
+          </div>
+
+          <div class="page-toolbar is-flush-top">
+            <div class="page-toolbar-search">
+              <span class="page-toolbar-search-icon">⌕</span>
+              <input id="service-links-search" class="input" type="search" placeholder="Search links..." autocomplete="off">
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table class="data-table sortable-table">
+              <thead>
+                <tr>
+                  <th>Link</th>
+                  <th>Service</th>
+                  <th>Team</th>
+                  <th>Type</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                  <th class="actions-th">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="service-links-table">
+                <tr><td colspan="7" class="empty-cell">No links</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+
+        <div id="services-tab-runbooks" class="services-tab-panel" style="display: none;">
+          <div class="card-header">
+            <div>
+              <h2>Runbooks</h2>
+              <div class="card-subtitle">Response instructions attached to services.</div>
+            </div>
+            <div class="card-header-actions">
+              <button id="open-service-runbook-create-modal" type="button" class="btn btn-primary">New runbook</button>
+              <button id="reload-service-context" type="button" class="btn">Reload</button>
+            </div>
+          </div>
+
+          <div class="page-toolbar is-flush-top">
+            <div class="page-toolbar-search">
+              <span class="page-toolbar-search-icon">⌕</span>
+              <input id="service-runbooks-search" class="input" type="search" placeholder="Search runbooks..." autocomplete="off">
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table class="data-table sortable-table">
+              <thead>
+                <tr>
+                  <th>Runbook</th>
+                  <th>Service</th>
+                  <th>Team</th>
+                  <th>Severity</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                  <th class="actions-th">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="service-runbooks-table">
+                <tr><td colspan="7" class="empty-cell">No runbooks</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+          <div id="services-tab-impact" class="services-tab-panel" style="display: none;">
+  <div class="card-header">
+    <div>
+      <h2>Service impact</h2>
+      <div class="card-subtitle">
+        Computed service status based on direct dependencies.
+      </div>
+    </div>
+
+    <div class="card-header-actions">
+      <button id="reload-service-impact" type="button" class="btn">
+        Reload
+      </button>
+    </div>
+  </div>
+
+  <div class="page-toolbar is-flush-top">
+    <div class="page-toolbar-search">
+      <span class="page-toolbar-search-icon">⌕</span>
+      <input
+        id="service-impact-search"
+        class="input"
+        type="search"
+        placeholder="Search impacted services..."
+        autocomplete="off"
+      >
+    </div>
+  </div>
+
+  <div class="table-wrapper">
+    <table class="data-table sortable-table">
+      <thead>
+        <tr>
+          <th>Service</th>
+          <th>Team</th>
+          <th>Own status</th>
+            <th>Alert impact</th>
+            <th>Effective status</th>
+            <th>Upstream issues</th>
+          <th>Criticality</th>
+          <th>Environment</th>
+        </tr>
+      </thead>
+      <tbody id="service-impact-table">
+        <tr>
+          <td colspan="8" class="empty-cell">No impact data loaded</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+        <div id="services-tab-dependencies" class="services-tab-panel" style="display: none;">
+          <div class="card-header">
+            <div>
+              <h2>Dependencies</h2>
+              <div class="card-subtitle">Cross-service and cross-team dependencies.</div>
+            </div>
+            <div class="card-header-actions">
+              <button id="open-service-dependency-create-modal" type="button" class="btn btn-primary">New dependency</button>
+              <button id="reload-service-context" type="button" class="btn">Reload</button>
+            </div>
+          </div>
+
+          <div class="page-toolbar is-flush-top">
+            <div class="page-toolbar-search">
+              <span class="page-toolbar-search-icon">⌕</span>
+              <input id="service-dependencies-search" class="input" type="search" placeholder="Search dependencies..." autocomplete="off">
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table class="data-table sortable-table">
+              <thead>
+                <tr>
+                  <th>Service</th>
+                  <th>Depends on</th>
+                  <th>Type</th>
+                  <th>Criticality</th>
+                  <th>Target status</th>
+                  <th>Description</th>
+                  <th class="actions-th">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="service-dependencies-table">
+                <tr><td colspan="7" class="empty-cell">No dependencies</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+          <div id="services-tab-analytics" class="services-tab-panel" style="display: none;">
+  <div class="card-header">
+    <div>
+      <h2>Analytics by affected system</h2>
+      <div class="card-subtitle">
+        Alert volume grouped by service for the selected scope.
+      </div>
+    </div>
+
+    <div class="card-header-actions">
+      <select id="service-analytics-days" class="input page-toolbar-filter">
+        <option value="7">Last 7 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="365">Last 365 days</option>
+      </select>
+
+      <button id="reload-service-analytics" type="button" class="btn">
+        Reload
+      </button>
+    </div>
+  </div>
+
+  <div class="page-toolbar is-flush-top">
+    <div class="page-toolbar-search">
+      <span class="page-toolbar-search-icon">⌕</span>
+      <input
+        id="service-analytics-search"
+        class="input"
+        type="search"
+        placeholder="Search services..."
+        autocomplete="off"
+      >
+    </div>
+  </div>
+
+  <div class="table-wrapper">
+    <table class="data-table sortable-table">
+      <thead>
+        <tr>
+          <th>Service</th>
+          <th>Team</th>
+          <th>Status</th>
+          <th>Criticality</th>
+          <th>Open</th>
+          <th>Firing</th>
+          <th>Ack</th>
+          <th>Resolved</th>
+          <th>Critical open</th>
+          <th>Last alert</th>
+        </tr>
+      </thead>
+      <tbody id="service-analytics-table">
+        <tr>
+          <td colspan="10" class="empty-cell">No analytics loaded</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+      </section>
+
+      <aside id="service-details-card" class="card page-details-card">
+        <div class="card-header">
+          <div>
+            <h2>Service details</h2>
+            <div id="service-details-subtitle" class="card-subtitle">Select a service</div>
+          </div>
+        </div>
+        <div id="service-details-body" class="details-body">
+          <p>Click a service name to inspect ownership, defaults and status.</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+<div id="service-form-modal" class="app-modal" style="display: none;">
+  <div class="app-modal-dialog app-modal-dialog-wide">
+    <div class="app-modal-header">
+      <div>
+        <h2 id="service-form-title">Create service</h2>
+        <div class="card-subtitle">Technical service or system affected by alerts.</div>
+      </div>
+      <button id="close-service-form-modal" type="button" class="app-modal-close" aria-label="Close">×</button>
+    </div>
+
+    <div class="app-modal-body">
+      <div class="grid-two">
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <h2>Service</h2>
+              <div class="card-subtitle">Ownership, identity and classification.</div>
+            </div>
+          </div>
+
+          <div class="form-body">
+            <input id="service-id" type="hidden">
+
+            <label for="service-team">Team</label>
+            <select id="service-team" class="input"></select>
+
+            <label for="service-name">Name</label>
+            <input id="service-name" class="input" type="text" placeholder="Cloud PostgreSQL">
+
+            <label for="service-slug">Slug</label>
+            <input id="service-slug" class="input" type="text" placeholder="cloud-postgresql">
+
+            <label for="service-description">Description</label>
+            <textarea id="service-description" class="input" rows="3"></textarea>
+
+            <label for="service-type">Type</label>
+            <select id="service-type" class="input">
+              <option value="api">API</option>
+              <option value="web">Web</option>
+              <option value="database">Database</option>
+              <option value="queue">Queue</option>
+              <option value="cache">Cache</option>
+              <option value="worker">Worker</option>
+              <option value="cron">Cron</option>
+              <option value="network">Network</option>
+              <option value="storage">Storage</option>
+              <option value="infrastructure">Infrastructure</option>
+              <option value="external">External</option>
+              <option value="other">Other</option>
+            </select>
+
+            <div class="form-grid-3">
+              <div>
+                <label for="service-environment">Environment</label>
+                <select id="service-environment" class="input">
+                  <option value="production">Production</option>
+                  <option value="staging">Staging</option>
+                  <option value="development">Development</option>
+                  <option value="testing">Testing</option>
+                  <option value="shared">Shared</option>
+                </select>
+              </div>
+              <div>
+                <label for="service-criticality">Criticality</label>
+                <select id="service-criticality" class="input">
+                  <option value="critical">Critical</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </div>
+              <div>
+                <label for="service-tier">Tier</label>
+                <select id="service-tier" class="input">
+                  <option value="tier_1">Tier 1</option>
+                  <option value="tier_2">Tier 2</option>
+                  <option value="tier_3">Tier 3</option>
+                  <option value="tier_4">Tier 4</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <h2>Status and defaults</h2>
+              <div class="card-subtitle">Status, default rotation and escalation policy.</div>
+            </div>
+          </div>
+
+          <div class="form-body">
+            <label for="service-status">Status</label>
+            <select id="service-status" class="input">
+              <option value="operational">Operational</option>
+              <option value="degraded">Degraded</option>
+              <option value="partial_outage">Partial outage</option>
+              <option value="major_outage">Major outage</option>
+              <option value="maintenance">Maintenance</option>
+              <option value="disabled">Disabled</option>
+              <option value="unknown">Unknown</option>
+            </select>
+
+            <label for="service-status-message">Status message</label>
+            <textarea id="service-status-message" class="input" rows="3"></textarea>
+
+            <label for="service-default-rotation">Default rotation</label>
+            <select id="service-default-rotation" class="input"><option value="">No default rotation</option></select>
+
+            <label for="service-default-policy">Default escalation policy</label>
+            <select id="service-default-policy" class="input"><option value="">No default policy</option></select>
+
+            <label class="md-checkbox"><input id="service-enabled" type="checkbox" checked><span>Enabled</span></label>
+            <label class="md-checkbox"><input id="service-public" type="checkbox"><span>Show on status page later</span></label>
+
+            <div class="form-actions">
+              <button id="reset-service-form" type="button" class="btn">Reset</button>
+              <button id="save-service" type="button" class="btn btn-primary">Save service</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="service-link-modal" class="app-modal" style="display: none;">
+  <div class="app-modal-dialog">
+    <div class="app-modal-header">
+      <div>
+        <h2 id="service-link-form-title">Create link</h2>
+        <div class="card-subtitle">Dashboard, logs, docs, repository or other service link.</div>
+      </div>
+      <button id="close-service-link-modal" type="button" class="app-modal-close" aria-label="Close">×</button>
+    </div>
+
+    <div class="app-modal-body">
+      <div class="form-body">
+        <input id="service-link-id" type="hidden">
+
+        <label for="service-link-service">Service</label>
+        <select id="service-link-service" class="input"></select>
+
+        <label for="service-link-type">Type</label>
+        <select id="service-link-type" class="input">
+          <option value="dashboard">Dashboard</option>
+          <option value="metrics">Metrics</option>
+          <option value="logs">Logs</option>
+          <option value="traces">Traces</option>
+          <option value="repository">Repository</option>
+          <option value="documentation">Documentation</option>
+          <option value="status_page">Status page</option>
+          <option value="wiki">Wiki</option>
+          <option value="other">Other</option>
+        </select>
+
+        <label for="service-link-label">Label</label>
+        <input id="service-link-label" class="input" type="text" placeholder="Grafana dashboard">
+
+        <label for="service-link-url">URL</label>
+        <input id="service-link-url" class="input" type="url" placeholder="https://...">
+
+        <label for="service-link-description">Description</label>
+        <textarea id="service-link-description" class="input" rows="3"></textarea>
+
+        <label for="service-link-priority">Priority</label>
+        <input id="service-link-priority" class="input" type="number" min="0" value="100">
+
+        <label class="md-checkbox"><input id="service-link-enabled" type="checkbox" checked><span>Enabled</span></label>
+
+        <div class="form-actions">
+          <button id="reset-service-link-form" type="button" class="btn">Reset</button>
+          <button id="save-service-link" type="button" class="btn btn-primary">Save link</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="service-runbook-modal" class="app-modal" style="display: none;">
+  <div class="app-modal-dialog app-modal-dialog-wide">
+    <div class="app-modal-header">
+      <div>
+        <h2 id="service-runbook-form-title">Create runbook</h2>
+        <div class="card-subtitle">Attach response instructions to a service.</div>
+      </div>
+      <button id="close-service-runbook-modal" type="button" class="app-modal-close" aria-label="Close">×</button>
+    </div>
+
+    <div class="app-modal-body">
+      <div class="grid-two">
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <h2>Runbook</h2>
+              <div class="card-subtitle">Service, title, URL and severity.</div>
+            </div>
+          </div>
+
+          <div class="form-body">
+            <input id="service-runbook-id" type="hidden">
+
+            <label for="service-runbook-service">Service</label>
+            <select id="service-runbook-service" class="input"></select>
+
+            <label for="service-runbook-title">Title</label>
+            <input id="service-runbook-title" class="input" type="text" placeholder="PostgreSQL outage">
+
+            <label for="service-runbook-url">URL</label>
+            <input id="service-runbook-url" class="input" type="url" placeholder="https://...">
+
+            <label for="service-runbook-severity">Severity</label>
+            <input id="service-runbook-severity" class="input" type="text" placeholder="critical">
+
+            <label for="service-runbook-priority">Priority</label>
+            <input id="service-runbook-priority" class="input" type="number" min="0" value="100">
+
+            <label class="md-checkbox"><input id="service-runbook-enabled" type="checkbox" checked><span>Enabled</span></label>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <h2>Matching</h2>
+              <div class="card-subtitle">Optional labels matcher for this runbook.</div>
+            </div>
+          </div>
+
+          <div class="form-body">
+            <label for="service-runbook-description">Description</label>
+            <textarea id="service-runbook-description" class="input" rows="3"></textarea>
+
+            <label for="service-runbook-matchers">Matchers JSON</label>
+            <textarea id="service-runbook-matchers" class="input json-editr" rows="8" spellcheck="false">{}</textarea>
+
+            <div class="form-actions">
+              <button id="reset-service-runbook-form" type="button" class="btn">Reset</button>
+              <button id="format-service-runbook-matchers" type="button" class="btn">Format JSON</button>
+              <button id="save-service-runbook" type="button" class="btn btn-primary">Save runbook</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="service-dependency-modal" class="app-modal" style="display: none;">
+  <div class="app-modal-dialog">
+    <div class="app-modal-header">
+      <div>
+        <h2 id="service-dependency-form-title">Create dependency</h2>
+        <div class="card-subtitle">Declare another service this service depends on.</div>
+      </div>
+      <button id="close-service-dependency-modal" type="button" class="app-modal-close" aria-label="Close">×</button>
+    </div>
+
+    <div class="app-modal-body">
+      <div class="form-body">
+        <input id="service-dependency-id" type="hidden">
+
+        <label for="service-dependency-source">Service</label>
+        <select id="service-dependency-source" class="input"></select>
+
+        <label for="service-dependency-target">Depends on service</label>
+        <select id="service-dependency-target" class="input"><option value="">Select service</option></select>
+
+        <label for="service-dependency-type">Dependency type</label>
+        <select id="service-dependency-type" class="input">
+          <option value="hard">Hard</option>
+          <option value="soft">Soft</option>
+          <option value="external">External</option>
+          <option value="informational">Informational</option>
+        </select>
+
+        <label for="service-dependency-criticality">Criticality</label>
+        <select id="service-dependency-criticality" class="input">
+          <option value="required">Required</option>
+          <option value="important">Important</option>
+          <option value="optional">Optional</option>
+        </select>
+
+        <label for="service-dependency-description">Description</label>
+        <textarea id="service-dependency-description" class="input" rows="3"></textarea>
+
+        <label class="md-checkbox"><input id="service-dependency-enabled" type="checkbox" checked><span>Enabled</span></label>
+
+        <div class="form-actions">
+          <button id="reset-service-dependency-form" type="button" class="btn">Reset</button>
+          <button id="save-service-dependency" type="button" class="btn btn-primary">Save dependency</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

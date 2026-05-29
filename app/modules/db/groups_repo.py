@@ -58,7 +58,12 @@ def list_groups_for_user(user, write_required=False, manage_users_required=False
     if manage_users_required:
         query = query.where(UserGroup.role == GROUP_USER_ADMIN_ROLE)
     elif write_required:
-        query = query.where(UserGroup.role == GROUP_EDITOR_ROLE)
+        query = query.where(
+            UserGroup.role.in_([
+                GROUP_EDITOR_ROLE,
+                GROUP_USER_ADMIN_ROLE,
+            ])
+        )
 
     return [membership.group for membership in query]
 

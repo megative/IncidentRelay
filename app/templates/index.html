@@ -89,6 +89,12 @@
                 <path d="M12 3a4 4 0 0 1 4 4c0 1.4-.7 2.6-1.8 3.3L20 16v5h-5v-3h-3v-3H9.5l-1.8-1.8A5 5 0 1 1 12 3Z"/>
                 <circle cx="7" cy="12" r="2"/>
             </symbol>
+            <symbol id="icon-services" viewBox="0 0 24 24">
+              <rect x="4" y="4" width="7" height="7" rx="1.5"></rect>
+              <rect x="13" y="4" width="7" height="7" rx="1.5"></rect>
+              <rect x="4" y="13" width="7" height="7" rx="1.5"></rect>
+              <rect x="13" y="13" width="7" height="7" rx="1.5"></rect>
+            </symbol>
         </svg>
 
     <div class="brand">
@@ -126,6 +132,11 @@
         <a href="/routes" data-page="routes" class="menu-link" title="Routes">
             <svg class="menu-icon"><use href="#icon-routes"></use></svg>
             <span class="menu-text">Routes</span>
+        </a>
+
+        <a href="/services" data-page="services" class="menu-link" title="Services">
+            <svg class="menu-icon"><use href="#icon-services"></use></svg>
+            <span class="menu-text">Services</span>
         </a>
 
         <a href="/escalation-policies" data-page="escalation-policies" class="menu-link" title="Escalation Policies">
@@ -203,6 +214,7 @@
             <div id="view-rotations" class="view">{% include "pages/rotations.html" %}</div>
             <div id="view-calendar" class="view">{% include "pages/calendar.html" %}</div>
             <div id="view-routes" class="view">{% include "pages/routes.html" %}</div>
+            <div id="view-services" class="view">{% include "pages/services.html" %}</div>
             <div id="view-escalation-policies" class="view">{% include "pages/escalation_policies.html" %}</div>
             <div id="view-channels" class="view">{% include "pages/channels.html" %}</div>
             <div id="view-silences" class="view">{% include "pages/silences.html" %}</div>
@@ -270,6 +282,7 @@
 <script src="/static/js/pages/rotations.js"></script>
 <script src="/static/js/pages/calendar.js"></script>
 <script src="/static/js/pages/routes.js"></script>
+<script src="{{ url_for('static', filename='js/pages/services.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pages/escalation_policies.js') }}"></script>
 <script src="/static/js/pages/channels.js"></script>
 <script src="/static/js/pages/silences.js"></script>

@@ -25,6 +25,7 @@ from app.views.version_view import version_bp
 from app.views.sso_admin_view import sso_admin_bp
 from app.views.sso_auth_view import sso_auth_bp
 from app.services.db_errors import handle_integrity_error, handle_not_found_error
+from app.views.services_view import services_bp
 
 
 def create_app():
@@ -87,6 +88,7 @@ def register_blueprints(flask_app):
     flask_app.register_blueprint(alerts_bp, url_prefix="/api/alerts")
     flask_app.register_blueprint(channels_bp, url_prefix="/api/channels")
     flask_app.register_blueprint(routes_bp, url_prefix="/api/routes")
+    flask_app.register_blueprint(services_bp, url_prefix="/api/services")
     flask_app.register_blueprint(escalation_policies_bp, url_prefix="/api/escalation-policies")
     flask_app.register_blueprint(silences_bp, url_prefix="/api/silences")
     flask_app.register_blueprint(integrations_bp, url_prefix="/api/integrations")

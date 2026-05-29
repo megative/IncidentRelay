@@ -25,6 +25,7 @@ class RouteBaseSchema(ApiModel):
         pattern=ROUTE_ESCALATION_MODE_PATTERN,
     )
     escalation_policy_id: int | None = Field(default=None, ge=1)
+    service_id: int | None = Field(default=None, ge=1)
 
     @model_validator(mode="after")
     def validate_escalation_policy(self):

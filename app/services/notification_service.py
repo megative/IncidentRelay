@@ -11,6 +11,35 @@ EDITABLE_EVENTS = {"acknowledged", "resolved"}
 logger = logging.getLogger("oncall.notifications")
 
 
+def alert_service_label(alert):
+    """Return a human-readable affected service label."""
+    service = getattr(alert, "service", None)
+
+    if service:
+        parts = [
+            getattr(service, "name", None)
+            or getattr(service, "slug", None)
+            or f"Service #{getattr(service, 'id', '-')}",
+        ]
+
+        criticality = getattr(service, "criticality", None)
+        status = getattr(service, "status", None)
+
+        if criticality:
+            parts.append(criticality)
+
+        if status:
+            parts.append(status)
+
+        return " / ".join(str(part) for part in parts if part)
+
+    service_id = getattr(alert, "service_id", None)
+    if service_id:
+        return f"Service #{service_id}"
+
+    return "-"
+
+
 def format_alert_message(alert, event_type="notification"):
     """Format a plain text alert notification."""
     assignee = (
@@ -24,6 +53,7 @@ def format_alert_message(alert, event_type="notification"):
     lines = [
         f"{event_type.upper()}: {alert.title}",
         f"Team: {team}",
+        f"Service: {alert_service_label(alert)}",
         f"Status: {alert.status}",
         f"Severity: {alert.severity or '-'}",
         f"Assignee: {assignee}",

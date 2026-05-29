@@ -8,6 +8,35 @@ from app.services.links import build_alert_web_url
 logger = logging.getLogger("oncall.alerts")
 
 
+def alert_service_label(alert):
+    """Return a human-readable affected service label."""
+    service = getattr(alert, "service", None)
+
+    if service:
+        parts = [
+            getattr(service, "name", None)
+            or getattr(service, "slug", None)
+            or f"Service #{getattr(service, 'id', '-')}",
+        ]
+
+        criticality = getattr(service, "criticality", None)
+        status = getattr(service, "status", None)
+
+        if criticality:
+            parts.append(criticality)
+
+        if status:
+            parts.append(status)
+
+        return " / ".join(str(part) for part in parts if part)
+
+    service_id = getattr(alert, "service_id", None)
+    if service_id:
+        return f"Service #{service_id}"
+
+    return "-"
+
+
 class IncomingWebhookNotifier(BaseNotifier):
     """Send notifications through a generic incoming webhook."""
 
@@ -33,6 +62,18 @@ class IncomingWebhookNotifier(BaseNotifier):
                 "message": alert.message,
                 "severity": alert.severity,
                 "assignee": alert.assignee.username if alert.assignee else None,
+                "service": alert_service_label(alert),
+                "service_id": alert.service.id if getattr(alert, "service", None) else None,
+                "service_name": (
+                    alert.service.name
+                    if getattr(alert, "service", None)
+                    else None
+                ),
+                "service_slug": (
+                    alert.service.slug
+                    if getattr(alert, "service", None)
+                    else None
+                ),
             },
             timeout=10,
         )

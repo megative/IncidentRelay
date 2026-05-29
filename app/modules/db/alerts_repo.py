@@ -1,11 +1,11 @@
 from functools import reduce
 from operator import or_
 from math import ceil
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from peewee import Case, JOIN, fn
 
-from app.modules.db.models import Alert, AlertEvent, AlertRoute, Rotation, Team, User
+from app.modules.db.models import Alert, AlertEvent, AlertRoute, Rotation, Service, Team, User
 
 
 MAX_ALERTS_PAGE_SIZE = 100
@@ -100,6 +100,10 @@ def build_alerts_query(
     status=None,
     source=None,
     severity=None,
+    service_id=None,
+    service_slug=None,
+    service_status=None,
+    service_criticality=None,
     search=None,
 ):
     """
@@ -136,6 +140,42 @@ def build_alerts_query(
 
     if severity:
         query = query.where(Alert.severity == severity)
+
+    if service_id:
+        query = query.where(Alert.service == service_id)
+
+    if service_slug:
+        service_ids = (
+            Service
+            .select(Service.id)
+            .where(
+                (Service.slug == service_slug)
+                & (Service.deleted == False)
+            )
+        )
+        query = query.where(Alert.service.in_(service_ids))
+
+    if service_status:
+        service_ids = (
+            Service
+            .select(Service.id)
+            .where(
+                (Service.status == service_status)
+                & (Service.deleted == False)
+            )
+        )
+        query = query.where(Alert.service.in_(service_ids))
+
+    if service_criticality:
+        service_ids = (
+            Service
+            .select(Service.id)
+            .where(
+                (Service.criticality == service_criticality)
+                & (Service.deleted == False)
+            )
+        )
+        query = query.where(Alert.service.in_(service_ids))
 
     if search:
         search = str(search).strip()
@@ -253,6 +293,10 @@ def paginate_alerts(
     status=None,
     source=None,
     severity=None,
+    service_id=None,
+    service_slug=None,
+    service_status=None,
+    service_criticality=None,
     search=None,
     page=1,
     page_size=25,
@@ -273,6 +317,10 @@ def paginate_alerts(
         status=status,
         source=source,
         severity=severity,
+        service_id=service_id,
+        service_slug=service_slug,
+        service_status=service_status,
+        service_criticality=service_criticality,
         search=search,
     )
 

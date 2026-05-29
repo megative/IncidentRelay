@@ -7,6 +7,7 @@ from app.modules.db import (
     channels_repo,
     rotations_repo,
     escalation_policies_repo,
+    services_repo,
 )
 from app.services.auth import create_raw_token, hash_token
 from app.services.audit import write_audit
@@ -16,6 +17,50 @@ from app.services.validation import validate_body
 
 
 routes_bp = Blueprint("routes_api", __name__)
+
+
+def validate_route_service(team_id, service_id):
+    """Ensure selected service exists, is enabled and belongs to the route team."""
+    if not service_id:
+        return None
+
+    try:
+        service = services_repo.get_service(service_id)
+    except DoesNotExist:
+        return jsonify({
+            "error": "service_not_found",
+            "message": "Service was not found",
+            "service_id": service_id,
+        }), 400
+
+    if service.team_id != team_id:
+        return jsonify({
+            "error": "service_team_mismatch",
+            "message": "Service does not belong to route team",
+            "service_id": service_id,
+            "service_team_id": service.team_id,
+            "team_id": team_id,
+        }), 400
+
+    if getattr(service, "deleted", False):
+        return jsonify({
+            "error": "service_deleted",
+            "message": "Service was deleted",
+            "service_id": service_id,
+        }), 400
+
+    if not getattr(service, "enabled", True):
+        return jsonify({
+            "error": "service_disabled",
+            "message": "Service is disabled",
+            "service_id": service_id,
+        }), 400
+
+    error = require_team_write(service.team_id)
+    if error:
+        return error
+
+    return None
 
 
 def validate_route_escalation_policy(team_id, escalation_policy_id):
@@ -180,6 +225,10 @@ def create_route():
     if policy_error:
         return policy_error
 
+    service_error = validate_route_service(payload.team_id, payload.service_id)
+    if service_error:
+        return service_error
+
     raw_token = create_raw_token()
 
     route = routes_repo.create_route(
@@ -193,6 +242,7 @@ def create_route():
         enabled=payload.enabled,
         intake_token_prefix=raw_token[:12],
         intake_token_hash=hash_token(raw_token),
+        service_id=payload.service_id,
     )
 
     for channel_id in payload.channel_ids:
@@ -248,6 +298,10 @@ def update_route(route_id):
     if policy_error:
         return policy_error
 
+    service_error = validate_route_service(payload.team_id, payload.service_id)
+    if service_error:
+        return service_error
+
     route = routes_repo.update_route(
         route_id,
         {
@@ -259,6 +313,7 @@ def update_route(route_id):
             "matchers": payload.matchers,
             "group_by": payload.group_by,
             "enabled": payload.enabled,
+            "service": payload.service_id,
         },
     )
 

@@ -11,7 +11,10 @@ from app.api.schemas.roles import (
 from app.modules.db import groups_repo, teams_repo
 
 GROUP_READ_ROLES = {GROUP_VIEWER_ROLE, GROUP_EDITOR_ROLE, GROUP_USER_ADMIN_ROLE}
-GROUP_WRITE_ROLES = {GROUP_EDITOR_ROLE}
+GROUP_WRITE_ROLES = {
+    GROUP_EDITOR_ROLE,
+    GROUP_USER_ADMIN_ROLE,
+}
 GROUP_USER_ADMIN_ROLES = {GROUP_USER_ADMIN_ROLE}
 
 TEAM_READ_ROLES = {TEAM_VIEWER_ROLE, TEAM_RESPONDER_ROLE, TEAM_MANAGER_ROLE}
@@ -207,14 +210,24 @@ def can_write_team(user, team_id):
     """Return True when a user can write team resources."""
     if not user:
         return False
+
     if user.is_admin:
         return True
 
     team = teams_repo.get_team(team_id)
-    if not team.group_id:
+
+    if not team or not team.group_id:
         return False
+
+    if can_write_group(user, team.group_id):
+        return True
+
+    if can_manage_group_users(user, team.group_id):
+        return True
+
     if not can_read_group(user, team.group_id):
         return False
+
     return teams_repo.get_user_team_role(user.id, team_id) in TEAM_WRITE_ROLES
 
 
@@ -235,7 +248,11 @@ def require_group_write(group_id):
     if is_admin_user():
         return None
     if not can_write_group(current_user(), group_id):
-        return jsonify({"error": "Group editor role is required for this group"}), 403
+        return jsonify({
+            "error": "group_write_required",
+            "message": "Group editor or group admin role is required for this group",
+        }), 403
+
     return None
 
 
@@ -331,5 +348,68 @@ def get_team_permissions(user, team_id):
         "can_read": can_read_team(user, team_id),
         "can_write": can_write_team(user, team_id),
         "can_respond": can_respond_team(user, team_id),
+        "can_manage_users": can_manage_team_users(user, team_id),
     }
 
+
+def is_global_admin_user(user=None):
+    """Return true when user is a global administrator."""
+    if user is None:
+        user = current_user()
+
+    return bool(user and user.is_admin)
+
+
+def can_assign_group_role(role, user=None):
+    """Return true when user can assign selected group role."""
+    if is_global_admin_user(user):
+        return True
+
+    return role != GROUP_USER_ADMIN_ROLE
+
+
+def can_manage_team_users(user, team_id):
+    """Return True when a user can manage team membership."""
+    if not user:
+        return False
+
+    if user.is_admin:
+        return True
+
+    team = teams_repo.get_team(team_id)
+
+    if not team or not team.group_id:
+        return False
+
+    if can_manage_group_users(user, team.group_id):
+        return True
+
+    if not can_read_group(user, team.group_id):
+        return False
+
+    return teams_repo.get_user_team_role(user.id, team_id) == TEAM_MANAGER_ROLE
+
+
+def require_assign_group_role(role):
+    """Return an error response when current user cannot assign selected role."""
+    if can_assign_group_role(role):
+        return None
+
+    return jsonify({
+        "error": "role_not_allowed",
+        "message": "Only global admin can assign group user-admin role",
+    }), 403
+
+
+def require_team_user_admin(team_id):
+    """Return an error response when current user cannot manage team users."""
+    if is_admin_user():
+        return None
+
+    if not can_manage_team_users(current_user(), team_id):
+        return jsonify({
+            "error": "team_user_admin_required",
+            "message": "Team manager or group admin role is required for this team",
+        }), 403
+
+    return None

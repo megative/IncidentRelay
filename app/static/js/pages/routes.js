@@ -23,6 +23,8 @@ const routesSortColumns = {
     },
     enabled: {path: "enabled", type: "boolean", defaultDirection: "desc"},
 };
+let selectedRouteForServiceRules = null;
+let routeServiceRulesCache = [];
 function getRouteEscalationLabel(route) {
     if (route.escalation_policy_name) {
         return "Policy: " + route.escalation_policy_name;
@@ -53,13 +55,24 @@ function loadRoutes() {
 
 function loadRouteDependencies(callback) {
     const teamId = $("#route-team").val();
+
     const rotationSelect = $("#route-rotation");
     const channelSelect = $("#route-channels");
-    rotationSelect.empty();
+    const policySelect = $("#route-escalation-policy");
+    const serviceSelect = $("#route-service");
+
+    rotationSelect.empty().append($("<option>").val("").text("No rotation"));
     channelSelect.empty();
 
+    if (policySelect.length) {
+        policySelect.empty().append($("<option>").val("").text("No policy"));
+    }
+
+    if (serviceSelect.length) {
+        serviceSelect.empty().append($("<option>").val("").text("No default service"));
+    }
+
     if (!teamId) {
-        rotationSelect.append($("<option>").val("").text("No rotation"));
         if (typeof callback === "function") {
             callback();
         }
@@ -68,44 +81,98 @@ function loadRouteDependencies(callback) {
 
     let rotationsLoaded = false;
     let channelsLoaded = false;
+    let policiesLoaded = !policySelect.length;
+    let servicesLoaded = !serviceSelect.length;
 
     function finishWhenReady() {
-        if (!rotationsLoaded || !channelsLoaded) {
+        if (!rotationsLoaded || !channelsLoaded || !policiesLoaded || !servicesLoaded) {
             return;
         }
+
         if (typeof callback === "function") {
             callback();
         }
     }
 
     apiGet("/api/rotations?team_id=" + encodeURIComponent(teamId), function (rotations) {
-        rotationSelect.empty();
-        rotationSelect.append($("<option>").val("").text("No rotation"));
+        rotationSelect.empty().append($("<option>").val("").text("No rotation"));
+
         asArray(rotations).forEach(function (rotation) {
             if (!rotation.enabled) {
                 return;
             }
-            rotationSelect.append($("<option>").val(String(rotation.id)).text(rotation.name));
+
+            rotationSelect.append(
+                $("<option>")
+                    .val(String(rotation.id))
+                    .text(rotation.name)
+            );
         });
+
         rotationsLoaded = true;
         finishWhenReady();
     });
 
     apiGet("/api/channels?team_id=" + encodeURIComponent(teamId), function (channels) {
         channelSelect.empty();
+
         asArray(channels).forEach(function (channel) {
             if (!channel.enabled) {
                 return;
             }
+
             channelSelect.append(
                 $("<option>")
                     .val(String(channel.id))
                     .text(channel.name + " (" + channel.channel_type + ")")
             );
         });
+
         channelsLoaded = true;
         finishWhenReady();
     });
+
+    if (policySelect.length) {
+        apiGet("/api/escalation-policies?team_id=" + encodeURIComponent(teamId), function (policies) {
+            policySelect.empty().append($("<option>").val("").text("No policy"));
+
+            asArray(policies).forEach(function (policy) {
+                if (!policy.enabled) {
+                    return;
+                }
+
+                policySelect.append(
+                    $("<option>")
+                        .val(String(policy.id))
+                        .text(policy.name)
+                );
+            });
+
+            policiesLoaded = true;
+            finishWhenReady();
+        });
+    }
+
+    if (serviceSelect.length) {
+        apiGet("/api/services?team_id=" + encodeURIComponent(teamId), function (services) {
+            serviceSelect.empty().append($("<option>").val("").text("No default service"));
+
+            asArray(services).forEach(function (service) {
+                if (!service.enabled) {
+                    return;
+                }
+
+                serviceSelect.append(
+                    $("<option>")
+                        .val(String(service.id))
+                        .text(service.name + " (" + service.slug + ")")
+                );
+            });
+
+            servicesLoaded = true;
+            finishWhenReady();
+        });
+    }
 }
 
 function refreshRoutes() {
@@ -172,6 +239,8 @@ function getRouteSearchText(route) {
         route.intake_token_prefix,
         route.enabled ? "enabled" : "disabled",
         channels,
+        route.service_name,
+        route.service_slug,
     ].join(" ").toLowerCase();
 }
 
@@ -267,6 +336,15 @@ function renderRouteActions(route) {
                 }
             },
             {
+                label: "Service rules",
+                icon: "fas fa-project-diagram",
+                required: "write",
+                denyMessage: "Team manager role is required to manage service rules.",
+                onClick: function () {
+                    openRouteServiceRules(route.id);
+                }
+            },
+            {
                 label: route.enabled ? "Disable" : "Enable",
                 icon: route.enabled ? "fas fa-pause" : "fas fa-play",
                 required: "write",
@@ -293,7 +371,268 @@ function renderRouteActions(route) {
         ]
     });
 }
+function getSelectedRouteForServiceRules() {
+    if (!selectedRouteForServiceRules) {
+        return null;
+    }
 
+    return routesCache.find(function (route) {
+        return Number(route.id) === Number(selectedRouteForServiceRules);
+    }) || null;
+}
+
+function openRouteServiceRules(routeId) {
+    const route = routesCache.find(function (item) {
+        return Number(item.id) === Number(routeId);
+    });
+
+    if (!route) {
+        return;
+    }
+
+    if (!canWriteObject(route)) {
+        showAppError("You do not have permission to manage service rules for this route.");
+        return;
+    }
+
+    selectedRouteForServiceRules = route.id;
+
+    $("#route-service-rules-title").text("Service rules / " + (route.name || ("Route #" + route.id)));
+    $("#service-rule-team").val(route.team_id);
+    $("#service-rule-route").val(route.id);
+
+    resetServiceRuleForm();
+
+    loadServiceRuleServices(route.team_id, function () {
+        refreshRouteServiceRules();
+        openAppModal("#route-service-rules-modal");
+    });
+}
+
+function loadServiceRuleServices(teamId, callback) {
+    const select = $("#service-rule-service");
+
+    select.empty();
+    select.append($("<option>").val("").text("Select service"));
+
+    if (!teamId) {
+        if (typeof callback === "function") {
+            callback();
+        }
+        return;
+    }
+
+    apiGet("/api/services?team_id=" + encodeURIComponent(teamId), function (services) {
+        select.empty();
+        select.append($("<option>").val("").text("Select service"));
+
+        asArray(services).forEach(function (service) {
+            if (!service.enabled) {
+                return;
+            }
+
+            select.append(
+                $("<option>")
+                    .val(String(service.id))
+                    .text(service.name + " (" + service.slug + ")")
+            );
+        });
+
+        if (typeof callback === "function") {
+            callback();
+        }
+    });
+}
+
+function refreshRouteServiceRules() {
+    const route = getSelectedRouteForServiceRules();
+
+    if (!route) {
+        routeServiceRulesCache = [];
+        renderRouteServiceRulesTable();
+        return;
+    }
+
+    apiGet(
+        "/api/services/match-rules?route_id=" + encodeURIComponent(route.id),
+        function (rules) {
+            routeServiceRulesCache = asArray(rules);
+            renderRouteServiceRulesTable();
+        }
+    );
+}
+
+function renderRouteServiceRulesTable() {
+    const tbody = $("#route-service-rules-table");
+
+    tbody.empty();
+
+    if (!routeServiceRulesCache.length) {
+        tbody.append(
+            $("<tr>").append(
+                $("<td>")
+                    .attr("colspan", "6")
+                    .addClass("empty-cell")
+                    .text("No service rules")
+            )
+        );
+        return;
+    }
+
+    routeServiceRulesCache.forEach(function (rule) {
+        tbody.append(renderRouteServiceRuleRow(rule));
+    });
+}
+
+function renderRouteServiceRuleRow(rule) {
+    const row = $("<tr>");
+
+    row.append($("<td>").text(rule.position || 0));
+
+    row.append(
+        $("<td>")
+            .addClass("table-cell-truncate")
+            .attr("title", rule.name || "-")
+            .text(rule.name || "-")
+    );
+
+    row.append(
+        $("<td>")
+            .addClass("table-cell-truncate")
+            .attr("title", rule.service_name || rule.service_slug || "-")
+            .text(rule.service_name || rule.service_slug || "-")
+    );
+
+    row.append(
+        $("<td>").append(
+            $("<code>")
+                .addClass("inline-code")
+                .text(JSON.stringify(rule.matchers || {}))
+        )
+    );
+
+    row.append(
+        $("<td>").append(
+            renderStatusBadge(rule.enabled, "Enabled", "Disabled")
+        )
+    );
+
+    row.append(
+        $("<td>")
+            .addClass("actions-cell")
+            .append(
+                makeActionMenu({
+                    object: getSelectedRouteForServiceRules(),
+                    items: [
+                        {
+                            label: "Edit",
+                            icon: "fas fa-edit",
+                            required: "write",
+                            onClick: function () {
+                                editRouteServiceRule(rule);
+                            }
+                        },
+                        {
+                            label: "Delete",
+                            icon: "fas fa-trash",
+                            required: "write",
+                            danger: true,
+                            onClick: function () {
+                                deleteRouteServiceRule(rule);
+                            }
+                        }
+                    ]
+                })
+            )
+    );
+
+    return row;
+}
+
+function resetServiceRuleForm() {
+    const route = getSelectedRouteForServiceRules();
+
+    $("#service-rule-form-title").text("Create rule");
+    $("#service-rule-id").val("");
+    $("#service-rule-team").val(route ? route.team_id : "");
+    $("#service-rule-route").val(route ? route.id : "");
+    $("#service-rule-name").val("");
+    $("#service-rule-service").val("");
+    $("#service-rule-position").val("0");
+    $("#service-rule-matchers").val(JSON.stringify({
+        labels: {
+            cluster: "cloud-postgresql"
+        }
+    }, null, 2));
+    $("#service-rule-enabled").prop("checked", true);
+}
+
+function editRouteServiceRule(rule) {
+    $("#service-rule-form-title").text("Edit rule #" + rule.id);
+    $("#service-rule-id").val(rule.id);
+    $("#service-rule-team").val(rule.team_id);
+    $("#service-rule-route").val(rule.route_id || "");
+    $("#service-rule-name").val(rule.name || "");
+    $("#service-rule-service").val(rule.service_id || "");
+    $("#service-rule-position").val(rule.position || 0);
+    $("#service-rule-matchers").val(JSON.stringify(rule.matchers || {}, null, 2));
+    $("#service-rule-enabled").prop("checked", !!rule.enabled);
+}
+
+function collectRouteServiceRulePayload() {
+    return {
+        team_id: Number($("#service-rule-team").val()),
+        route_id: $("#service-rule-route").val()
+            ? Number($("#service-rule-route").val())
+            : null,
+        service_id: Number($("#service-rule-service").val()),
+        position: Number($("#service-rule-position").val() || 0),
+        name: $("#service-rule-name").val(),
+        description: null,
+        matchers: parseJsonInput("#service-rule-matchers", {}),
+        enabled: $("#service-rule-enabled").is(":checked"),
+    };
+}
+
+function saveRouteServiceRule() {
+    const id = $("#service-rule-id").val();
+    const payload = collectRouteServiceRulePayload();
+
+    if (!payload.service_id) {
+        showAppError("Service is required.");
+        return;
+    }
+
+    if (id) {
+        apiPut("/api/services/match-rules/" + id, payload, function () {
+            resetServiceRuleForm();
+            refreshRouteServiceRules();
+        });
+        return;
+    }
+
+    apiPost(
+        "/api/services/" + payload.service_id + "/match-rules",
+        payload,
+        function () {
+            resetServiceRuleForm();
+            refreshRouteServiceRules();
+        }
+    );
+}
+
+function deleteRouteServiceRule(rule) {
+    showAppConfirm({
+        title: "Delete this service rule?",
+        message: "Delete service rule \"" + (rule.name || ("#" + rule.id)) + "\"?",
+        confirmText: "Delete",
+        confirmClass: "btn-danger",
+    }).done(function () {
+        apiDelete("/api/services/match-rules/" + rule.id, function () {
+            refreshRouteServiceRules();
+        });
+    });
+}
 function routeDetailsItem(label, value) {
     return $("<div>")
         .addClass("details-item")
@@ -330,6 +669,7 @@ function renderRouteDetails(route) {
             .append(routeDetailsItem("Status", route.enabled ? "Enabled" : "Disabled"))
             .append(routeDetailsCode("Matchers", route.matchers || {}))
             .append(routeDetailsCode("Group by", route.group_by || []))
+            .append(routeDetailsItem("Service", route.service_name || route.service_slug || "-"))
     );
 
     const actions = $("<div>").addClass("details-actions");
@@ -403,19 +743,36 @@ function restoreRouteDetails() {
 }
 
 function collectRoutePayload() {
-    const mode = $("#route-escalation-mode").val() || "rotation";
-    const usePolicy = mode === "policy";
+    const selectedPolicyId = $("#route-escalation-policy").val();
+    const selectedRotationId = $("#route-rotation").val();
+
+    let escalationMode = $("#route-escalation-mode").val() || "rotation";
+
+    if (selectedPolicyId) {
+        escalationMode = "policy";
+    }
+
+    const usePolicy = escalationMode === "policy";
 
     return {
         team_id: Number($("#route-team").val()),
         name: $("#route-name").val(),
         source: $("#route-source").val(),
-        rotation_id: !usePolicy && $("#route-rotation").val()
-            ? Number($("#route-rotation").val())
+
+        escalation_mode: escalationMode,
+
+        rotation_id: !usePolicy && selectedRotationId
+            ? Number(selectedRotationId)
             : null,
-        escalation_policy_id: usePolicy && $("#route-escalation-policy").val()
-            ? Number($("#route-escalation-policy").val())
+
+        escalation_policy_id: usePolicy && selectedPolicyId
+            ? Number(selectedPolicyId)
             : null,
+
+        service_id: $("#route-service").val()
+            ? Number($("#route-service").val())
+            : null,
+
         channel_ids: ($("#route-channels").val() || []).map(Number),
         matchers: parseJsonInput("#route-matchers", {}),
         group_by: parseJsonInput("#route-group-by", []),
@@ -480,6 +837,8 @@ function editRoute(id) {
             return String(channel.id);
         }));
 
+        $("#route-service").val(route.service_id || "");
+
         updateRouteEscalationModeUi();
     });
 
@@ -501,7 +860,6 @@ function disableRoute(route) {
     }).done(function () {
         apiPost("/api/routes/" + route.id + "/disable", {}, function () {
             refreshRoutes();
-            showAppSuccess("Route disabled.");
         });
     });
 }
@@ -514,7 +872,6 @@ function enableRoute(route) {
 
     apiPost("/api/routes/" + route.id + "/enable", {}, function () {
         refreshRoutes();
-        showAppSuccess("Route enabled.");
     });
 }
 
@@ -537,7 +894,6 @@ function deleteRoute(route) {
                 renderRouteDetailsEmpty();
             }
             refreshRoutes();
-            showAppSuccess("Route deleted.");
         });
     });
 }
@@ -554,6 +910,7 @@ function resetRouteForm() {
     $("#route-channels").val([]);
     $("#route-escalation-mode").val("rotation");
     $("#route-escalation-policy").val("");
+    $("#route-service").val("");
     updateRouteEscalationModeUi();
 }
 
@@ -684,105 +1041,21 @@ $(document).on("keydown", function (event) {
 $(document).on("click", "#format-route-matchers", function () {
     formatJsonTextarea("#route-matchers", {}, "Alert filters JSON");
 });
-function loadRouteDependencies(callback) {
-    const teamId = $("#route-team").val();
-    const rotationSelect = $("#route-rotation");
-    const channelSelect = $("#route-channels");
-    const policySelect = $("#route-escalation-policy");
-
-    rotationSelect.empty();
-    channelSelect.empty();
-    policySelect.empty();
-
-    rotationSelect.append($("<option>").val("").text("No rotation"));
-    policySelect.append($("<option>").val("").text("No policy"));
-
-    if (!teamId) {
-        updateRouteEscalationModeUi();
-
-        if (typeof callback === "function") {
-            callback();
-        }
-
-        return;
+$(document).on("change", "#route-rotation", function () {
+    if ($(this).val()) {
+        $("#route-escalation-mode").val("rotation");
+        $("#route-escalation-policy").val("");
     }
 
-    let rotationsLoaded = false;
-    let channelsLoaded = false;
-    let policiesLoaded = false;
-
-    function finishWhenReady() {
-        if (!rotationsLoaded || !channelsLoaded || !policiesLoaded) {
-            return;
-        }
-
-        updateRouteEscalationModeUi();
-
-        if (typeof callback === "function") {
-            callback();
-        }
+    updateRouteEscalationModeUi();
+});
+$(document).on("change", "#route-escalation-policy", function () {
+    if ($(this).val()) {
+        $("#route-escalation-mode").val("policy");
     }
 
-    apiGet("/api/rotations?team_id=" + encodeURIComponent(teamId), function (rotations) {
-        rotationSelect.empty();
-        rotationSelect.append($("<option>").val("").text("No rotation"));
-
-        asArray(rotations).forEach(function (rotation) {
-            if (!rotation.enabled) {
-                return;
-            }
-
-            rotationSelect.append(
-                $("<option>")
-                    .val(String(rotation.id))
-                    .text(rotation.name)
-            );
-        });
-
-        rotationsLoaded = true;
-        finishWhenReady();
-    });
-
-    apiGet("/api/channels?team_id=" + encodeURIComponent(teamId), function (channels) {
-        channelSelect.empty();
-
-        asArray(channels).forEach(function (channel) {
-            if (!channel.enabled) {
-                return;
-            }
-
-            channelSelect.append(
-                $("<option>")
-                    .val(String(channel.id))
-                    .text(channel.name + " (" + channel.channel_type + ")")
-            );
-        });
-
-        channelsLoaded = true;
-        finishWhenReady();
-    });
-
-    apiGet("/api/escalation-policies?team_id=" + encodeURIComponent(teamId), function (policies) {
-        policySelect.empty();
-        policySelect.append($("<option>").val("").text("No policy"));
-
-        asArray(policies).forEach(function (policy) {
-            if (!policy.enabled) {
-                return;
-            }
-
-            policySelect.append(
-                $("<option>")
-                    .val(String(policy.id))
-                    .text(policy.name)
-            );
-        });
-
-        policiesLoaded = true;
-        finishWhenReady();
-    });
-}
-
+    updateRouteEscalationModeUi();
+});
 function updateRouteEscalationModeUi() {
     const mode = $("#route-escalation-mode").val() || "rotation";
     const usePolicy = mode === "policy";
@@ -798,3 +1071,28 @@ function updateRouteEscalationModeUi() {
     $("#route-policy-group").toggleClass("is-hidden", !usePolicy);
 }
 $(document).on("change", "#route-escalation-mode", updateRouteEscalationModeUi);
+$(document).on("click", "#save-service-rule", saveRouteServiceRule);
+
+$(document).on("click", "#reset-service-rule-form", resetServiceRuleForm);
+
+$(document).on("click", "#format-service-rule-matchers", function () {
+    try {
+        const value = JSON.parse($("#service-rule-matchers").val() || "{}");
+        $("#service-rule-matchers").val(JSON.stringify(value, null, 2));
+    } catch (error) {
+        showAppError("Invalid JSON: " + error.message);
+    }
+});
+
+$(document).on("click", "#close-route-service-rules-modal", function () {
+    closeAppModal("#route-service-rules-modal");
+});
+
+$(document).on("click", "#route-service-rules-modal", function (event) {
+    if (event.target === this) {
+        closeAppModal("#route-service-rules-modal");
+    }
+});
+$(document).on("click", "#format-service-rule-matchers", function () {
+    formatJsonTextarea("#service-rule-matchers", {}, "Matchers JSON");
+});

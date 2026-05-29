@@ -1,160 +1,341 @@
-function closeAppActionMenus() {
-    $(".app-action-menu.is-open")
-        .removeClass("is-open")
-        .find(".app-action-menu-toggle")
-        .attr("aria-expanded", "false");
-}
+(function (window, $) {
+    "use strict";
 
-function isActionMenuItemAllowed(menuObject, item) {
-    const options = item || {};
+    let openedActionMenu = null;
 
-    if (options.hidden) {
-        return false;
+    function actionItems(items) {
+        return Array.isArray(items) ? items : [];
     }
 
-    if (typeof options.visible === "function" && !options.visible(menuObject, options)) {
-        return false;
+    function callMaybe(value, object) {
+        if (typeof value === "function") {
+            return value(object);
+        }
+
+        return value;
     }
 
-    if (typeof options.visible !== "undefined" && !options.visible) {
-        return false;
-    }
-
-    if (typeof options.allowed === "function") {
-        return !!options.allowed(menuObject, options);
-    }
-
-    if (typeof options.allowed !== "undefined") {
-        return !!options.allowed;
-    }
-
-    if (options.required) {
-        if (typeof canActionObject !== "function") {
+    function canUseActionItem(object, item) {
+        if (callMaybe(item.disabled, object)) {
             return false;
         }
 
-        return canActionObject(options.object || menuObject, options.required);
+        if (typeof item.allowed === "function") {
+            return !!item.allowed(object);
+        }
+
+        if (item.required && typeof window.canActionObject === "function") {
+            return window.canActionObject(object, item.required);
+        }
+
+        return true;
     }
 
-    return true;
-}
+    function shouldShowActionItem(object, item) {
+        if (callMaybe(item.hidden, object)) {
+            return false;
+        }
 
-function denyActionMenuItem(item) {
-    const message = item.denyMessage || "You do not have permission to perform this action.";
+        if (typeof item.visible === "function" && !item.visible(object)) {
+            return false;
+        }
 
-    if (typeof showAppError === "function") {
-        showAppError(message, "Access denied");
-    }
-}
+        if (!canUseActionItem(object, item)) {
+            return false;
+        }
 
-function makeActionMenuItem(menuObject, item) {
-    const options = item || {};
-
-    if (!isActionMenuItemAllowed(menuObject, options)) {
-        return null;
+        return true;
     }
 
-    const button = $("<button>")
-        .attr("type", "button")
-        .addClass("app-action-menu-item")
-        .toggleClass("is-danger", !!options.danger)
-        .toggleClass("is-disabled", !!options.disabled)
-        .prop("disabled", !!options.disabled)
-        .append(
-            $("<span>")
-                .addClass("app-action-menu-icon")
-                .append(
-                    $("<i>")
-                        .addClass(options.icon || "fas fa-circle")
-                        .attr("aria-hidden", "true")
-                )
-        )
-        .append(
-            $("<span>")
-                .addClass("app-action-menu-label")
-                .text(options.label || "Action")
+    function getActionItemLabel(item, object) {
+        const label = callMaybe(item.label, object);
+        return label || "Action";
+    }
+
+    function getActionItemIcon(item, object) {
+        return callMaybe(item.icon, object) || "";
+    }
+
+    function placeActionMenu(menu) {
+        const toggle = menu.data("action-menu-toggle");
+        const list = menu.data("action-menu-list");
+
+        if (!toggle || !toggle.length || !list || !list.length) {
+            return;
+        }
+
+        if (!document.body.contains(toggle[0])) {
+            closeActionMenu(menu);
+            return;
+        }
+
+        const rect = toggle[0].getBoundingClientRect();
+        const gap = 6;
+        const edgeGap = 8;
+
+        list.css({
+            position: "fixed",
+            display: "block",
+            visibility: "hidden",
+            left: "0px",
+            top: "0px",
+            zIndex: 3000,
+        });
+
+        const listWidth = list.outerWidth();
+        const listHeight = list.outerHeight();
+
+        let left = rect.right - listWidth;
+        let top = rect.bottom + gap;
+
+        if (left < edgeGap) {
+            left = edgeGap;
+        }
+
+        if (left + listWidth > window.innerWidth - edgeGap) {
+            left = Math.max(edgeGap, window.innerWidth - listWidth - edgeGap);
+        }
+
+        if (
+            top + listHeight > window.innerHeight - edgeGap
+            && rect.top - gap - listHeight >= edgeGap
+        ) {
+            top = rect.top - gap - listHeight;
+        }
+
+        if (top + listHeight > window.innerHeight - edgeGap) {
+            top = Math.max(edgeGap, window.innerHeight - listHeight - edgeGap);
+        }
+
+        list.css({
+            left: Math.round(left) + "px",
+            top: Math.round(top) + "px",
+            visibility: "visible",
+        });
+    }
+
+    function openActionMenu(menu) {
+        if (openedActionMenu && openedActionMenu[0] === menu[0]) {
+            closeActionMenu(menu);
+            return;
+        }
+
+        closeOpenedActionMenu();
+
+        const list = menu.data("action-menu-list");
+
+        if (!list || !list.length) {
+            return;
+        }
+
+        openedActionMenu = menu;
+
+        menu.addClass("is-open");
+
+        list
+            .appendTo(document.body)
+            .addClass("is-open app-action-menu-portal")
+            .show();
+
+        window.requestAnimationFrame(function () {
+            placeActionMenu(menu);
+        });
+    }
+
+    function closeActionMenu(menu) {
+        if (!menu || !menu.length) {
+            return;
+        }
+
+        const list = menu.data("action-menu-list");
+
+        menu.removeClass("is-open");
+
+        if (list && list.length) {
+            list
+                .removeClass("is-open app-action-menu-portal")
+                .hide()
+                .css({
+                    position: "",
+                    display: "",
+                    visibility: "",
+                    left: "",
+                    top: "",
+                    zIndex: "",
+                })
+                .appendTo(menu);
+        }
+
+        if (openedActionMenu && openedActionMenu[0] === menu[0]) {
+            openedActionMenu = null;
+        }
+    }
+
+    function closeOpenedActionMenu() {
+        if (openedActionMenu) {
+            closeActionMenu(openedActionMenu);
+        }
+    }
+
+    function bindActionMenuGlobalHandlers() {
+        if (window.__appActionMenuGlobalHandlersBound) {
+            return;
+        }
+
+        window.__appActionMenuGlobalHandlersBound = true;
+
+        $(document).on("click.appActionMenu", function (event) {
+            if (!openedActionMenu) {
+                return;
+            }
+
+            const list = openedActionMenu.data("action-menu-list");
+            const clickedInsideMenu = openedActionMenu[0].contains(event.target);
+            const clickedInsideList = list && list[0] && list[0].contains(event.target);
+
+            if (clickedInsideMenu || clickedInsideList) {
+                return;
+            }
+
+            closeOpenedActionMenu();
+        });
+
+        $(document).on("keydown.appActionMenu", function (event) {
+            if (event.key === "Escape") {
+                closeOpenedActionMenu();
+            }
+        });
+
+        window.addEventListener(
+            "scroll",
+            function () {
+                if (openedActionMenu) {
+                    placeActionMenu(openedActionMenu);
+                }
+            },
+            true
         );
 
-    if (typeof options.onClick === "function" && !options.disabled) {
+        window.addEventListener("resize", function () {
+            if (openedActionMenu) {
+                placeActionMenu(openedActionMenu);
+            }
+        });
+    }
+
+    function makeActionMenuItem(item, object, menu) {
+        const label = getActionItemLabel(item, object);
+        const icon = getActionItemIcon(item, object);
+
+        const button = $("<button>")
+            .attr("type", "button")
+            .attr("role", "menuitem")
+            .addClass("app-action-menu-item")
+            .toggleClass("is-danger", !!callMaybe(item.danger, object));
+
+        if (icon) {
+    if (/^(fa|fas|far|fab|fal|fad)\s/.test(icon)) {
+        button.append(
+            $("<i>")
+                .addClass("app-action-menu-icon " + icon)
+                .attr("aria-hidden", "true")
+        );
+    } else {
+        button.append(
+            $("<span>")
+                .addClass("app-action-menu-icon")
+                .text(icon)
+        );
+    }
+}
+
+        button.append(
+            $("<span>")
+                .addClass("app-action-menu-label")
+                .text(label)
+        );
+
         button.on("click", function (event) {
             event.preventDefault();
             event.stopPropagation();
 
-            if (!isActionMenuItemAllowed(menuObject, options)) {
-                denyActionMenuItem(options);
+            if (!canUseActionItem(object, item)) {
+                closeActionMenu(menu);
+
+                if (item.denyMessage && typeof window.showAppError === "function") {
+                    window.showAppError(callMaybe(item.denyMessage, object));
+                }
+
                 return;
             }
 
-            closeAppActionMenus();
-            options.onClick(event);
-        });
-    }
+            closeActionMenu(menu);
 
-    return button;
-}
-
-function makeActionMenu(options) {
-    const opts = options || {};
-    const menuObject = opts.object || opts.item || null;
-    const items = asArray(opts.items);
-
-    const allowedItems = items.filter(function (item) {
-        return isActionMenuItemAllowed(menuObject, item);
-    });
-
-    const menu = $("<div>").addClass("app-action-menu");
-
-    if (opts.className) {
-        menu.addClass(opts.className);
-    }
-
-    const toggle = $("<button>")
-        .attr("type", "button")
-        .attr("aria-haspopup", "true")
-        .attr("aria-expanded", "false")
-        .attr("title", opts.label || "Actions")
-        .attr("aria-label", opts.label || "Actions")
-        .addClass("btn btn-small app-action-menu-toggle")
-        .prop("disabled", !allowedItems.length)
-        .append(
-            $("<i>")
-                .addClass(opts.icon || "fas fa-ellipsis-v")
-                .attr("aria-hidden", "true")
-        )
-        .on("click", function (event) {
-            event.preventDefault();
-            event.stopPropagation();
-
-            const isOpen = menu.hasClass("is-open");
-            closeAppActionMenus();
-
-            if (!isOpen && allowedItems.length) {
-                menu.addClass("is-open");
-                toggle.attr("aria-expanded", "true");
+            if (typeof item.onClick === "function") {
+                item.onClick(object, event);
             }
         });
 
-    const list = $("<div>").addClass("app-action-menu-list");
-
-    allowedItems.forEach(function (item) {
-        const menuItem = makeActionMenuItem(menuObject, item);
-        if (menuItem) {
-            list.append(menuItem);
-        }
-    });
-
-    menu.append(toggle).append(list);
-    return menu;
-}
-
-
-
-$(document).on("click.appActionMenu", function () {
-    closeAppActionMenus();
-});
-
-$(document).on("keydown.appActionMenu", function (event) {
-    if (event.key === "Escape") {
-        closeAppActionMenus();
+        return button;
     }
-});
+
+    function makeActionMenu(options) {
+        options = options || {};
+
+        const object = options.object || {};
+        const items = actionItems(options.items);
+
+        const menu = $("<div>").addClass("app-action-menu");
+
+        const toggle = $("<button>")
+            .attr("type", "button")
+            .attr("aria-label", options.label || "Actions")
+            .addClass("app-action-menu-toggle")
+            .append(
+                $("<i>")
+                    .addClass("fas fa-ellipsis-v")
+                    .attr("aria-hidden", "true")
+            );
+
+        const list = $("<div>")
+            .addClass("app-action-menu-list")
+            .attr("role", "menu")
+            .hide();
+
+        items.forEach(function (item) {
+            if (!item || !shouldShowActionItem(object, item)) {
+                return;
+            }
+
+            list.append(makeActionMenuItem(item, object, menu));
+        });
+
+        if (!list.children().length) {
+            toggle.prop("disabled", true);
+        }
+
+        toggle.on("click", function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (toggle.prop("disabled")) {
+                return;
+            }
+
+            openActionMenu(menu);
+        });
+
+        menu
+            .data("action-menu-toggle", toggle)
+            .data("action-menu-list", list)
+            .append(toggle)
+            .append(list);
+
+        bindActionMenuGlobalHandlers();
+
+        return menu;
+    }
+
+    window.makeActionMenu = makeActionMenu;
+    window.closeOpenedActionMenu = closeOpenedActionMenu;
+})(window, jQuery);

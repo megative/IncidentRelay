@@ -70,6 +70,35 @@ def _team_name(alert: Any) -> str:
     )
 
 
+def _service_name(alert: Any) -> str:
+    """Return a human-readable affected service name."""
+    service = getattr(alert, "service", None)
+
+    if service:
+        parts = [
+            getattr(service, "name", None)
+            or getattr(service, "slug", None)
+            or f"Service #{getattr(service, 'id', '-')}",
+        ]
+
+        criticality = getattr(service, "criticality", None)
+        status = getattr(service, "status", None)
+
+        if criticality:
+            parts.append(criticality)
+
+        if status:
+            parts.append(status)
+
+        return _html(" / ".join(str(part) for part in parts if part))
+
+    service_id = getattr(alert, "service_id", None)
+    if service_id:
+        return _html(f"Service #{service_id}")
+
+    return "-"
+
+
 def _action_user(alert: Any, event_type: str, actor: Any = None) -> Any:
     """Return the user who performed ACK or Resolve."""
 
@@ -208,6 +237,9 @@ def format_telegram_alert_message(
     lines.extend(
         [
             f"<b>Team:</b> {_team_name(alert)}",
+            f"Team: {_team_name(alert)}",
+            f"Service: {_service_name(alert)}",
+            f"Status: {_html(getattr(alert, 'status', None))}",
             f"<b>Status:</b> {_html(getattr(alert, 'status', None))}",
             f"<b>Severity:</b> {_html(getattr(alert, 'severity', None))}",
             f"<b>Assignee:</b> {_person_name(getattr(alert, 'assignee', None))}",

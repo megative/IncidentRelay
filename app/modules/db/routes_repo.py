@@ -102,6 +102,7 @@ def create_route(
     enabled=True,
     intake_token_prefix=None,
     intake_token_hash=None,
+    service_id=None
 ):
     """
     Create an alert route.
@@ -113,6 +114,7 @@ def create_route(
         source=source,
         rotation=rotation_id,
         escalation_policy=escalation_policy_id,
+        service=service_id,
         matchers=matchers or {},
         group_by=group_by or [],
         enabled=enabled,
@@ -164,6 +166,7 @@ def update_route(route_id, data):
         "enabled",
         "intake_token_prefix",
         "intake_token_hash",
+        "service",
     ]:
         if field in data:
             setattr(route, field, data[field])

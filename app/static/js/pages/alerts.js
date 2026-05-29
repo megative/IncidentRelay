@@ -6,6 +6,8 @@ let alertsLastAppliedQueryString = null;
 let alertsCurrentPage = 1;
 let alertsPageSize = 25;
 let alertsSortState = createTableSortState("activity", "desc");
+let alertsServiceFilterApplying = false;
+let alertsServiceFilterLoaded = false;
 let alertsPagination = {
     page: 1,
     page_size: 25,
@@ -90,7 +92,32 @@ function getAlertIdFromPath(pathname) {
 function buildAlertDetailsUrl(alertId) {
     return "/alerts/" + encodeURIComponent(alertId);
 }
+function alertServiceLabel(alert) {
+    if (!alert.service_id) {
+        return "No service";
+    }
 
+    return alert.service_name || alert.service_slug || ("Service #" + alert.service_id);
+}
+
+
+function alertServiceDetailsLabel(alert) {
+    if (!alert.service_id) {
+        return "-";
+    }
+
+    const parts = [alertServiceLabel(alert)];
+
+    if (alert.service_criticality) {
+        parts.push(alert.service_criticality);
+    }
+
+    if (alert.service_status) {
+        parts.push(alert.service_status);
+    }
+
+    return parts.join(" / ");
+}
 function buildAlertListUrl() {
     return "/alerts" + (window.location.search || "");
 }
@@ -234,6 +261,9 @@ function buildAlertsApiUrl() {
     if ($("#alerts-search").val()) {
         params.push("search=" + encodeURIComponent($("#alerts-search").val()));
     }
+    if ($("#alerts-service-filter").val()) {
+        params.push("service_id=" + encodeURIComponent($("#alerts-service-filter").val()));
+    }
 
     params.push("page=" + encodeURIComponent(alertsCurrentPage));
     params.push("page_size=" + encodeURIComponent(alertsPageSize));
@@ -262,6 +292,9 @@ function writeAlertsQueryParams() {
     if (alertsPageSize !== 25) {
         params.set("page_size", String(alertsPageSize));
     }
+    if ($("#alerts-service-filter").val()) {
+        params.set("service_id", $("#alerts-service-filter").val());
+    }
     if (
         alertsSortState.column &&
         (alertsSortState.column !== "activity" || alertsSortState.direction !== "desc")
@@ -272,22 +305,26 @@ function writeAlertsQueryParams() {
 
     const query = params.toString();
     const nextUrl = window.location.pathname + (query ? "?" + query : "");
-    history.replaceState({ path: nextUrl }, "", nextUrl);
+    history.replaceState({path: nextUrl}, "", nextUrl);
     alertsLastAppliedQueryString = window.location.search || "";
 }
 
 function loadAlerts() {
     applyAlertsQueryParams();
     initAlertsTableSorting();
-    apiGet(buildAlertsApiUrl(), function (response) {
-        alertsCache = alertsResponseItems(response);
-        alertsPagination = alertsResponsePagination(response);
-        alertsSummary = alertsResponseSummary(response);
-        alertsCurrentPage = alertsPagination.page || alertsCurrentPage;
-        alertsPageSize = alertsPagination.page_size || alertsPageSize;
-        writeAlertsQueryParams();
-        updateSortableTableHeaders("#alerts-table-view", alertsSortState);
-        renderAlertsPage();
+
+    loadAlertServiceFilter(function () {
+        apiGet(buildAlertsApiUrl(), function (response) {
+            alertsCache = alertsResponseItems(response);
+            alertsPagination = alertsResponsePagination(response);
+            alertsSummary = alertsResponseSummary(response);
+            alertsCurrentPage = alertsPagination.page || alertsCurrentPage;
+            alertsPageSize = alertsPagination.page_size || alertsPageSize;
+
+            writeAlertsQueryParams();
+            updateSortableTableHeaders("#alerts-table-view", alertsSortState);
+            renderAlertsPage();
+        });
     });
 }
 
@@ -389,6 +426,11 @@ function renderAlertPageRow(alert) {
         $("<td>")
             .append($("<div>").addClass("alerts-team").text(alert.team_slug || "-"))
             .append($("<div>").addClass("alerts-subtitle").text(alert.route_name || "No route"))
+            .append(
+                $("<div>")
+                    .addClass("alerts-subtitle")
+                    .text(alert.service_id ? "Service: " + alertServiceLabel(alert) : "No service")
+            )
     );
     row.append($("<td>").text(alert.assignee || "-"));
     row.append($("<td>").text(formatDateTimeMinutes(alertCreatedValue(alert))));
@@ -441,7 +483,34 @@ function buildAlertSubtitle(alert) {
     }
     return parts.length ? parts.join(" · ") : "Routed alert";
 }
+function alertServiceLabel(alert) {
+    if (!alert.service_id) {
+        return "No service";
+    }
 
+    return alert.service_name || alert.service_slug || ("Service #" + alert.service_id);
+}
+
+
+function alertServiceDetailsLabel(alert) {
+    if (!alert.service_id) {
+        return "-";
+    }
+
+    const parts = [];
+
+    parts.push(alertServiceLabel(alert));
+
+    if (alert.service_criticality) {
+        parts.push(alert.service_criticality);
+    }
+
+    if (alert.service_status) {
+        parts.push(alert.service_status);
+    }
+
+    return parts.join(" / ");
+}
 function renderReminderCount(alert) {
     const count = alert.reminder_count || 0;
     return $("<span>")
@@ -531,7 +600,7 @@ function alertPolicyRuleLabel(alert) {
 }
 function alertTeamEscalationLabel(alert) {
     if (alert.escalation_policy_name) {
-        return "Ignored for policy mode";
+        return "Used only when escalation mode is Rotation";
     }
 
     if (alert.team_escalation_enabled) {
@@ -561,6 +630,7 @@ function showAlertDetails(alertId) {
         modal.find("#alert-details-payload").text(JSON.stringify(alert.payload || {}, null, 2));
         renderEvents(alert.events || [], modal);
         renderNotifications(alert.notifications || [], modal);
+        renderAlertServiceContext(alert, modal);
 
         if (!currentDetailsAlertCanRespond || normalizeAlertValue(alert.status) === "resolved") {
             modal.find("#modal-alert-ack").hide();
@@ -573,7 +643,190 @@ function showAlertDetails(alertId) {
         openAlertDetailsModal();
     });
 }
+function ensureAlertServiceContext(modal) {
+    let target = modal.find("#alert-service-context");
 
+    if (target.length) {
+        return target;
+    }
+
+    target = $("<div>")
+        .attr("id", "alert-service-context")
+        .addClass("alert-service-context");
+
+    modal.find("#alert-details-summary").after(target);
+
+    return target;
+}
+
+
+function renderAlertServiceContext(alert, modal) {
+    const target = ensureAlertServiceContext(modal);
+    target.empty();
+
+    if (!alert.service_id) {
+        target.hide();
+        return;
+    }
+
+    target.show();
+
+    target.append(
+        $("<div>")
+            .addClass("alert-service-context-header")
+            .append($("<h3>").text("Service context"))
+            .append(
+                $("<div>")
+                    .addClass("card-subtitle")
+                    .text(alertServiceDetailsLabel(alert))
+            )
+    );
+
+    const linksList = $("<div>")
+        .attr("id", "alert-service-links")
+        .addClass("alert-service-context-list")
+        .append($("<div>").addClass("help-text").text("Loading links..."));
+
+    const runbooksList = $("<div>")
+        .attr("id", "alert-service-runbooks")
+        .addClass("alert-service-context-list")
+        .append($("<div>").addClass("help-text").text("Loading runbooks..."));
+
+    target.append(
+        $("<div>")
+            .addClass("alert-service-context-grid")
+            .append(
+                $("<section>")
+                    .addClass("alert-service-context-section")
+                    .append($("<h4>").text("Links"))
+                    .append(linksList)
+            )
+            .append(
+                $("<section>")
+                    .addClass("alert-service-context-section")
+                    .append($("<h4>").text("Runbooks"))
+                    .append(runbooksList)
+            )
+    );
+
+    apiGet("/api/services/" + alert.service_id + "/links", function (links) {
+        renderAlertServiceLinks(asArray(links));
+    });
+
+    apiGet("/api/services/" + alert.service_id + "/runbooks", function (runbooks) {
+        renderAlertServiceRunbooks(alert, asArray(runbooks));
+    });
+}
+
+
+function renderAlertServiceLinks(links) {
+    const target = $("#alert-service-links");
+    target.empty();
+
+    const enabledLinks = links.filter(function (link) {
+        return !!link.enabled;
+    });
+
+    if (!enabledLinks.length) {
+        target.append($("<div>").addClass("help-text").text("No links."));
+        return;
+    }
+
+    enabledLinks.forEach(function (link) {
+        target.append(
+            $("<a>")
+                .addClass("alert-service-context-link")
+                .attr("href", link.url)
+                .attr("target", "_blank")
+                .attr("rel", "noopener noreferrer")
+                .append($("<span>").addClass("alert-service-context-title").text(link.label || link.url))
+                .append(
+                    $("<span>")
+                        .addClass("alert-service-context-meta")
+                        .text(link.link_type || "other")
+                )
+        );
+    });
+}
+
+
+function renderAlertServiceRunbooks(alert, runbooks) {
+    const target = $("#alert-service-runbooks");
+    target.empty();
+
+    const matchedRunbooks = runbooks.filter(function (runbook) {
+        return !!runbook.enabled && alertMatchesRunbook(alert, runbook);
+    });
+
+    if (!matchedRunbooks.length) {
+        target.append($("<div>").addClass("help-text").text("No matching runbooks."));
+        return;
+    }
+
+    matchedRunbooks.forEach(function (runbook) {
+        target.append(
+            $("<a>")
+                .addClass("alert-service-context-link")
+                .attr("href", runbook.url)
+                .attr("target", "_blank")
+                .attr("rel", "noopener noreferrer")
+                .append($("<span>").addClass("alert-service-context-title").text(runbook.title || runbook.url))
+                .append(
+                    $("<span>")
+                        .addClass("alert-service-context-meta")
+                        .text(
+                            [
+                                runbook.severity ? "severity: " + runbook.severity : null,
+                                runbook.description || null,
+                            ].filter(Boolean).join(" / ") || "runbook"
+                        )
+                )
+        );
+    });
+}
+
+
+function alertMatchesRunbook(alert, runbook) {
+    if (runbook.severity && normalizeAlertValue(runbook.severity) !== normalizeAlertValue(alert.severity)) {
+        return false;
+    }
+
+    return alertMatchesSimpleMatchers(alert, runbook.matchers || {});
+}
+
+
+function alertMatchesSimpleMatchers(alert, matchers) {
+    const matcherKeys = Object.keys(matchers || {});
+
+    if (!matcherKeys.length) {
+        return true;
+    }
+
+    const labels = alert.labels || {};
+    const expectedLabels = matchers.labels || {};
+
+    for (const key in expectedLabels) {
+        if (!Object.prototype.hasOwnProperty.call(expectedLabels, key)) {
+            continue;
+        }
+
+        const expected = expectedLabels[key];
+        const actual = labels[key];
+
+        if (Array.isArray(expected)) {
+            if (expected.map(String).indexOf(String(actual)) === -1) {
+                return false;
+            }
+            continue;
+        }
+
+        if (String(actual) !== String(expected)) {
+            return false;
+        }
+    }
+
+    return true;
+}
 function renderAlertDetailsSummary(alert, modal) {
     const summary = modal.find("#alert-details-summary");
     summary.empty();
@@ -581,6 +834,9 @@ function renderAlertDetailsSummary(alert, modal) {
     summary.append(detailItem("Source", alert.source));
     summary.append(detailItem("External ID", alert.external_id));
     summary.append(detailItem("Route", alert.route_name));
+    summary.append(detailItem("Service", alertServiceDetailsLabel(alert)));
+    summary.append(detailItem("Service status", alert.service_status));
+    summary.append(detailItem("Service criticality", alert.service_criticality));
     summary.append(detailItem("Escalation mode", alertEscalationModeLabel(alert)));
     summary.append(detailItem("Escalation policy", alert.escalation_policy_name));
     summary.append(detailItem("Policy rule", alertPolicyRuleLabel(alert)));
@@ -590,7 +846,7 @@ function renderAlertDetailsSummary(alert, modal) {
     summary.append(detailItem("Last escalated", formatDateTimeMinutes(alert.last_escalated_at)));
     summary.append(detailItem("Escalation level", alert.escalation_level || 0));
     summary.append(detailItem("Policy repeat count", alert.escalation_repeat_count || 0));
-    summary.append(detailItem("Team escalation", alertTeamEscalationLabel(alert)));
+    summary.append(detailItem("Default rotation", alertTeamEscalationLabel(alert)));
     summary.append(detailItem("Acknowledged by", alert.acknowledged_by));
     summary.append(detailItem("Created", formatDateTimeMinutes(alert.first_seen_at || alert.created_at)));
     summary.append(detailItem("Last seen", formatDateTimeMinutes(alert.last_seen_at)));
@@ -751,6 +1007,7 @@ function applyAlertsQueryParams() {
     $("#status-filter").val(params.get("status") || "");
     $("#severity-filter").val(params.get("severity") || "");
     $("#alerts-search").val(params.get("search") || "");
+    $("#alerts-service-filter").val(params.get("service_id") || "");
 
     if (params.get("team_id")) {
         $("#global-team-filter").val(params.get("team_id"));
@@ -858,3 +1115,59 @@ $(document).on("click", "#modal-alert-resolve", function () {
         loadAlerts();
     });
 });
+$(document).on("change", "#alerts-service-filter", function () {
+    if (alertsServiceFilterApplying) {
+        return;
+    }
+
+    resetAlertsPagination();
+    writeAlertsQueryParams();
+    loadAlerts();
+});
+function loadAlertServiceFilter(callback) {
+    const select = $("#alerts-service-filter");
+
+    if (!select.length) {
+        if (typeof callback === "function") {
+            callback();
+        }
+        return;
+    }
+
+    const params = new URLSearchParams(window.location.search || "");
+    const currentValue = select.val() || params.get("service_id") || "";
+
+    alertsServiceFilterApplying = true;
+
+    select.empty();
+    select.append($("<option>").val("").text("All services"));
+
+    apiGet("/api/services" + selectedTeamQuery(), function (services) {
+        asArray(services).forEach(function (service) {
+            if (!service.enabled) {
+                return;
+            }
+
+            select.append(
+                $("<option>")
+                    .val(String(service.id))
+                    .text(
+                        (service.team_slug || service.team_name || "-")
+                        + " / "
+                        + (service.name || service.slug || service.id)
+                    )
+            );
+        });
+
+        if (currentValue) {
+            select.val(String(currentValue));
+        }
+
+        alertsServiceFilterLoaded = true;
+        alertsServiceFilterApplying = false;
+
+        if (typeof callback === "function") {
+            callback();
+        }
+    });
+}

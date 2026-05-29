@@ -3,7 +3,7 @@ from urllib.parse import urljoin
 import requests
 
 from app import Config
-from app.notifiers.plugins import IncomingWebhookNotifier
+from app.notifiers.plugins import IncomingWebhookNotifier, alert_service_label
 from app.services.links import build_alert_web_url
 
 
@@ -155,6 +155,7 @@ class MattermostNotifier(IncomingWebhookNotifier):
         alert_url = build_alert_web_url(alert)
         fields = [
             {"short": True, "title": "Team", "value": team},
+            {"short": True, "title": "Service", "value": alert_service_label(alert)},
             {"short": True, "title": "Status", "value": alert.status},
             {"short": True, "title": "Severity", "value": alert.severity or "-"},
             {"short": True, "title": "Assignee", "value": assignee},

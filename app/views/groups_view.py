@@ -21,6 +21,8 @@ from app.services.rbac import (
     require_admin_user,
     require_group_user_admin,
     require_group_write,
+    is_global_admin_user,
+    require_assign_group_role,
 )
 from app.services.serializers import serialize_group, serialize_user, serialize_user_group
 from app.services.validation import validate_body
@@ -34,11 +36,22 @@ def list_groups():
     """Return groups visible to the current user."""
     user = request.current_user
     if user and user.is_admin:
-        return jsonify([serialize_group(group) for group in groups_repo.list_groups(active_only=False)])
+        return jsonify([
+            serialize_group(group, user)
+            for group in groups_repo.list_groups(active_only=False)
+        ])
 
     allowed_group_ids = get_allowed_group_ids()
-    groups = [group for group in groups_repo.list_groups(active_only=True) if group.id in allowed_group_ids]
-    return jsonify([serialize_group(group) for group in groups])
+    groups = [
+        group
+        for group in groups_repo.list_groups(active_only=True)
+        if group.id in allowed_group_ids
+    ]
+
+    return jsonify([
+        serialize_group(group, user)
+        for group in groups
+    ])
 
 
 @groups_bp.route("", methods=["POST"])
@@ -71,7 +84,7 @@ def create_group():
 
         return integrity_conflict("Group could not be saved because it conflicts with existing data")
     write_audit("group.create", object_type="group", object_id=group.id, group_id=group.id, data=payload.model_dump())
-    return jsonify(serialize_group(group)), 201
+    return jsonify(serialize_group(group, request.current_user)), 201
 
 
 @groups_bp.route("/<int:group_id>", methods=["PUT"])
@@ -87,7 +100,7 @@ def update_group(group_id):
 
     group = groups_repo.update_group(group_id, payload.model_dump())
     write_audit("group.update", object_type="group", object_id=group.id, group_id=group.id, data=payload.model_dump())
-    return jsonify(serialize_group(group))
+    return jsonify(serialize_group(group, request.current_user))
 
 
 @groups_bp.route("/<int:group_id>/users", methods=["GET"])
@@ -159,14 +172,35 @@ def create_group_user(group_id):
 
 @groups_bp.route("/<int:group_id>/users", methods=["POST"])
 def add_group_user(group_id):
-    """Add an existing user to a group. Global admin only."""
-    error = require_admin_user()
+    """Add an existing user to a group.
+
+    Group user-admin or global admin required.
+    """
+    error = require_group_user_admin(group_id)
     if error:
         return error
+
+    try:
+        group = groups_repo.get_group(group_id)
+    except DoesNotExist:
+        return jsonify({
+            "error": "group_not_found",
+            "message": "Selected group was not found",
+        }), 404
+
+    if not group.active:
+        return jsonify({
+            "error": "group_inactive",
+            "message": "Selected group is inactive",
+        }), 400
 
     payload, error = validate_body(UserGroupAddSchema)
     if error:
         return error
+
+    role_error = require_assign_group_role(payload.role)
+    if role_error:
+        return role_error
 
     membership = groups_repo.add_user_to_group(
         payload.user_id,
@@ -174,13 +208,24 @@ def add_group_user(group_id):
         payload.role,
         active=payload.active,
     )
-    write_audit("group.user.add", object_type="group", object_id=group_id, group_id=group_id, data=payload.model_dump())
+
+    write_audit(
+        "group.user.add",
+        object_type="group",
+        object_id=group_id,
+        group_id=group_id,
+        data=payload.model_dump(),
+    )
+
     return jsonify(serialize_user_group(membership)), 201
 
 
 @groups_bp.route("/users/<int:membership_id>", methods=["PUT"])
 def update_group_user(membership_id):
-    """Update a group membership."""
+    """Update a group membership.
+
+    Group user-admin or global admin required.
+    """
     membership = groups_repo.get_group_membership(membership_id)
     error = require_group_user_admin(membership.group.id)
     if error:
@@ -190,11 +235,9 @@ def update_group_user(membership_id):
     if error:
         return error
 
-    if not request.current_user.is_admin and payload.role == GROUP_USER_ADMIN_ROLE:
-        return jsonify({
-            "error": "role_not_allowed",
-            "message": "Only global admin can assign group user-admin role",
-        }), 403
+    role_error = require_assign_group_role(payload.role)
+    if role_error:
+        return role_error
 
     membership = groups_repo.update_group_membership(
         membership_id=membership_id,
@@ -220,11 +263,17 @@ def update_group_user(membership_id):
 
 @groups_bp.route("/users/<int:membership_id>", methods=["DELETE"])
 def delete_group_user(membership_id):
-    """Remove user from group, group teams and group rotations. Global admin only."""
-    error = require_admin_user()
+    """Remove user from group, group teams and group rotations.
+
+    Group user-admin or global admin required.
+    """
+    membership = groups_repo.get_group_membership(membership_id)
+
+    error = require_group_user_admin(membership.group.id)
     if error:
         return error
 
+    group_id = membership.group.id
     data = groups_repo.delete_group_membership(membership_id)
     write_audit(
         "group.user.remove",
@@ -240,7 +289,7 @@ def delete_group_user(membership_id):
             "removed_rotation_overrides": data.get("removed_rotation_overrides", 0),
         },
     )
-    return jsonify({"deleted": True, "id": membership_id})
+    return jsonify({"deleted": True, "id": membership_id, "group_id": group_id})
 
 
 @groups_bp.route("/<int:group_id>", methods=["DELETE"])

@@ -75,6 +75,7 @@ class VoiceCallNotifier(BaseNotifier):
         template = getattr(Config, "VOICE_TEXT_TEMPLATE", "") or (
             "IncidentRelay alert {alert_id}. "
             "{title}. "
+            "Service {service}. "
             "Severity {severity}. "
             "{message}. "
             "Press 1 to acknowledge. "

@@ -412,3 +412,6 @@ function applyRbacUiState() {
      */
     applyCreateButtonsVisibility();
 }
+function isGlobalAdminUser() {
+    return !!(currentUser && currentUser.is_admin);
+}

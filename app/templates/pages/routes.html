@@ -177,6 +177,10 @@
                 <option value="zabbix">Zabbix</option>
                 <option value="webhook">Webhook</option>
               </select>
+                <label for="route-service">Default service</label>
+                <select id="route-service" class="input">
+                  <option value="">No service</option>
+                </select>
                 <div class="form-group">
                     <label for="route-escalation-mode">Escalation mode</label>
                     <select id="route-escalation-mode">
@@ -326,4 +330,134 @@
       </div>
     </div>
   </div>
+    <div id="route-service-rules-modal" class="app-modal" style="display: none;">
+  <div class="app-modal-dialog app-modal-dialog-wide">
+    <div class="app-modal-header">
+      <div>
+        <h2 id="route-service-rules-title">Service rules</h2>
+        <div class="card-subtitle">
+          Match alerts inside this route to affected services.
+        </div>
+      </div>
+
+      <button
+        id="close-route-service-rules-modal"
+        type="button"
+        class="app-modal-close"
+        aria-label="Close"
+      >
+        ×
+      </button>
+    </div>
+
+    <div class="app-modal-body">
+      <div class="grid-two">
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <h2>Rules</h2>
+              <div class="card-subtitle">
+                Route-specific service classification rules.
+              </div>
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Position</th>
+                  <th>Name</th>
+                  <th>Service</th>
+                  <th>Matchers</th>
+                  <th>Status</th>
+                  <th class="actions-th">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="route-service-rules-table">
+                <tr>
+                  <td colspan="6" class="empty-cell">No service rules</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <h2 id="service-rule-form-title">Create rule</h2>
+              <div class="card-subtitle">
+                Define matchers and target service.
+              </div>
+            </div>
+          </div>
+
+          <div class="form-body">
+            <input id="service-rule-id" type="hidden">
+            <input id="service-rule-team" type="hidden">
+            <input id="service-rule-route" type="hidden">
+
+            <label for="service-rule-name">Name</label>
+            <input
+              id="service-rule-name"
+              class="input"
+              type="text"
+              placeholder="PostgreSQL alerts"
+              autocomplete="off"
+            >
+
+            <label for="service-rule-service">Service</label>
+            <select id="service-rule-service" class="input">
+              <option value="">Select service</option>
+            </select>
+
+            <label for="service-rule-position">Position</label>
+            <input
+              id="service-rule-position"
+              class="input"
+              type="number"
+              min="0"
+              value="0"
+            >
+
+            <div class="json-editor">
+              <div class="json-editor-header">
+                  <span>Matchers</span>
+                  <button id="format-route-matchers" type="button" class="btn btn-small">
+                    Format
+                  </button>
+              </div>
+
+              <textarea
+                id="service-rule-matchers"
+                class="input code-textarea json-editor-textarea"
+                rows="8"
+                spellcheck="false"
+              >{
+              "labels": {
+                "cluster": "cloud-postgresql"
+              }
+            }</textarea>
+            </div>
+
+            <label class="md-checkbox">
+              <input id="service-rule-enabled" type="checkbox" checked>
+              <span>Enabled</span>
+            </label>
+
+            <div class="form-actions">
+              <button id="reset-service-rule-form" type="button" class="btn">
+                Reset
+              </button>
+              <button id="save-service-rule" type="button" class="btn btn-primary">
+                Save rule
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
 </div>

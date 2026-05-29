@@ -16,6 +16,7 @@ from app.services.rbac import (
     require_group_write,
     require_team_read,
     require_team_write,
+    require_team_user_admin
 )
 from app.services.serializers import serialize_team
 from app.services.validation import validate_body
@@ -46,7 +47,10 @@ def list_teams():
             for team in teams_repo.list_teams(active_only=active_only)
             if team.id in team_ids
         ]
-    return jsonify([serialize_team(team) for team in teams])
+    return jsonify([
+        serialize_team(team, user)
+        for team in teams
+    ])
 
 
 @teams_bp.route("/<int:team_id>", methods=["GET"])
@@ -55,7 +59,10 @@ def get_team(team_id):
     error = require_team_read(team_id)
     if error:
         return error
-    return jsonify(serialize_team(teams_repo.get_team(team_id)))
+    return jsonify(serialize_team(
+        teams_repo.get_team(team_id),
+        request.current_user,
+    ))
 
 
 @teams_bp.route("", methods=["POST"])
@@ -103,7 +110,7 @@ def create_team():
         team_id=team.id,
         data=payload.model_dump(),
     )
-    return jsonify(serialize_team(team)), 201
+    return jsonify(serialize_team(team, request.current_user)), 201
 
 
 @teams_bp.route("/<int:team_id>", methods=["PUT"])
@@ -158,7 +165,7 @@ def update_team(team_id):
         team_id=team.id,
         data=payload.model_dump(),
     )
-    return jsonify(serialize_team(team))
+    return jsonify(serialize_team(team, request.current_user)), 201
 
 
 @teams_bp.route("/<int:team_id>", methods=["DELETE"])
@@ -212,7 +219,7 @@ def list_team_users(team_id):
 @teams_bp.route("/<int:team_id>/users", methods=["POST"])
 def add_team_user(team_id):
     """Add an existing group user to a team."""
-    error = require_team_write(team_id)
+    error = require_team_user_admin(team_id)
     if error:
         return error
 
@@ -255,7 +262,7 @@ def add_team_user(team_id):
 def update_team_user(membership_id):
     """Update a team membership."""
     membership = teams_repo.get_team_membership(membership_id)
-    error = require_team_write(membership.team.id)
+    error = require_team_user_admin(membership.team.id)
     if error:
         return error
 
@@ -290,7 +297,7 @@ def update_team_user(membership_id):
 def delete_team_user(membership_id):
     """Remove a user from a team and from all rotations of this team."""
     membership = teams_repo.get_team_membership(membership_id)
-    error = require_team_write(membership.team.id)
+    error = require_team_user_admin(membership.team.id)
     if error:
         return error
 

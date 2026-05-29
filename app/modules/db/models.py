@@ -301,6 +301,266 @@ class EscalationPolicyRule(BaseModel):
         )
 
 
+class Service(SoftDeleteModel):
+    """Technical service or system affected by alerts."""
+
+    id = AutoField()
+    group = ForeignKeyField(Group, null=True, backref="services", on_delete="CASCADE")
+    team = ForeignKeyField(Team, backref="services", on_delete="CASCADE")
+
+    slug = CharField()
+    name = CharField()
+    description = TextField(null=True)
+
+    service_type = CharField(default="other")
+    environment = CharField(default="production")
+    criticality = CharField(default="medium")
+    tier = CharField(default="tier_3")
+
+    status = CharField(default="operational")
+    status_source = CharField(default="manual")
+    status_message = TextField(null=True)
+    status_updated_at = DateTimeField(null=True)
+    status_updated_by = ForeignKeyField(
+        User,
+        null=True,
+        backref="service_status_updates",
+        on_delete="SET NULL",
+    )
+
+    default_rotation = ForeignKeyField(
+        Rotation,
+        null=True,
+        backref="default_for_services",
+        on_delete="SET NULL",
+    )
+    default_escalation_policy = ForeignKeyField(
+        EscalationPolicy,
+        null=True,
+        backref="default_for_services",
+        on_delete="SET NULL",
+    )
+
+    labels = JSONTextField(null=True)
+    tags = JSONTextField(null=True)
+    metadata = JSONTextField(null=True)
+
+    enabled = BooleanField(default=True)
+    public = BooleanField(default=False)
+    public_name = CharField(null=True)
+    public_description = TextField(null=True)
+    public_order = IntegerField(default=100)
+
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "service"
+        indexes = (
+            (("team", "slug"), True),
+            (("team", "status"), False),
+            (("group", "enabled"), False),
+        )
+
+
+class ServiceChannel(BaseModel):
+    """Default notification channel for a service."""
+
+    id = AutoField()
+    service = ForeignKeyField(Service, backref="service_channels", on_delete="CASCADE")
+    channel = ForeignKeyField(
+        NotificationChannel,
+        backref="service_channels",
+        on_delete="CASCADE",
+    )
+    purpose = CharField(default="default")
+    enabled = BooleanField(default=True)
+    created_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "service_channel"
+        indexes = (
+            (("service", "channel", "purpose"), True),
+        )
+
+
+class ServiceDependency(SoftDeleteModel):
+    """Dependency between two technical services."""
+
+    id = AutoField()
+    service = ForeignKeyField(Service, backref="dependencies", on_delete="CASCADE")
+    depends_on_service = ForeignKeyField(
+        Service,
+        backref="dependent_services",
+        on_delete="CASCADE",
+    )
+
+    dependency_type = CharField(default="hard")
+    criticality = CharField(default="important")
+    description = TextField(null=True)
+
+    enabled = BooleanField(default=True)
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "service_dependency"
+        indexes = (
+            (("service", "depends_on_service"), True),
+        )
+
+
+class ServiceRunbook(SoftDeleteModel):
+    """Runbook attached to a service."""
+
+    id = AutoField()
+    service = ForeignKeyField(Service, backref="runbooks", on_delete="CASCADE")
+
+    title = CharField()
+    description = TextField(null=True)
+    url = TextField()
+
+    severity = CharField(null=True)
+    matchers = JSONTextField(null=True)
+    priority = IntegerField(default=100)
+
+    enabled = BooleanField(default=True)
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "service_runbook"
+        indexes = (
+            (("service", "priority"), False),
+            (("service", "enabled"), False),
+        )
+
+
+class ServiceLink(SoftDeleteModel):
+    """Useful service link such as dashboard, logs, repository or docs."""
+
+    id = AutoField()
+    service = ForeignKeyField(Service, backref="links", on_delete="CASCADE")
+
+    link_type = CharField(default="other")
+    label = CharField()
+    url = TextField()
+    description = TextField(null=True)
+    priority = IntegerField(default=100)
+
+    enabled = BooleanField(default=True)
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "service_link"
+        indexes = (
+            (("service", "link_type"), False),
+            (("service", "priority"), False),
+        )
+
+
+class MaintenanceWindow(SoftDeleteModel):
+    """Maintenance window that can affect one or more services."""
+
+    id = AutoField()
+    group = ForeignKeyField(Group, null=True, backref="maintenance_windows", on_delete="CASCADE")
+    team = ForeignKeyField(Team, null=True, backref="maintenance_windows", on_delete="CASCADE")
+
+    name = CharField()
+    description = TextField(null=True)
+
+    starts_at = DateTimeField()
+    ends_at = DateTimeField()
+    timezone = CharField(default="UTC")
+
+    recurrence = TextField(null=True)
+    recurrence_until = DateTimeField(null=True)
+
+    behavior = CharField(default="suppress_notifications")
+    status = CharField(default="scheduled")
+
+    created_by = ForeignKeyField(
+        User,
+        null=True,
+        backref="created_maintenance_windows",
+        on_delete="SET NULL",
+    )
+
+    enabled = BooleanField(default=True)
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "maintenance_window"
+        indexes = (
+            (("team", "starts_at"), False),
+            (("group", "starts_at"), False),
+            (("status", "enabled"), False),
+        )
+
+
+class MaintenanceWindowService(BaseModel):
+    """Link maintenance window to affected services."""
+
+    id = AutoField()
+    maintenance_window = ForeignKeyField(
+        MaintenanceWindow,
+        backref="service_links",
+        on_delete="CASCADE",
+    )
+    service = ForeignKeyField(Service, backref="maintenance_windows", on_delete="CASCADE")
+
+    class Meta:
+        table_name = "maintenance_window_service"
+        indexes = (
+            (("maintenance_window", "service"), True),
+        )
+
+
+class ServiceOwner(BaseModel):
+    """Additional service owner or stakeholder."""
+
+    id = AutoField()
+    service = ForeignKeyField(Service, backref="owners", on_delete="CASCADE")
+    user = ForeignKeyField(User, backref="owned_services", on_delete="CASCADE")
+    role = CharField(default="owner")
+    active = BooleanField(default=True)
+    created_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "service_owner"
+        indexes = (
+            (("service", "user", "role"), True),
+        )
+
+
+class ServiceSlo(SoftDeleteModel):
+    """Service-level targets for acknowledgement and resolution."""
+
+    id = AutoField()
+    service = ForeignKeyField(Service, backref="slos", on_delete="CASCADE")
+
+    name = CharField()
+    description = TextField(null=True)
+    severity = CharField(null=True)
+
+    ack_target_seconds = IntegerField(null=True)
+    resolve_target_seconds = IntegerField(null=True)
+    availability_target_basis_points = IntegerField(null=True)
+
+    enabled = BooleanField(default=True)
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "service_slo"
+        indexes = (
+            (("service", "name"), True),
+            (("service", "enabled"), False),
+        )
+
+
 class AlertRoute(SoftDeleteModel):
     """Route incoming alerts to a team, rotation and channels."""
 
@@ -321,10 +581,47 @@ class AlertRoute(SoftDeleteModel):
     intake_token_hash = CharField(null=True)
     enabled = BooleanField(default=True)
     created_at = DateTimeField(default=datetime.utcnow)
+    service = ForeignKeyField(
+        Service,
+        null=True,
+        backref="alert_routes",
+        on_delete="SET NULL",
+    )
 
     class Meta:
         indexes = (
             (("team", "name"), True),
+        )
+
+
+class ServiceMatchRule(SoftDeleteModel):
+    """Map alerts to affected services after an alert route has matched."""
+
+    id = AutoField()
+    team = ForeignKeyField(Team, backref="service_match_rules", on_delete="CASCADE")
+    route = ForeignKeyField(
+        AlertRoute,
+        null=True,
+        backref="service_match_rules",
+        on_delete="CASCADE",
+    )
+    service = ForeignKeyField(Service, backref="match_rules", on_delete="CASCADE")
+
+    position = IntegerField(default=0)
+    name = CharField()
+    description = TextField(null=True)
+    matchers = JSONTextField(null=True)
+
+    enabled = BooleanField(default=True)
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "service_match_rule"
+        indexes = (
+            (("route", "position"), False),
+            (("team", "position"), False),
+            (("service", "enabled"), False),
         )
 
 
@@ -384,12 +681,48 @@ class Alert(BaseModel):
     escalation_level = IntegerField(default=0)
     silenced = BooleanField(default=False)
     resolved_at = DateTimeField(null=True)
+    service = ForeignKeyField(Service, null=True, backref="alerts", on_delete="SET NULL")
 
     class Meta:
         indexes = (
             (("team", "status"), False),
             (("source", "dedup_key"), False),
             (("group_key", "status"), False),
+        )
+
+
+class ServiceStatusHistory(BaseModel):
+    """Product history of service status changes."""
+
+    id = AutoField()
+    service = ForeignKeyField(Service, backref="status_history", on_delete="CASCADE")
+
+    old_status = CharField(null=True)
+    new_status = CharField()
+    source = CharField(default="manual")
+    message = TextField(null=True)
+
+    alert = ForeignKeyField(Alert, null=True, backref="service_status_changes", on_delete="SET NULL")
+    maintenance_window = ForeignKeyField(
+        MaintenanceWindow,
+        null=True,
+        backref="service_status_changes",
+        on_delete="SET NULL",
+    )
+    changed_by = ForeignKeyField(
+        User,
+        null=True,
+        backref="service_status_changes",
+        on_delete="SET NULL",
+    )
+
+    created_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "service_status_history"
+        indexes = (
+            (("service", "created_at"), False),
+            (("new_status", "created_at"), False),
         )
 
 

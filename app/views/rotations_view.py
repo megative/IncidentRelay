@@ -40,7 +40,14 @@ def list_rotations():
         rotations = rotations_repo.list_rotations(team_id=team_id)
     else:
         rotations = rotations_repo.list_rotations(team_ids=get_allowed_team_ids())
-    return jsonify([serialize_rotation(rotation, get_current_oncall_user(rotation)) for rotation in rotations])
+    return jsonify([
+        serialize_rotation(
+            rotation,
+            get_current_oncall_user(rotation),
+            request.current_user,
+        )
+        for rotation in rotations
+    ])
 
 
 @rotations_bp.route("/<int:rotation_id>", methods=["GET"])
@@ -53,7 +60,11 @@ def get_rotation(rotation_id):
     error = require_team_read(rotation.team_id)
     if error:
         return error
-    return jsonify(serialize_rotation(rotation, get_current_oncall_user(rotation)))
+    return jsonify(serialize_rotation(
+        rotation,
+        get_current_oncall_user(rotation),
+        request.current_user,
+    ))
 
 
 @rotations_bp.route("", methods=["POST"])
@@ -109,7 +120,11 @@ def create_rotation():
             )
             position += 1
 
-    return jsonify(serialize_rotation(rotation, get_current_oncall_user(rotation))), 201
+    return jsonify(serialize_rotation(
+        rotation,
+        get_current_oncall_user(rotation),
+        request.current_user,
+    )), 201
 
 
 @rotations_bp.route("/<int:rotation_id>", methods=["PUT"])
@@ -150,7 +165,11 @@ def update_rotation(rotation_id):
         },
     )
     write_audit("rotation.update", object_type="rotation", object_id=rotation.id, team_id=rotation.team.id, data=payload.model_dump(mode="json"))
-    return jsonify(serialize_rotation(rotation, get_current_oncall_user(rotation)))
+    return jsonify(serialize_rotation(
+        rotation,
+        get_current_oncall_user(rotation),
+        request.current_user,
+    ))
 
 
 @rotations_bp.route("/<int:rotation_id>/enabled", methods=["PUT"])
@@ -195,7 +214,11 @@ def delete_rotation(rotation_id):
         team_id=rotation.team.id,
     )
 
-    return jsonify({"deleted": True, "id": rotation.id})
+    return jsonify(serialize_rotation(
+        rotation,
+        get_current_oncall_user(rotation),
+        request.current_user,
+    ))
 
 
 @rotations_bp.route("/<int:rotation_id>/members", methods=["GET"])

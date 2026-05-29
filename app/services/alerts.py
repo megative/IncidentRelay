@@ -12,6 +12,11 @@ from app.services.notification_service import (
     notify_alert,
     update_alert_messages,
 )
+from app.services.service_resolution import (
+    get_effective_escalation_policy,
+    get_effective_route_rotation,
+    resolve_alert_service,
+)
 
 
 logger = logging.getLogger("oncall.alerts")
@@ -24,7 +29,8 @@ def upsert_alert(alert_data):
 
     route = find_route_for_alert(alert_data)
     team = route.team if route else None
-    rotation = route.rotation if route else None
+    service = resolve_alert_service(route, alert_data) if route else None
+    rotation = get_effective_route_rotation(route, service) if route else None
     group_key = build_group_key(route, alert_data)
     status = alert_data.get("status") or "firing"
 
@@ -45,6 +51,9 @@ def upsert_alert(alert_data):
     existing_alert = alerts_repo.find_existing_alert(alert_data["source"], alert_data["dedup_key"], Config.ALERT_GROUP_WINDOW_SECONDS)
     if existing_alert:
         existing_alert, previous_status = alerts_repo.update_alert_from_payload(existing_alert, alert_data, status, group_key)
+        if service and existing_alert.service_id != service.id:
+            existing_alert.service = service
+            existing_alert.save()
         if status == "resolved" and previous_status != "resolved":
             alerts_repo.create_alert_event(existing_alert.id, "resolved", "Alert resolved by incoming payload")
             logger.info("alert resolved by incoming payload", extra={"extra": {"alert_id": existing_alert.id, "source": existing_alert.source}})
@@ -67,7 +76,7 @@ def upsert_alert(alert_data):
         )
         return None, False
 
-    policy = route.escalation_policy if route and route.escalation_policy else None
+    policy = get_effective_escalation_policy(route, service) if route else None
     policy_rule = None
     next_escalation_at = None
 
@@ -113,6 +122,7 @@ def upsert_alert(alert_data):
         first_seen_at=datetime.utcnow(),
         last_seen_at=datetime.utcnow(),
         silenced=bool(silence),
+        service=service.id if service else None,
     )
 
     alerts_repo.create_alert_event(alert.id, "created", "Alert created")
@@ -128,6 +138,7 @@ def upsert_alert(alert_data):
                 "team": alert.team.slug if alert.team else None,
                 "route_id": alert.route.id if alert.route else None,
                 "routing_error": alert_data.get("routing_error"),
+                "service_id": service.id if service else None,
             }
         },
     )
