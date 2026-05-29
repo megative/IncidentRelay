@@ -293,16 +293,6 @@ def format_telegram_alert_message(
         ]
     )
 
-    lines.extend(_service_context_lines(alert))
-
-    lines.extend(
-        [
-            "",
-            "<b>Message:</b>",
-            f"<blockquote>{_trim_html(getattr(alert, 'message', None))}</blockquote>",
-        ]
-    )
-
     if getattr(alert, "status", None) == "firing":
         ack_url = _ack_url(alert)
         if ack_url:

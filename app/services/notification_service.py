@@ -5,7 +5,7 @@ from app.modules.db import alerts_repo, notifications_repo, routes_repo
 from app.notifiers.registry import get_notifier
 from app.services.links import build_alert_web_url
 from app.services.severity import normalize_severity, normalize_severity_list
-from app.services.service_context import format_service_context_plain
+from app.services.service_context import format_service_context_plain, service_display_name
 
 EDITABLE_EVENTS = {"acknowledged", "resolved"}
 
@@ -41,6 +41,15 @@ def alert_service_label(alert):
     return "-"
 
 
+def _team_display_name(alert):
+    """Return team display name using name first, then slug."""
+    team = getattr(alert, "team", None)
+    if not team:
+        return "unknown"
+
+    return team.name or team.slug or "unknown"
+
+
 def format_alert_message(alert, event_type="notification"):
     """Format a plain text alert notification."""
     assignee = (
@@ -48,13 +57,14 @@ def format_alert_message(alert, event_type="notification"):
         if alert.assignee
         else "unknown"
     )
-    team = alert.team.slug if alert.team else "unknown"
+    team = _team_display_name(alert)
+    service = service_display_name(alert)
     alert_url = build_alert_web_url(alert)
 
     lines = [
         f"{event_type.upper()}: {alert.title}",
         f"Team: {team}",
-        f"Service: {alert_service_label(alert)}",
+        f"Service: {service}",
         f"Status: {alert.status}",
         f"Severity: {alert.severity or '-'}",
         f"Assignee: {assignee}",

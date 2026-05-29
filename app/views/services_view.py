@@ -1252,6 +1252,60 @@ def _base_service_impact_row(service, alert_impact):
     }
 
 
+def _downgrade_dependency_status(status, target_status):
+    """Return the lower of status and target_status by service status rank."""
+    if _service_status_rank(status) <= _service_status_rank(target_status):
+        return status
+    return target_status
+
+
+def _dependency_downstream_impact_status(dependency, upstream_status):
+    """
+    Return downstream impact status caused by one upstream dependency.
+
+    The upstream issue can still be shown in UI even when it does not change
+    downstream effective_status.
+    """
+    upstream_status = upstream_status or "unknown"
+
+    if upstream_status in {"operational", "disabled"}:
+        return "operational"
+
+    dependency_type = (dependency.dependency_type or "hard").lower()
+    criticality = (dependency.criticality or "important").lower()
+
+    if dependency_type == "informational":
+        return "operational"
+
+    if criticality == "optional":
+        if upstream_status in {"major_outage", "partial_outage", "degraded"}:
+            return "degraded"
+        return "operational"
+
+    if upstream_status == "maintenance":
+        return "maintenance"
+
+    if upstream_status == "unknown":
+        return "unknown"
+
+    if upstream_status == "major_outage":
+        if criticality == "required" and dependency_type in {"hard", "external"}:
+            return "major_outage"
+        if criticality in {"required", "important"}:
+            return "partial_outage"
+        return "degraded"
+
+    if upstream_status == "partial_outage":
+        if criticality == "required" and dependency_type in {"hard", "external"}:
+            return "partial_outage"
+        return "degraded"
+
+    if upstream_status == "degraded":
+        return "degraded"
+
+    return upstream_status
+
+
 def _apply_dependency_impact(row, dependencies, rows_by_service):
     """Apply direct dependency impact to a service row."""
     upstream_issues = []
@@ -1261,7 +1315,6 @@ def _apply_dependency_impact(row, dependencies, rows_by_service):
             continue
 
         target = dependency.depends_on_service
-
         if not target or not target.enabled:
             continue
 
@@ -1270,36 +1323,51 @@ def _apply_dependency_impact(row, dependencies, rows_by_service):
             continue
 
         target_row = rows_by_service.get(target.id)
-        target_status = (
+        upstream_status = (
             target_row["effective_status"]
             if target_row
             else target.status or "unknown"
         )
 
-        if target_status == "operational":
+        if upstream_status == "operational":
             continue
+
+        impact_status = _dependency_downstream_impact_status(
+            dependency,
+            upstream_status,
+        )
+
+        contributes_to_impact = impact_status != "operational"
 
         upstream_issues.append({
             "dependency_id": dependency.id,
             "dependency_type": dependency.dependency_type,
             "criticality": dependency.criticality,
             "description": dependency.description,
+
             "service_id": target.id,
             "service_name": target.name,
             "service_slug": target.slug,
+
             "team_id": target.team_id,
             "team_name": target.team.name if target.team else None,
             "team_slug": target.team.slug if target.team else None,
-            "status": target_status,
+
+            "status": upstream_status,
+            "impact_status": impact_status,
+            "contributes_to_impact": contributes_to_impact,
         })
 
-    dependency_impact_status = _worst_service_status([
-        issue["status"]
+    contributing_statuses = [
+        issue["impact_status"]
         for issue in upstream_issues
-    ])
+        if issue["contributes_to_impact"]
+    ]
+
+    dependency_impact_status = _worst_service_status(contributing_statuses)
 
     row["dependency_impact_status"] = dependency_impact_status
-    row["has_dependency_impact"] = bool(upstream_issues)
+    row["has_dependency_impact"] = dependency_impact_status != "operational"
     row["upstream_issues_count"] = len(upstream_issues)
     row["upstream_issues"] = upstream_issues
 
@@ -1312,6 +1380,111 @@ def _apply_dependency_impact(row, dependencies, rows_by_service):
     if not row["enabled"]:
         row["effective_status"] = "disabled"
 
+    return row
+
+
+SERVICE_IMPACT_MAX_DEPTH = 3
+
+
+def _collect_dependency_impact_context(services, max_depth=SERVICE_IMPACT_MAX_DEPTH):
+    """
+    Collect requested services plus readable upstream dependency services.
+
+    This allows:
+        frontend -> billing-api -> postgresql
+
+    If postgresql has a critical alert, frontend can still receive dependency impact.
+    """
+    services_by_id = {
+        service.id: service
+        for service in services
+    }
+
+    dependencies_by_service = {}
+    visited_service_ids = set(services_by_id.keys())
+    frontier = set(services_by_id.keys())
+
+    for _depth in range(max_depth):
+        if not frontier:
+            break
+
+        dependencies = services_repo.list_service_dependencies(
+            service_ids=list(frontier),
+        )
+
+        next_frontier = set()
+
+        for dependency in dependencies:
+            dependencies_by_service.setdefault(
+                dependency.service_id,
+                [],
+            ).append(dependency)
+
+            if not dependency.enabled:
+                continue
+
+            target = dependency.depends_on_service
+            if not target or not target.enabled:
+                continue
+
+            error = require_team_read(target.team_id)
+            if error:
+                continue
+
+            services_by_id[target.id] = target
+
+            if target.id not in visited_service_ids:
+                visited_service_ids.add(target.id)
+                next_frontier.add(target.id)
+
+        frontier = next_frontier
+
+    return services_by_id, dependencies_by_service
+
+
+def _compute_service_impact_row(
+    service_id,
+    rows_by_service,
+    dependencies_by_service,
+    state,
+):
+    """
+    Compute effective status for one service after upstream rows are computed.
+
+    Cycles are ignored safely:
+        A -> B -> A
+    """
+    current_state = state.get(service_id)
+
+    if current_state == "done":
+        return rows_by_service.get(service_id)
+
+    if current_state == "visiting":
+        return rows_by_service.get(service_id)
+
+    row = rows_by_service.get(service_id)
+    if not row:
+        return None
+
+    state[service_id] = "visiting"
+
+    for dependency in dependencies_by_service.get(service_id, []):
+        target = dependency.depends_on_service
+        if target and target.id in rows_by_service:
+            _compute_service_impact_row(
+                target.id,
+                rows_by_service,
+                dependencies_by_service,
+                state,
+            )
+
+    _apply_dependency_impact(
+        row,
+        dependencies_by_service.get(service_id, []),
+        rows_by_service,
+    )
+
+    state[service_id] = "done"
     return row
 
 
@@ -1329,35 +1502,12 @@ def list_service_impact():
     days = request.args.get("days", default=30, type=int)
     days = max(1, min(days or 30, 365))
 
-    dependencies = services_repo.list_service_dependencies(
-        service_ids=requested_service_ids,
+    impact_services_by_id, dependencies_by_service = (
+        _collect_dependency_impact_context(services)
     )
 
-    impact_services_by_id = {
-        service.id: service
-        for service in services
-    }
-
-    for dependency in dependencies:
-        if not dependency.enabled:
-            continue
-
-        target = dependency.depends_on_service
-        if not target or not target.enabled:
-            continue
-
-        # Dependency impact must include upstream alert impact even when
-        # the request is filtered by a single downstream service.
-        error = require_team_read(target.team_id)
-        if error:
-            continue
-
-        impact_services_by_id[target.id] = target
-
-    impact_service_ids = list(impact_services_by_id.keys())
-
     alert_impact = _build_alert_impact_by_service(
-        impact_service_ids,
+        list(impact_services_by_id.keys()),
         days=days,
     )
 
@@ -1369,24 +1519,20 @@ def list_service_impact():
         for service in impact_services_by_id.values()
     }
 
-    dependencies_by_service = {}
-    for dependency in dependencies:
-        dependencies_by_service.setdefault(
-            dependency.service_id,
-            [],
-        ).append(dependency)
+    state = {}
 
-    for service in services:
-        row = rows_by_service[service.id]
-        _apply_dependency_impact(
-            row,
-            dependencies_by_service.get(service.id, []),
+    for service_id in requested_service_ids:
+        _compute_service_impact_row(
+            service_id,
             rows_by_service,
+            dependencies_by_service,
+            state,
         )
 
     result = [
-        rows_by_service[service.id]
-        for service in services
+        rows_by_service[service_id]
+        for service_id in requested_service_ids
+        if service_id in rows_by_service
     ]
 
     result.sort(

@@ -1,5 +1,5 @@
 from app.modules.db.models import Alert, ServiceLink, ServiceRunbook
-from app.services.notifier import format_alert_message
+from app.services.notification_service import format_alert_message
 from app.services.service_context import (
     format_service_context_plain,
     get_alert_service_runbooks,

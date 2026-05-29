@@ -1565,12 +1565,12 @@ function renderServiceImpactRow(row) {
         .append(
             $("<td>")
                 .addClass("table-cell-truncate")
-                .attr("title", row.service_name || row.service_slug || "-")
+                .attr("title", getImpactServiceDisplayName(row))
                 .append(
                     $("<button>")
                         .attr("type", "button")
                         .addClass("name-button")
-                        .text(row.service_name || row.service_slug || "-")
+                        .text(getImpactServiceDisplayName(row))
                         .on("click", function () {
                             const service = getServiceById(row.service_id);
                             if (service) {
@@ -1586,15 +1586,15 @@ function renderServiceImpactRow(row) {
                         .text(row.service_slug || "")
                 )
         )
-        .append($("<td>").text(row.team_slug || row.team_name || "-"))
+        .append($("<td>").text(getImpactTeamDisplayName(row)))
         .append($("<td>").append(renderImpactStatusBadge(row.own_status)))
-        .append($("<td>").append(renderImpactStatusBadge(row.alert_impact_status)))
+        .append($("<td>").append(renderImpactAlertCell(row)))
         .append($("<td>").append(renderImpactStatusBadge(row.effective_status)))
         .append(
             $("<td>")
                 .addClass("table-cell-truncate-wide")
                 .attr("title", getImpactIssuesLabel(row))
-                .text(getImpactIssuesLabel(row))
+                .append(renderImpactUpstreamIssues(row))
         )
         .append($("<td>").text(row.criticality || "-"))
         .append($("<td>").text(row.environment || "-"));
@@ -1609,10 +1609,16 @@ function getImpactIssuesLabel(row) {
     }
 
     return issues.map(function (issue) {
+        const impact = issue.impact_status && issue.impact_status !== issue.status
+            ? " -> " + issue.impact_status
+            : "";
+
         return [
-            issue.team_slug || issue.team_name || "-",
-            issue.service_name || issue.service_slug || "-",
-            issue.status || "unknown",
+            getImpactIssueTeamDisplayName(issue),
+            getImpactIssueServiceDisplayName(issue),
+            (issue.status || "unknown") + impact,
+            issue.dependency_type || "dependency",
+            issue.criticality || "important"
         ].join(" / ");
     }).join("; ");
 }
@@ -1620,6 +1626,7 @@ function getImpactIssuesLabel(row) {
 
 function renderImpactStatusBadge(status) {
     const normalized = status || "unknown";
+    const label = formatImpactStatusText(normalized);
 
     if (normalized === "operational") {
         return $("<span>").addClass("status-pill status-active").text("Operational");
@@ -1632,7 +1639,7 @@ function renderImpactStatusBadge(status) {
     if (["degraded", "partial_outage", "major_outage"].indexOf(normalized) !== -1) {
         return $("<span>")
             .addClass("status-pill status-inactive")
-            .text(normalized.replace(/_/g, " "));
+            .text(label);
     }
 
     if (normalized === "disabled") {
@@ -1641,7 +1648,146 @@ function renderImpactStatusBadge(status) {
 
     return $("<span>")
         .addClass("status-pill status-neutral")
-        .text(normalized.replace(/_/g, " "));
+        .text(label);
 }
 $(document).on("input", "#service-impact-search", renderServiceImpactTable);
 $(document).on("click", "#reload-service-impact", refreshServiceImpact);
+function displayName(name, slug, fallback) {
+    const resolvedFallback = fallback === undefined ? "-" : fallback;
+
+    if (name) {
+        return name;
+    }
+
+    if (slug) {
+        return slug;
+    }
+
+    return resolvedFallback;
+}
+
+function formatImpactStatusText(status) {
+    return String(status || "unknown").replace(/_/g, " ");
+}
+
+function getImpactServiceDisplayName(row) {
+    return displayName(row.service_name, row.service_slug);
+}
+
+function getImpactTeamDisplayName(row) {
+    return displayName(row.team_name, row.team_slug);
+}
+
+function getImpactIssueServiceDisplayName(issue) {
+    return displayName(issue.service_name, issue.service_slug);
+}
+
+function getImpactIssueTeamDisplayName(issue) {
+    return displayName(issue.team_name, issue.team_slug);
+}
+
+function getImpactIssueTitle(issue) {
+    return [
+        getImpactIssueTeamDisplayName(issue),
+        getImpactIssueServiceDisplayName(issue),
+        issue.status || "unknown"
+    ].join(" / ");
+}
+
+function renderImpactAlertCell(row) {
+    const wrapper = $("<div>").addClass("impact-alert-cell");
+
+    wrapper.append(renderImpactStatusBadge(row.alert_impact_status));
+
+    const counters = $("<div>").addClass("impact-mini-counters");
+
+    counters.append(
+        $("<span>")
+            .addClass("impact-mini-counter")
+            .text("open " + Number(row.open_alerts || 0))
+    );
+
+    counters.append(
+        $("<span>")
+            .addClass("impact-mini-counter")
+            .text("critical " + Number(row.critical_open_alerts || 0))
+    );
+
+    counters.append(
+        $("<span>")
+            .addClass("impact-mini-counter")
+            .text("warning " + Number(row.warning_open_alerts || 0))
+    );
+
+    wrapper.append(counters);
+
+    return wrapper;
+}
+
+function renderImpactUpstreamIssues(row) {
+    const issues = asArray(row.upstream_issues);
+
+    if (!issues.length) {
+        return $("<span>").addClass("details-meta").text("-");
+    }
+
+    const list = $("<div>").addClass("impact-upstream-list");
+
+    issues.forEach(function (issue) {
+        const item = $("<div>")
+            .addClass("impact-upstream-item")
+            .toggleClass("impact-upstream-muted", issue.contributes_to_impact === false);
+
+        const title = $("<div>")
+            .addClass("impact-upstream-title")
+            .append(
+                $("<span>")
+                    .addClass("impact-upstream-service")
+                    .text(getImpactIssueServiceDisplayName(issue))
+            )
+            .append(
+                $("<span>")
+                    .addClass("impact-upstream-team")
+                    .text(getImpactIssueTeamDisplayName(issue))
+            );
+
+        const meta = $("<div>").addClass("impact-upstream-meta");
+
+        meta.append(renderImpactStatusBadge(issue.status));
+
+        if (issue.impact_status && issue.impact_status !== issue.status) {
+            meta.append(
+                $("<span>")
+                    .addClass("impact-arrow")
+                    .text("→")
+            );
+            meta.append(renderImpactStatusBadge(issue.impact_status));
+        }
+
+        meta.append(
+            $("<span>")
+                .addClass("impact-dependency-meta")
+                .text(
+                    [
+                        issue.dependency_type || "dependency",
+                        issue.criticality || "important"
+                    ].join(" / ")
+                )
+        );
+
+        item.append(title);
+        item.append(meta);
+
+        if (issue.description) {
+            item.append(
+                $("<div>")
+                    .addClass("impact-upstream-description")
+                    .text(issue.description)
+            );
+        }
+
+        list.append(item);
+    });
+
+    return list;
+}

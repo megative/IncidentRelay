@@ -695,3 +695,130 @@ def test_service_impact_reports_dependency_impact(client, admin_headers):
     assert rows[0]["service_id"] == frontend.id
     assert rows[0]["has_dependency_impact"] is True
     assert rows[0]["upstream_issues_count"] >= 1
+    assert rows[0]["dependency_impact_status"] == "major_outage"
+    assert rows[0]["effective_status"] == "major_outage"
+
+    issue = rows[0]["upstream_issues"][0]
+    assert issue["service_id"] == api.id
+    assert issue["service_name"] == api.name
+    assert issue["service_slug"] == api.slug
+    assert issue["status"] == "major_outage"
+    assert issue["impact_status"] == "major_outage"
+    assert issue["contributes_to_impact"] is True
+
+
+def test_service_impact_informational_dependency_is_visible_but_does_not_change_status(
+    client,
+    admin_headers,
+):
+    group = create_group()
+    team = create_team(group)
+
+    frontend = create_service(team, slug="frontend-web", name="Frontend Web")
+    api = create_service(team, slug="billing-api", name="Billing API")
+    route = create_route(team, service=api)
+
+    ServiceDependency.create(
+        service=frontend,
+        depends_on_service=api,
+        dependency_type="informational",
+        criticality="important",
+        enabled=True,
+    )
+
+    create_service_alert(
+        team=team,
+        route=route,
+        service=api,
+        fingerprint="billing-api-critical-informational-impact",
+        status="firing",
+        severity="critical",
+        alertname="BillingApiDown",
+        summary="Billing API is down",
+    )
+
+    response = client.get(
+        f"/api/services/impact?service_id={frontend.id}&days=30",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+
+    rows = response.get_json()
+    assert len(rows) == 1
+
+    row = rows[0]
+    assert row["service_id"] == frontend.id
+    assert row["has_dependency_impact"] is False
+    assert row["dependency_impact_status"] == "operational"
+    assert row["effective_status"] == "operational"
+    assert row["upstream_issues_count"] == 1
+
+    issue = row["upstream_issues"][0]
+    assert issue["service_id"] == api.id
+    assert issue["status"] == "major_outage"
+    assert issue["impact_status"] == "operational"
+    assert issue["contributes_to_impact"] is False
+
+
+def test_service_impact_reports_transitive_dependency_impact(client, admin_headers):
+    group = create_group()
+    team = create_team(group)
+
+    frontend = create_service(team, slug="frontend-web", name="Frontend Web")
+    api = create_service(team, slug="billing-api", name="Billing API")
+    postgres = create_service(team, slug="postgresql-prod", name="PostgreSQL Prod")
+
+    postgres_route = create_route(team, service=postgres)
+
+    ServiceDependency.create(
+        service=frontend,
+        depends_on_service=api,
+        dependency_type="hard",
+        criticality="required",
+        enabled=True,
+    )
+
+    ServiceDependency.create(
+        service=api,
+        depends_on_service=postgres,
+        dependency_type="hard",
+        criticality="required",
+        enabled=True,
+    )
+
+    create_service_alert(
+        team=team,
+        route=postgres_route,
+        service=postgres,
+        fingerprint="postgresql-prod-critical-transitive-impact",
+        status="firing",
+        severity="critical",
+        alertname="PostgreSQLDown",
+        summary="PostgreSQL is down",
+    )
+
+    response = client.get(
+        f"/api/services/impact?service_id={frontend.id}&days=30",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+
+    rows = response.get_json()
+    assert len(rows) == 1
+
+    row = rows[0]
+    assert row["service_id"] == frontend.id
+    assert row["has_dependency_impact"] is True
+    assert row["dependency_impact_status"] == "major_outage"
+    assert row["effective_status"] == "major_outage"
+    assert row["upstream_issues_count"] >= 1
+
+    issue = row["upstream_issues"][0]
+    assert issue["service_id"] == api.id
+    assert issue["service_name"] == api.name
+    assert issue["service_slug"] == api.slug
+    assert issue["status"] == "major_outage"
+    assert issue["impact_status"] == "major_outage"
+    assert issue["contributes_to_impact"] is True
