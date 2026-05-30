@@ -49,12 +49,6 @@ function dashboardEscalationText(alert) {
     return "Rotation: " + (alert.rotation_name || "-");
 }
 function loadDashboard() {
-    /*
-     * Load dashboard page data.
-     *
-     * The alerts API is paginated, so dashboard reads the first page sorted by
-     * latest activity and renders widgets from response.items.
-     */
     const params = [];
     if (typeof selectedTeamId === "function" && selectedTeamId()) {
         params.push("team_id=" + encodeURIComponent(selectedTeamId()));
@@ -71,13 +65,14 @@ function loadDashboard() {
         const sortedActiveAlerts = dashboardSortByActivity(activeAlerts);
 
         renderAlertsSummaryGrid("#overview-alerts-summary", alerts);
-        renderDashboardAlertsTable(sortedActiveAlerts.slice(0, 10));
+        renderDashboardAlertsTable(sortedActiveAlerts.slice(0, 15));
         renderDashboardRecentAlerts(sortedAlerts.slice(0, 5));
         renderDashboardTeamsNow(activeAlerts);
         renderDashboardSeveritySplit(alerts);
         renderDashboardTeamSummary(alerts);
         renderDashboardSystemStatus(alerts, activeAlerts);
     });
+    loadDashboardServiceImpact();
 }
 
 function renderDashboardAlertsTable(alerts) {
@@ -341,3 +336,231 @@ function renderDashboardSystemStatus(alerts, activeAlerts) {
 }
 
 $(document).on("click", "#reload-dashboard", loadDashboard);
+function dashboardSelectedTeamQuery() {
+    if (typeof selectedTeamId === "function" && selectedTeamId()) {
+        return "?team_id=" + encodeURIComponent(selectedTeamId());
+    }
+
+    return "";
+}
+
+function dashboardDisplayName(name, slug, fallback) {
+    return name || slug || fallback || "-";
+}
+
+function dashboardImpactStatusRank(status) {
+    const ranks = {
+        disabled: 0,
+        operational: 1,
+        unknown: 2,
+        maintenance: 3,
+        degraded: 4,
+        partial_outage: 5,
+        major_outage: 6,
+    };
+
+    return ranks[status || "unknown"] || 0;
+}
+
+function dashboardImpactStatusLabel(status) {
+    return String(status || "unknown").replace(/_/g, " ");
+}
+
+function dashboardImpactStatusCssClass(status) {
+    const normalized = status || "unknown";
+
+    return {
+        major_outage: "impact-status-major",
+        partial_outage: "impact-status-partial",
+        degraded: "impact-status-degraded",
+        maintenance: "impact-status-maintenance",
+        operational: "impact-status-operational",
+        disabled: "impact-status-neutral",
+        unknown: "impact-status-neutral"
+    }[normalized] || "impact-status-neutral";
+}
+
+function dashboardImpactBadge(status) {
+    const normalized = status || "unknown";
+
+    return $("<span>")
+        .addClass("status-pill impact-status-pill")
+        .addClass(dashboardImpactStatusCssClass(normalized))
+        .text(dashboardImpactStatusLabel(normalized));
+}
+
+function dashboardImpactIssueRootCause(issue) {
+    return dashboardDisplayName(
+        issue.root_cause_service_name,
+        issue.root_cause_service_slug,
+        issue.root_cause_service_display
+    );
+}
+
+function dashboardImpactIssuePath(issue) {
+    const path = dashboardAsArray(issue.path);
+
+    if (!path.length) {
+        return dashboardDisplayName(
+            issue.service_name,
+            issue.service_slug,
+            issue.service_display
+        );
+    }
+
+    return path.map(function (node) {
+        return dashboardDisplayName(
+            node.service_name,
+            node.service_slug,
+            node.service_display
+        );
+    }).join(" → ");
+}
+
+function dashboardBestImpactIssue(row) {
+    const issues = dashboardAsArray(row.upstream_issues);
+
+    if (!issues.length) {
+        return null;
+    }
+
+    return issues
+        .slice()
+        .sort(function (left, right) {
+            return dashboardImpactStatusRank(right.impact_status || right.status)
+                - dashboardImpactStatusRank(left.impact_status || left.status);
+        })[0];
+}
+
+function dashboardImpactRows(rows) {
+    return dashboardAsArray(rows)
+        .filter(function (row) {
+            return row.effective_status
+                && row.effective_status !== "operational"
+                && row.effective_status !== "disabled";
+        })
+        .sort(function (left, right) {
+            return dashboardImpactStatusRank(right.effective_status)
+                - dashboardImpactStatusRank(left.effective_status)
+                || Number(right.critical_open_alerts || 0) - Number(left.critical_open_alerts || 0)
+                || Number(right.open_alerts || 0) - Number(left.open_alerts || 0);
+        });
+}
+
+function loadDashboardServiceImpact() {
+    apiGet("/api/services/impact" + dashboardSelectedTeamQuery(), function (rows) {
+        renderDashboardServiceImpact(dashboardImpactRows(rows));
+    });
+}
+
+function renderDashboardServiceImpact(rows) {
+    const target = $("#dashboard-service-impact");
+    target.empty();
+
+    $("#dashboard-impacted-services-count").text(rows.length);
+
+    if (!rows.length) {
+        target.append(
+            $("<div>")
+                .addClass("overview-empty")
+                .text("No impacted services")
+        );
+        return;
+    }
+
+    rows.slice(0, 5).forEach(function (row) {
+        target.append(renderDashboardServiceImpactItem(row));
+    });
+
+    if (rows.length > 5) {
+        target.append(
+            $("<button>")
+                .attr("type", "button")
+                .addClass("overview-list-item overview-list-button dashboard-impact-more")
+                .text("+" + (rows.length - 5) + " more impacted service" + (rows.length - 5 === 1 ? "" : "s"))
+                .on("click", function () {
+                    navigate("/services", true);
+                })
+        );
+    }
+}
+
+function renderDashboardServiceImpactItem(row) {
+    const serviceName = dashboardDisplayName(
+        row.service_name,
+        row.service_slug,
+        "Service #" + row.service_id
+    );
+
+    const teamName = dashboardDisplayName(row.team_name, row.team_slug);
+    const issue = dashboardBestImpactIssue(row);
+
+    const item = $("<button>")
+        .attr("type", "button")
+        .addClass("overview-list-item overview-list-button dashboard-impact-item")
+        .addClass(
+            "dashboard-impact-item-"
+            + String(row.effective_status || "unknown").replace(/_/g, "-")
+        )
+        .on("click", function () {
+            navigate("/services", true);
+        });
+
+    item.append(
+        $("<span>")
+            .addClass("overview-list-dot")
+            .addClass("overview-dot-" + String(row.effective_status || "unknown").replace(/_/g, "-"))
+    );
+
+    const main = $("<div>").addClass("overview-list-main");
+
+    main.append(
+        $("<div>")
+            .addClass("overview-list-title dashboard-impact-title")
+            .text(serviceName)
+    );
+
+    const subtitleParts = [
+        teamName,
+        "open " + Number(row.open_alerts || 0),
+    ];
+
+    if (Number(row.critical_open_alerts || 0) > 0) {
+        subtitleParts.push("critical " + Number(row.critical_open_alerts || 0));
+    }
+
+    main.append(
+        $("<div>")
+            .addClass("overview-list-subtitle")
+            .text(subtitleParts.join(" · "))
+    );
+
+    if (issue) {
+        main.append(
+            $("<div>")
+                .addClass("dashboard-impact-root")
+                .text(
+                    "Root cause: "
+                    + dashboardImpactIssueRootCause(issue)
+                    + " · "
+                    + dashboardImpactIssuePath(issue)
+                )
+        );
+    } else if (row.has_alert_impact) {
+        main.append(
+            $("<div>")
+                .addClass("dashboard-impact-root")
+                .text("Caused by open alerts")
+        );
+    }
+
+    item.append(main);
+
+    item.append(
+        $("<div>")
+            .addClass("dashboard-impact-status")
+            .append(dashboardImpactBadge(row.effective_status))
+    );
+
+    return item;
+}

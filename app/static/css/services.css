@@ -92,3 +92,249 @@
     font-size: 12px;
     line-height: 1.35;
 }
+.impact-path-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+}
+
+.impact-path-label {
+    flex: 0 0 auto;
+    color: var(--muted, #667085);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.8;
+}
+
+.impact-path {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+}
+
+.impact-path-node {
+    display: inline-flex;
+    align-items: center;
+    max-width: 180px;
+    min-height: 22px;
+    padding: 2px 8px;
+    border: 1px solid var(--border, #e5edf6);
+    border-radius: 999px;
+    background: var(--surface-muted, #f8fafc);
+    color: var(--text, #101828);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.impact-path-node-cycle {
+    border-color: #f79009;
+    background: #fffaeb;
+    color: #b54708;
+}
+
+.impact-path-arrow {
+    color: var(--muted, #667085);
+    font-size: 12px;
+    line-height: 1;
+}
+
+.impact-issue-flags {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.impact-flag {
+    display: inline-flex;
+    align-items: center;
+    min-height: 20px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--surface-muted, #f8fafc);
+    color: var(--muted, #667085);
+    font-size: 12px;
+    line-height: 1.2;
+}
+
+.impact-flag-warning {
+    background: #fffaeb;
+    color: #b54708;
+}
+.impact-upstream-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--border, #e5edf6);
+    border-radius: 14px;
+    background: var(--surface, #ffffff);
+}
+
+.impact-upstream-group-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.impact-upstream-group-title {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.impact-direct-upstream-link,
+.impact-root-cause-link {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: var(--text, #101828);
+    font: inherit;
+    font-weight: 700;
+    line-height: 1.25;
+    text-align: left;
+    cursor: pointer;
+}
+
+.impact-direct-upstream-link:hover,
+.impact-root-cause-link:hover,
+.impact-path-node-link:hover {
+    text-decoration: underline;
+}
+
+.impact-upstream-group-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.impact-path-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.impact-path-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--border, #e5edf6);
+    border-radius: 12px;
+    background: var(--surface-muted, #f8fafc);
+}
+
+.impact-path-item-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.impact-root-cause {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+}
+
+.impact-root-cause-label {
+    color: var(--muted, #667085);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.impact-path-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+}
+
+.impact-path-label {
+    flex: 0 0 auto;
+    color: var(--muted, #667085);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.8;
+}
+
+.impact-path {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+}
+
+.impact-path-node {
+    display: inline-flex;
+    align-items: center;
+    max-width: 180px;
+    min-height: 22px;
+    padding: 2px 8px;
+    border: 1px solid var(--border, #e5edf6);
+    border-radius: 999px;
+    background: #ffffff;
+    color: var(--text, #101828);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+button.impact-path-node {
+    cursor: pointer;
+}
+
+.impact-path-node-cycle {
+    border-color: #f79009;
+    background: #fffaeb;
+    color: #b54708;
+}
+
+.impact-path-arrow {
+    color: var(--muted, #667085);
+    font-size: 12px;
+    line-height: 1;
+}
+
+.impact-issue-flags {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.impact-flag {
+    display: inline-flex;
+    align-items: center;
+    min-height: 20px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #ffffff;
+    color: var(--muted, #667085);
+    font-size: 12px;
+    line-height: 1.2;
+}
+
+.impact-flag-warning {
+    background: #fffaeb;
+    color: #b54708;
+}

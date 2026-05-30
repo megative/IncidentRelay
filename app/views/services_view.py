@@ -1306,62 +1306,38 @@ def _dependency_downstream_impact_status(dependency, upstream_status):
     return upstream_status
 
 
-def _apply_dependency_impact(row, dependencies, rows_by_service):
-    """Apply direct dependency impact to a service row."""
-    upstream_issues = []
+def _apply_dependency_impact(row, dependencies, rows_by_service, dependencies_by_service=None):
+    """Apply dependency impact and attach full dependency paths."""
+    dependencies_by_service = dependencies_by_service or {}
 
-    for dependency in dependencies:
-        if not dependency.enabled:
-            continue
+    service_id = row["service_id"]
 
-        target = dependency.depends_on_service
-        if not target or not target.enabled:
-            continue
+    upstream_issues = _build_dependency_issue_paths(
+        service_id=service_id,
+        rows_by_service=rows_by_service,
+        dependencies_by_service=dependencies_by_service,
+        path_service_ids={service_id},
+        depth=0,
+        max_depth=SERVICE_IMPACT_MAX_DEPTH,
+    )
 
-        error = require_team_read(target.team_id)
-        if error:
-            continue
+    # Keep only issues from direct dependencies passed to this row.
+    direct_dependency_ids = {
+        dependency.id
+        for dependency in dependencies
+        if dependency.enabled
+    }
 
-        target_row = rows_by_service.get(target.id)
-        upstream_status = (
-            target_row["effective_status"]
-            if target_row
-            else target.status or "unknown"
-        )
-
-        if upstream_status == "operational":
-            continue
-
-        impact_status = _dependency_downstream_impact_status(
-            dependency,
-            upstream_status,
-        )
-
-        contributes_to_impact = impact_status != "operational"
-
-        upstream_issues.append({
-            "dependency_id": dependency.id,
-            "dependency_type": dependency.dependency_type,
-            "criticality": dependency.criticality,
-            "description": dependency.description,
-
-            "service_id": target.id,
-            "service_name": target.name,
-            "service_slug": target.slug,
-
-            "team_id": target.team_id,
-            "team_name": target.team.name if target.team else None,
-            "team_slug": target.team.slug if target.team else None,
-
-            "status": upstream_status,
-            "impact_status": impact_status,
-            "contributes_to_impact": contributes_to_impact,
-        })
+    upstream_issues = [
+        issue
+        for issue in upstream_issues
+        if issue.get("dependency_id") in direct_dependency_ids
+    ]
 
     contributing_statuses = [
         issue["impact_status"]
         for issue in upstream_issues
-        if issue["contributes_to_impact"]
+        if issue.get("contributes_to_impact")
     ]
 
     dependency_impact_status = _worst_service_status(contributing_statuses)
@@ -1442,6 +1418,268 @@ def _collect_dependency_impact_context(services, max_depth=SERVICE_IMPACT_MAX_DE
     return services_by_id, dependencies_by_service
 
 
+def _service_display_name(service):
+    """Return service display name using name first, then slug."""
+    if not service:
+        return "-"
+
+    return service.name or service.slug or f"Service #{service.id}"
+
+
+def _team_display_name(team):
+    """Return team display name using name first, then slug."""
+    if not team:
+        return "-"
+
+    return team.name or team.slug or f"Team #{team.id}"
+
+
+def _service_path_node(service, row=None, dependency=None, *, cycle=False):
+    """Build a dependency path node."""
+    team = service.team if service else None
+
+    return {
+        "service_id": service.id if service else None,
+        "service_name": service.name if service else None,
+        "service_slug": service.slug if service else None,
+        "service_display": _service_display_name(service),
+
+        "team_id": team.id if team else None,
+        "team_name": team.name if team else None,
+        "team_slug": team.slug if team else None,
+        "team_display": _team_display_name(team),
+
+        "status": (
+            row.get("effective_status")
+            if row
+            else service.status if service else "unknown"
+        ),
+
+        "dependency_id": dependency.id if dependency else None,
+        "dependency_type": dependency.dependency_type if dependency else None,
+        "criticality": dependency.criticality if dependency else None,
+        "cycle": cycle,
+    }
+
+
+def _service_has_own_or_alert_impact(row):
+    """Return true when service itself is a root cause candidate."""
+    if not row:
+        return False
+
+    return (
+        row.get("own_status") not in {None, "operational", "disabled"}
+        or row.get("has_alert_impact") is True
+    )
+
+
+def _make_dependency_issue(
+    *,
+    direct_dependency,
+    direct_service,
+    direct_row,
+    path,
+    impact_status,
+    contributes_to_impact,
+    cycle_detected=False,
+    depth_limited=False,
+):
+    """Build one upstream issue with full dependency path."""
+    root = path[-1] if path else None
+
+    return {
+        "dependency_id": direct_dependency.id,
+        "dependency_type": direct_dependency.dependency_type,
+        "criticality": direct_dependency.criticality,
+        "description": direct_dependency.description,
+
+        # Direct upstream service. Kept for backward compatibility with UI.
+        "service_id": direct_service.id,
+        "service_name": direct_service.name,
+        "service_slug": direct_service.slug,
+        "service_display": _service_display_name(direct_service),
+
+        "team_id": direct_service.team_id,
+        "team_name": direct_service.team.name if direct_service.team else None,
+        "team_slug": direct_service.team.slug if direct_service.team else None,
+        "team_display": _team_display_name(direct_service.team),
+
+        # Effective status of direct upstream.
+        "status": direct_row.get("effective_status") if direct_row else direct_service.status,
+
+        # What this dependency contributes to downstream.
+        "impact_status": impact_status,
+        "contributes_to_impact": contributes_to_impact,
+
+        # Full path metadata.
+        "path": path,
+        "depth": max(len(path) - 1, 0),
+        "cycle_detected": cycle_detected,
+        "depth_limited": depth_limited,
+
+        # Root cause metadata.
+        "root_cause_service_id": root.get("service_id") if root else direct_service.id,
+        "root_cause_service_name": root.get("service_name") if root else direct_service.name,
+        "root_cause_service_slug": root.get("service_slug") if root else direct_service.slug,
+        "root_cause_service_display": (
+            root.get("service_display")
+            if root
+            else _service_display_name(direct_service)
+        ),
+        "root_cause_status": root.get("status") if root else (
+            direct_row.get("effective_status") if direct_row else direct_service.status
+        ),
+    }
+
+
+def _build_dependency_issue_paths(
+    *,
+    service_id,
+    rows_by_service,
+    dependencies_by_service,
+    path_service_ids=None,
+    depth=0,
+    max_depth=SERVICE_IMPACT_MAX_DEPTH,
+):
+    """
+    Return dependency issue paths for service_id.
+
+    Each result describes one root-cause path visible from this service:
+
+        Frontend -> Billing API -> PostgreSQL
+
+    The returned path excludes the current service and starts with its direct
+    upstream dependency.
+    """
+    path_service_ids = set(path_service_ids or [])
+    issues = []
+
+    if depth >= max_depth:
+        return issues
+
+    dependencies = dependencies_by_service.get(service_id, [])
+
+    for dependency in dependencies:
+        if not dependency.enabled:
+            continue
+
+        target = dependency.depends_on_service
+        if not target or not target.enabled:
+            continue
+
+        error = require_team_read(target.team_id)
+        if error:
+            continue
+
+        target_row = rows_by_service.get(target.id)
+        target_status = (
+            target_row.get("effective_status")
+            if target_row
+            else target.status or "unknown"
+        )
+
+        impact_status = _dependency_downstream_impact_status(
+            dependency,
+            target_status,
+        )
+        contributes_to_impact = impact_status != "operational"
+
+        target_node = _service_path_node(
+            target,
+            target_row,
+            dependency,
+        )
+
+        if target.id in path_service_ids:
+            cycle_node = _service_path_node(
+                target,
+                target_row,
+                dependency,
+                cycle=True,
+            )
+            issues.append(
+                _make_dependency_issue(
+                    direct_dependency=dependency,
+                    direct_service=target,
+                    direct_row=target_row,
+                    path=[cycle_node],
+                    impact_status="operational",
+                    contributes_to_impact=False,
+                    cycle_detected=True,
+                )
+            )
+            continue
+
+        next_path_service_ids = set(path_service_ids)
+        next_path_service_ids.add(target.id)
+
+        child_issues = _build_dependency_issue_paths(
+            service_id=target.id,
+            rows_by_service=rows_by_service,
+            dependencies_by_service=dependencies_by_service,
+            path_service_ids=next_path_service_ids,
+            depth=depth + 1,
+            max_depth=max_depth,
+        )
+
+        # If the target has its own/manual/alert impact, it is a root cause.
+        if target_status != "operational" and _service_has_own_or_alert_impact(target_row):
+            issues.append(
+                _make_dependency_issue(
+                    direct_dependency=dependency,
+                    direct_service=target,
+                    direct_row=target_row,
+                    path=[target_node],
+                    impact_status=impact_status,
+                    contributes_to_impact=contributes_to_impact,
+                )
+            )
+
+        # If target is impacted by deeper dependencies, prepend target to each path.
+        for child_issue in child_issues:
+            child_path = child_issue.get("path") or []
+            full_path = [target_node] + child_path
+
+            issues.append(
+                _make_dependency_issue(
+                    direct_dependency=dependency,
+                    direct_service=target,
+                    direct_row=target_row,
+                    path=full_path,
+                    impact_status=impact_status,
+                    contributes_to_impact=contributes_to_impact,
+                    cycle_detected=bool(child_issue.get("cycle_detected")),
+                    depth_limited=bool(child_issue.get("depth_limited")),
+                )
+            )
+
+        # If target is non-operational but has no own/alert root and no child path,
+        # keep it visible as a terminal upstream issue.
+        if (
+            target_status != "operational"
+            and not _service_has_own_or_alert_impact(target_row)
+            and not child_issues
+        ):
+            depth_limited = (
+                depth + 1 >= max_depth
+                and bool(dependencies_by_service.get(target.id))
+            )
+
+            issues.append(
+                _make_dependency_issue(
+                    direct_dependency=dependency,
+                    direct_service=target,
+                    direct_row=target_row,
+                    path=[target_node],
+                    impact_status=impact_status,
+                    contributes_to_impact=contributes_to_impact,
+                    depth_limited=depth_limited,
+                )
+            )
+
+    return issues
+
+
 def _compute_service_impact_row(
     service_id,
     rows_by_service,
@@ -1482,6 +1720,7 @@ def _compute_service_impact_row(
         row,
         dependencies_by_service.get(service_id, []),
         rows_by_service,
+        dependencies_by_service=dependencies_by_service,
     )
 
     state[service_id] = "done"

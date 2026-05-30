@@ -132,7 +132,6 @@ body.md-theme .grid-two {
 body.md-theme .side-column {
   display: flex;
   flex-direction: column;
-  gap: 20px;
 }
 
 body.md-theme .bottom-grid {

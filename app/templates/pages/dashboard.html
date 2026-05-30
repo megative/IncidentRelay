@@ -1,5 +1,5 @@
-<link rel="stylesheet" href="{{ url_for('static', filename='css/overview.css') }}">
 <script src="/static/js/pages/dashboard.js"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/overview.css') }}">
 <div class="first-div-page-layout page-stack">
   {% set summary_id = "overview-alerts-summary" %}
   {% include 'pages/include/alerts_summary_grid.html' %}
@@ -46,53 +46,73 @@
     </div>
 
     <aside class="side-column">
-      <div class="card dashboard-status-card">
-        <div class="card-header">
-          <div>
-            <h2>System status</h2>
-            <div class="card-subtitle">
-              Current operational summary
+        <div class="card dashboard-status-card">
+            <div class="card-header">
+                <div>
+                    <h2>System status</h2>
+                    <div class="card-subtitle">
+                        Current operational summary
+                    </div>
+                </div>
             </div>
-          </div>
-        </div>
 
-        <div class="dashboard-status-body">
-          <div class="dashboard-status-icon">●</div>
-          <div id="dashboard-system-status" class="dashboard-status-text">
-            Waiting for data...
-          </div>
-        </div>
-      </div>
+            <div class="dashboard-status-body">
+                <div class="dashboard-status-icon">●</div>
 
-      <div class="card dashboard-list-card">
-        <div class="card-header">
-          <div>
-            <h2>Recent alerts</h2>
-            <div class="card-subtitle">
-              Last activity
+                <div id="dashboard-system-status" class="dashboard-status-text">
+                    Waiting for data...
+                </div>
             </div>
-          </div>
-
-          <a href="/alerts" class="btn btn-small">
-            View all
-          </a>
         </div>
 
-        <div id="dashboard-recent-alerts" class="dashboard-list"></div>
-      </div>
+        <div class="card dashboard-list-card dashboard-impact-card">
+            <div class="card-header">
+                <div>
+                    <h2>Impacted services</h2>
+                    <div class="card-subtitle">
+                        Service impact from alerts and dependencies
+                        <span id="dashboard-impacted-services-count" class="overview-count-badge">0</span>
+                    </div>
+                </div>
 
-      <div class="card dashboard-list-card">
-        <div class="card-header">
-          <div>
-            <h2>Teams involved now</h2>
-            <div class="card-subtitle">
-              Based on active alerts
+                <a href="/services" class="btn btn-small">
+                    View all
+                </a>
             </div>
-          </div>
+
+            <div id="dashboard-service-impact" class="dashboard-list"></div>
         </div>
 
-        <div id="dashboard-teams-now" class="dashboard-list"></div>
-      </div>
+        <div class="card dashboard-list-card">
+            <div class="card-header">
+                <div>
+                    <h2>Recent alerts</h2>
+                    <div class="card-subtitle">
+                        Last activity
+                    </div>
+                </div>
+
+                <a href="/alerts" class="btn btn-small">
+                    View all
+                </a>
+            </div>
+
+            <div id="dashboard-recent-alerts" class="dashboard-list"></div>
+        </div>
+
+        <div class="card dashboard-list-card">
+            <div class="card-header">
+                <div>
+                    <h2>Teams involved now</h2>
+
+                    <div class="card-subtitle">
+                        Based on active alerts
+                    </div>
+                </div>
+            </div>
+
+            <div id="dashboard-teams-now" class="dashboard-list"></div>
+        </div>
     </aside>
   </section>
 

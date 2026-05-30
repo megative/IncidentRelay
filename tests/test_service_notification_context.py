@@ -169,3 +169,93 @@ def test_disabled_links_and_runbooks_are_not_included():
     lines = format_service_context_plain(alert)
 
     assert lines == []
+
+
+def test_format_alert_message_includes_integration_runbook_url():
+    group = create_group()
+    team = create_team(group, name="Infra", slug="infra")
+    service = create_service(team, name="RabbitMQ Cloud", slug="rabbitmq-cloud")
+    route = create_route(team, service=service)
+
+    alert = Alert.create(
+        route=route,
+        team=team,
+        service=service,
+        source="alertmanager",
+        external_id="integration-runbook-test",
+        dedup_key="integration-runbook-test",
+        group_key="integration-runbook-test",
+        title="RabbitMQ Cluster Partition",
+        message="RabbitMQ cluster partition detected",
+        severity="critical",
+        status="firing",
+        labels={
+            "alertname": "RabbitMQClusterPartition",
+            "severity": "critical",
+            "job": "RabbitMQ",
+        },
+        payload={
+            "status": "firing",
+            "labels": {
+                "alertname": "RabbitMQClusterPartition",
+                "severity": "critical",
+                "job": "RabbitMQ",
+            },
+            "annotations": {
+                "summary": "RabbitMQ Cluster Partition",
+                "description": "RabbitMQ cluster partition detected",
+                "runbook_url": (
+                    "https://docs.example.com/runbooks/rabbitmq/cluster-partition"
+                ),
+                "runbook_title": "RabbitMQ cluster partition",
+            },
+        },
+    )
+
+    text = format_alert_message(alert)
+
+    assert "Runbooks:" in text
+    assert (
+        "RabbitMQ cluster partition (critical): "
+        "https://docs.example.com/runbooks/rabbitmq/cluster-partition"
+    ) in text
+
+
+def test_format_alert_message_includes_integration_runbook_without_service():
+    group = create_group()
+    team = create_team(group, name="Infra", slug="infra")
+    route = create_route(team)
+
+    alert = Alert.create(
+        route=route,
+        team=team,
+        source="alertmanager",
+        external_id="integration-runbook-no-service-test",
+        dedup_key="integration-runbook-no-service-test",
+        group_key="integration-runbook-no-service-test",
+        title="DiskFull",
+        message="/var is full",
+        severity="warning",
+        status="firing",
+        labels={
+            "alertname": "DiskFull",
+            "severity": "warning",
+        },
+        payload={
+            "annotations": {
+                "runbook_url": "https://docs.example.com/runbooks/linux/disk-full",
+            },
+            "labels": {
+                "alertname": "DiskFull",
+                "severity": "warning",
+            },
+        },
+    )
+
+    text = format_alert_message(alert)
+
+    assert "Runbooks:" in text
+    assert (
+        "Integration runbook (warning): "
+        "https://docs.example.com/runbooks/linux/disk-full"
+    ) in text

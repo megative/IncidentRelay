@@ -204,13 +204,46 @@ Dependencies are used by service impact views to show whether a service may be a
 
 ## Service impact
 
-Service impact combines:
+Service impact is computed from four values:
 
-- manual service status
-- open alerts
-- critical open alerts
-- warning open alerts
-- upstream dependency issues
+| Field | Meaning |
+|---|---|
+| `own_status` | Manual/current service status |
+| `alert_impact_status` | Impact from open firing or acknowledged alerts |
+| `dependency_impact_status` | Impact from upstream dependencies |
+| `effective_status` | Worst status from own, alert and dependency impact |
+
+Resolved and silenced alerts do not affect service impact.
+
+Dependency impact respects dependency type and criticality:
+
+| Dependency | Effect |
+|---|---|
+| `hard` + `required` | Can propagate major outage |
+| `soft` / `important` | Reduces severe upstream impact |
+| `optional` | Maximum downstream impact is degraded |
+| `informational` | Visible in upstream issues, but does not change effective status |
+
+Impact is calculated through upstream dependencies up to the configured impact depth.
+
+
+### Dependency paths
+
+When impact is propagated through multiple upstream dependencies, IncidentRelay shows the full dependency path.
+
+Example:
+
+```text
+Frontend Web -> Billing API -> PostgreSQL Prod
+
+root_cause_* points to the last affected service in the path.
+
+path contains upstream services from the direct dependency to the root cause.
+
+cycle_detected is true when a dependency cycle was found.
+
+depth_limited is true when traversal stopped at the configured impact depth.
+```
 
 The API exposes this through:
 

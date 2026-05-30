@@ -484,6 +484,84 @@ SERVICE_ANALYTICS_SCHEMA = {
     },
 }
 
+SERVICE_UPSTREAM_ISSUE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "dependency_id": {"type": "integer"},
+        "dependency_type": {
+            "type": "string",
+            "enum": SERVICE_DEPENDENCY_TYPES,
+        },
+        "criticality": {
+            "type": "string",
+            "enum": SERVICE_DEPENDENCY_CRITICALITIES,
+        },
+        "description": {"type": "string", "nullable": True},
+
+        "service_id": {"type": "integer"},
+        "service_name": {"type": "string", "nullable": True},
+        "service_slug": {"type": "string", "nullable": True},
+
+        "team_id": {"type": "integer"},
+        "team_name": {"type": "string", "nullable": True},
+        "team_slug": {"type": "string", "nullable": True},
+
+        "status": {"type": "string", "enum": SERVICE_STATUSES},
+        "impact_status": {"type": "string", "enum": SERVICE_STATUSES},
+        "contributes_to_impact": {"type": "boolean"},
+    },
+    "path": {
+    "type": "array",
+    "description": (
+        "Dependency path from direct upstream service to root cause. "
+        "The current affected service is not included in this array."
+    ),
+    "items": {
+        "type": "object",
+        "properties": {
+            "service_id": {"type": "integer", "nullable": True},
+            "service_name": {"type": "string", "nullable": True},
+            "service_slug": {"type": "string", "nullable": True},
+            "service_display": {"type": "string"},
+            "team_id": {"type": "integer", "nullable": True},
+            "team_name": {"type": "string", "nullable": True},
+            "team_slug": {"type": "string", "nullable": True},
+            "team_display": {"type": "string"},
+            "status": {"type": "string", "enum": SERVICE_STATUSES},
+            "dependency_id": {"type": "integer", "nullable": True},
+            "dependency_type": {
+                "type": "string",
+                "nullable": True,
+                "enum": SERVICE_DEPENDENCY_TYPES,
+            },
+            "criticality": {
+                "type": "string",
+                "nullable": True,
+                "enum": SERVICE_DEPENDENCY_CRITICALITIES,
+            },
+            "cycle": {"type": "boolean"},
+        },
+    },
+},
+    "depth": {
+    "type": "integer",
+    "description": "Number of dependency hops represented by path.",
+},
+    "cycle_detected": {
+    "type": "boolean",
+    "description": "Whether this path includes a dependency cycle.",
+},
+    "depth_limited": {
+    "type": "boolean",
+    "description": "Whether dependency traversal stopped at configured impact depth.",
+},
+    "root_cause_service_id": {"type": "integer", "nullable": True},
+    "root_cause_service_name": {"type": "string", "nullable": True},
+    "root_cause_service_slug": {"type": "string", "nullable": True},
+    "root_cause_service_display": {"type": "string", "nullable": True},
+    "root_cause_status": {"type": "string", "enum": SERVICE_STATUSES},
+}
+
 
 SERVICE_IMPACT_SCHEMA = {
     "type": "object",
@@ -494,10 +572,26 @@ SERVICE_IMPACT_SCHEMA = {
         "team_id": {"type": "integer"},
         "team_name": {"type": "string", "nullable": True},
         "team_slug": {"type": "string", "nullable": True},
-        "own_status": {"type": "string", "enum": SERVICE_STATUSES},
-        "alert_impact_status": {"type": "string", "enum": SERVICE_STATUSES},
-        "dependency_impact_status": {"type": "string", "enum": SERVICE_STATUSES},
-        "effective_status": {"type": "string", "enum": SERVICE_STATUSES},
+        "own_status": {
+            "type": "string",
+            "enum": SERVICE_STATUSES,
+            "description": "Manual/current status stored on the service.",
+        },
+        "alert_impact_status": {
+            "type": "string",
+            "enum": SERVICE_STATUSES,
+            "description": "Computed impact from open firing or acknowledged alerts.",
+        },
+        "dependency_impact_status": {
+            "type": "string",
+            "enum": SERVICE_STATUSES,
+            "description": "Computed impact from upstream dependencies.",
+        },
+        "effective_status": {
+            "type": "string",
+            "enum": SERVICE_STATUSES,
+            "description": "Worst status from own_status, alert_impact_status and dependency_impact_status.",
+        },
         "has_alert_impact": {"type": "boolean"},
         "has_dependency_impact": {"type": "boolean"},
         "open_alerts": {"type": "integer"},
@@ -506,7 +600,7 @@ SERVICE_IMPACT_SCHEMA = {
         "upstream_issues_count": {"type": "integer"},
         "upstream_issues": {
             "type": "array",
-            "items": {"type": "object"},
+            "items": SERVICE_UPSTREAM_ISSUE_SCHEMA,
         },
         "criticality": {"type": "string", "enum": SERVICE_CRITICALITIES},
         "environment": {"type": "string", "enum": SERVICE_ENVIRONMENTS},
@@ -1006,7 +1100,7 @@ def paths():
                 "summary": "Service impact status",
                 "description": (
                     "Returns computed service impact based on manual service status, "
-                    "open alerts and direct upstream dependencies."
+                    "open alerts and upstream dependencies up to the configured impact depth."
                 ),
                 "operationId": "getServiceImpact",
                 "parameters": [

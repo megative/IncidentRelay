@@ -22,7 +22,7 @@ body.md-theme .dashboard-active-card {
 }
 
 body.md-theme .dashboard-alerts-wrapper {
-  max-height: 620px;
+  max-height: 1000px;
   overflow: auto;
 }
 
@@ -137,7 +137,6 @@ body.md-theme .overview-list-dot {
   height: 10px;
   flex: 0 0 10px;
   border-radius: 999px;
-  background: var(--md-muted);
 }
 
 body.md-theme .overview-dot-firing {
@@ -272,4 +271,56 @@ body.md-theme .empty-table-cell {
   body.md-theme .dashboard-bottom-grid {
     grid-template-columns: 1fr;
   }
+}
+.overview-impact-card .overview-list {
+    gap: 8px;
+}
+
+.dashboard-impact-item {
+    align-items: flex-start;
+}
+
+.dashboard-impact-title {
+    font-weight: 700;
+}
+
+.dashboard-impact-root {
+    margin-top: 4px;
+    color: var(--muted, #667085);
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.dashboard-impact-status {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    flex: 0 0 auto;
+    margin-left: 8px;
+}
+
+.dashboard-impact-more {
+    justify-content: center;
+    color: var(--muted, #667085);
+    font-weight: 700;
+}
+
+.overview-dot-major-outage {
+    background: #d92d20 !important;
+}
+
+.overview-dot-partial-outage {
+    background: #f79009 !important;
+}
+
+.overview-dot-degraded {
+    background: #fdb022 !important;
+}
+
+.overview-dot-maintenance {
+    background: #7a5af8 !important;
+}
+
+.overview-dot-unknown {
+    background: #98a2b3 !important;
 }

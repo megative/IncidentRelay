@@ -1,11 +1,28 @@
 from html import escape as html_escape
 from typing import Any
+from types import SimpleNamespace
 
 from app.modules.db import services_repo
 from app.services.matchers import match_alert
 
 
 MAX_SERVICE_CONTEXT_ITEMS = 5
+INTEGRATION_RUNBOOK_URL_KEYS = (
+    "runbook_url",
+    "runbook",
+    "runbook_link",
+    "runbookUrl",
+    "runbookURL",
+    "playbook_url",
+    "playbook",
+)
+
+INTEGRATION_RUNBOOK_TITLE_KEYS = (
+    "runbook_title",
+    "runbook_name",
+    "playbook_title",
+    "playbook_name",
+)
 
 
 def _clean(value: Any) -> str:
@@ -99,21 +116,179 @@ def _runbook_matches_alert(runbook: Any, alert: Any) -> bool:
         return False
 
 
-def get_alert_service_runbooks(alert: Any, limit: int = MAX_SERVICE_CONTEXT_ITEMS) -> list:
-    """Return enabled runbooks matching this alert."""
-    service_id = _alert_service_id(alert)
-    if not service_id:
-        return []
+def _first_text_value(*values: Any) -> str:
+    """Return first non-empty text value."""
+    for value in values:
+        text = _clean(value)
+        if text:
+            return text
+    return ""
 
-    runbooks = services_repo.list_service_runbooks(service_id=service_id)
-    matched = [
+
+def _first_mapping_value(mapping: dict, keys: tuple[str, ...]) -> Any:
+    """Return first value from mapping by known keys."""
+    if not isinstance(mapping, dict):
+        return None
+
+    for key in keys:
+        value = mapping.get(key)
+        if value not in (None, ""):
+            return value
+
+    return None
+
+
+def _integration_runbook_title(payload: dict, labels: dict, annotations: dict) -> str:
+    """Return title for runbook passed by integration payload."""
+    return _first_text_value(
+        _first_mapping_value(annotations, INTEGRATION_RUNBOOK_TITLE_KEYS),
+        _first_mapping_value(labels, INTEGRATION_RUNBOOK_TITLE_KEYS),
+        _first_mapping_value(payload, INTEGRATION_RUNBOOK_TITLE_KEYS),
+        "Integration runbook",
+    )
+
+
+def _integration_runbook_from_value(
+    value: Any,
+    *,
+    payload: dict,
+    labels: dict,
+    annotations: dict,
+    severity: str | None,
+):
+    """Build synthetic runbook object from integration-provided value."""
+    if isinstance(value, dict):
+        url = _first_text_value(
+            value.get("url"),
+            value.get("href"),
+            value.get("link"),
+        )
+        title = _first_text_value(
+            value.get("title"),
+            value.get("name"),
+            _integration_runbook_title(payload, labels, annotations),
+        )
+    else:
+        url = _clean(value)
+        title = _integration_runbook_title(payload, labels, annotations)
+
+    if not url and not title:
+        return None
+
+    return SimpleNamespace(
+        id=None,
+        title=title or "Integration runbook",
+        description=None,
+        url=url,
+        severity=severity,
+        matchers={},
+        priority=0,
+        enabled=True,
+        deleted=False,
+        source="integration",
+    )
+
+
+def get_alert_integration_runbooks(alert: Any) -> list:
+    """Return runbooks passed directly by integration payload."""
+    payload = getattr(alert, "payload", None) or {}
+    labels = getattr(alert, "labels", None) or {}
+
+    if not isinstance(payload, dict):
+        payload = {}
+
+    if not isinstance(labels, dict):
+        labels = {}
+
+    annotations = payload.get("annotations") or {}
+    if not isinstance(annotations, dict):
+        annotations = {}
+
+    severity = getattr(alert, "severity", None)
+
+    values = [
+        _first_mapping_value(annotations, INTEGRATION_RUNBOOK_URL_KEYS),
+        _first_mapping_value(labels, INTEGRATION_RUNBOOK_URL_KEYS),
+        _first_mapping_value(payload, INTEGRATION_RUNBOOK_URL_KEYS),
+    ]
+
+    # Optional structured form:
+    #
+    # "runbook": {
+    #   "title": "...",
+    #   "url": "..."
+    # }
+    structured = payload.get("runbook")
+    if isinstance(structured, dict):
+        values.insert(0, structured)
+
+    runbooks = []
+    seen = set()
+
+    for value in values:
+        if value in (None, ""):
+            continue
+
+        runbook = _integration_runbook_from_value(
+            value,
+            payload=payload,
+            labels=labels,
+            annotations=annotations,
+            severity=severity,
+        )
+
+        if not runbook:
+            continue
+
+        key = (
+            _clean(getattr(runbook, "url", None)),
+            _clean(getattr(runbook, "title", None)),
+        )
+
+        if key in seen:
+            continue
+
+        seen.add(key)
+        runbooks.append(runbook)
+
+    return runbooks
+
+
+def get_alert_service_runbooks(alert: Any, limit: int = MAX_SERVICE_CONTEXT_ITEMS) -> list:
+    """Return integration-provided and service runbooks matching this alert."""
+    integration_runbooks = get_alert_integration_runbooks(alert)
+
+    service_id = _alert_service_id(alert)
+    service_runbooks = []
+
+    if service_id:
+        service_runbooks = services_repo.list_service_runbooks(service_id=service_id)
+
+    matched_service_runbooks = [
         runbook
-        for runbook in runbooks
+        for runbook in service_runbooks
         if getattr(runbook, "enabled", True)
         and not getattr(runbook, "deleted", False)
         and _runbook_matches_alert(runbook, alert)
     ]
-    return matched[:limit]
+
+    result = []
+    seen = set()
+
+    # Put integration runbook first because it came with the exact alert.
+    for runbook in integration_runbooks + matched_service_runbooks:
+        key = (
+            _clean(getattr(runbook, "url", None)),
+            _clean(getattr(runbook, "title", None)),
+        )
+
+        if key in seen:
+            continue
+
+        seen.add(key)
+        result.append(runbook)
+
+    return result[:limit]
 
 
 def link_display_label(link: Any) -> str:

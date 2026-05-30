@@ -1463,7 +1463,7 @@ function renderServiceAnalyticsRow(row) {
                 )
         )
         .append($("<td>").text(row.team_slug || row.team_name || "-"))
-        .append($("<td>").append(renderAnalyticsServiceStatus(row.service_status)))
+        .append($("<td>").append(renderImpactStatusBadge(row.service_status)))
         .append($("<td>").text(row.service_criticality || "-"))
         .append($("<td>").text(row.open_alerts || 0))
         .append($("<td>").text(row.firing_alerts || 0))
@@ -1473,24 +1473,6 @@ function renderServiceAnalyticsRow(row) {
         .append($("<td>").text(formatDateTime(row.last_alert_at) || "-"));
 }
 
-
-function renderAnalyticsServiceStatus(status) {
-    const normalized = status || "unknown";
-
-    if (normalized === "operational") {
-        return $("<span>").addClass("status-pill status-active").text("Operational");
-    }
-
-    if (normalized === "maintenance") {
-        return $("<span>").addClass("status-pill status-scheduled").text("Maintenance");
-    }
-
-    if (["degraded", "partial_outage", "major_outage"].indexOf(normalized) !== -1) {
-        return $("<span>").addClass("status-pill status-inactive").text(normalized.replace(/_/g, " "));
-    }
-
-    return $("<span>").addClass("status-pill status-neutral").text(normalized.replace(/_/g, " "));
-}
 $(document).on("input", "#service-analytics-search", renderServiceAnalyticsTable);
 $(document).on("change", "#service-analytics-days", refreshServiceAnalytics);
 $(document).on("click", "#reload-service-analytics", refreshServiceAnalytics);
@@ -1614,8 +1596,9 @@ function getImpactIssuesLabel(row) {
             : "";
 
         return [
-            getImpactIssueTeamDisplayName(issue),
-            getImpactIssueServiceDisplayName(issue),
+            "direct=" + getPathNodeDisplayName(getIssueDirectNode(issue)),
+            "root=" + getIssueRootCauseLabel(issue),
+            "path=" + getIssuePathLabel(issue),
             (issue.status || "unknown") + impact,
             issue.dependency_type || "dependency",
             issue.criticality || "important"
@@ -1628,27 +1611,16 @@ function renderImpactStatusBadge(status) {
     const normalized = status || "unknown";
     const label = formatImpactStatusText(normalized);
 
-    if (normalized === "operational") {
-        return $("<span>").addClass("status-pill status-active").text("Operational");
-    }
-
-    if (normalized === "maintenance") {
-        return $("<span>").addClass("status-pill status-scheduled").text("Maintenance");
-    }
-
-    if (["degraded", "partial_outage", "major_outage"].indexOf(normalized) !== -1) {
-        return $("<span>")
-            .addClass("status-pill status-inactive")
-            .text(label);
-    }
-
-    if (normalized === "disabled") {
-        return renderStatusBadge(false, "Enabled", "Disabled");
-    }
-
     return $("<span>")
-        .addClass("status-pill status-neutral")
-        .text(label);
+        .addClass("status-pill impact-status-pill")
+        .addClass(impactStatusCssClass(normalized))
+        .text(
+            normalized === "operational"
+                ? "Operational"
+                : normalized === "maintenance"
+                    ? "Maintenance"
+                    : label
+        );
 }
 $(document).on("input", "#service-impact-search", renderServiceImpactTable);
 $(document).on("click", "#reload-service-impact", refreshServiceImpact);
@@ -1732,62 +1704,334 @@ function renderImpactUpstreamIssues(row) {
     }
 
     const list = $("<div>").addClass("impact-upstream-list");
+    const groups = groupImpactIssuesByDirectUpstream(issues);
 
-    issues.forEach(function (issue) {
-        const item = $("<div>")
-            .addClass("impact-upstream-item")
-            .toggleClass("impact-upstream-muted", issue.contributes_to_impact === false);
+    groups.forEach(function (group) {
+        list.append(renderImpactUpstreamGroup(group));
+    });
 
-        const title = $("<div>")
-            .addClass("impact-upstream-title")
+    return list;
+}
+function getIssuePath(issue) {
+    return asArray(issue.path);
+}
+
+function getIssueDirectNode(issue) {
+    const path = getIssuePath(issue);
+
+    if (path.length) {
+        return path[0];
+    }
+
+    return {
+        service_id: issue.service_id,
+        service_name: issue.service_name,
+        service_slug: issue.service_slug,
+        service_display: issue.service_display,
+        team_id: issue.team_id,
+        team_name: issue.team_name,
+        team_slug: issue.team_slug,
+        team_display: issue.team_display,
+        status: issue.status,
+        dependency_id: issue.dependency_id,
+        dependency_type: issue.dependency_type,
+        criticality: issue.criticality,
+    };
+}
+
+function getPathNodeDisplayName(node) {
+    return displayName(
+        node.service_name,
+        node.service_slug,
+        node.service_display || "-"
+    );
+}
+
+function getPathNodeTeamDisplayName(node) {
+    return displayName(
+        node.team_name,
+        node.team_slug,
+        node.team_display || "-"
+    );
+}
+
+function getIssueRootCauseLabel(issue) {
+    return displayName(
+        issue.root_cause_service_name,
+        issue.root_cause_service_slug,
+        issue.root_cause_service_display || getImpactIssueServiceDisplayName(issue)
+    );
+}
+
+function getIssuePathLabel(issue) {
+    const path = getIssuePath(issue);
+
+    if (!path.length) {
+        return getImpactIssueServiceDisplayName(issue);
+    }
+
+    return path.map(getPathNodeDisplayName).join(" → ");
+}
+
+function openServiceFromImpact(serviceId) {
+    if (!serviceId) {
+        return;
+    }
+
+    const service = getServiceById(serviceId);
+
+    if (!service) {
+        return;
+    }
+
+    selectedServiceDetailsId = service.id;
+    switchServicesPageTab("services");
+    renderServiceDetails(service);
+}
+
+function renderImpactServiceNode(node) {
+    const label = getPathNodeDisplayName(node);
+    const service = getServiceById(node.service_id);
+
+    const element = service
+        ? $("<button>")
+            .attr("type", "button")
+            .addClass("impact-path-node impact-path-node-link")
+            .on("click", function () {
+                openServiceFromImpact(node.service_id);
+            })
+        : $("<span>").addClass("impact-path-node");
+
+    element
+        .toggleClass("impact-path-node-cycle", !!node.cycle)
+        .attr("title", [
+            getPathNodeTeamDisplayName(node),
+            node.status || "unknown"
+        ].join(" / "))
+        .text(label);
+
+    return element;
+}
+
+function renderImpactPath(issue) {
+    const path = getIssuePath(issue);
+
+    if (!path.length) {
+        return $("<div>")
+            .addClass("impact-path")
+            .append(renderImpactServiceNode(getIssueDirectNode(issue)));
+    }
+
+    const wrapper = $("<div>").addClass("impact-path");
+
+    path.forEach(function (node, index) {
+        if (index > 0) {
+            wrapper.append(
+                $("<span>")
+                    .addClass("impact-path-arrow")
+                    .text("→")
+            );
+        }
+
+        wrapper.append(renderImpactServiceNode(node));
+    });
+
+    return wrapper;
+}
+
+function renderImpactIssueFlags(issue) {
+    const wrapper = $("<div>").addClass("impact-issue-flags");
+
+    if (issue.cycle_detected) {
+        wrapper.append(
+            $("<span>")
+                .addClass("impact-flag impact-flag-warning")
+                .text("cycle detected")
+        );
+    }
+
+    if (issue.depth_limited) {
+        wrapper.append(
+            $("<span>")
+                .addClass("impact-flag impact-flag-warning")
+                .text("depth limit")
+        );
+    }
+
+    if (issue.contributes_to_impact === false) {
+        wrapper.append(
+            $("<span>")
+                .addClass("impact-flag")
+                .text("visible only")
+        );
+    }
+
+    return wrapper;
+}
+
+function groupImpactIssuesByDirectUpstream(issues) {
+    const groupsByKey = new Map();
+
+    asArray(issues).forEach(function (issue) {
+        const directNode = getIssueDirectNode(issue);
+        const key = directNode.service_id
+            ? "service:" + directNode.service_id
+            : "service:" + getPathNodeDisplayName(directNode);
+
+        if (!groupsByKey.has(key)) {
+            groupsByKey.set(key, {
+                directNode: directNode,
+                issues: [],
+            });
+        }
+
+        groupsByKey.get(key).issues.push(issue);
+    });
+
+    return Array.from(groupsByKey.values());
+}
+
+function renderImpactIssuePathItem(issue) {
+    const item = $("<div>")
+        .addClass("impact-path-item")
+        .toggleClass("impact-upstream-muted", issue.contributes_to_impact === false);
+
+    const header = $("<div>").addClass("impact-path-item-header");
+
+    header.append(
+        $("<div>")
+            .addClass("impact-root-cause")
             .append(
                 $("<span>")
-                    .addClass("impact-upstream-service")
-                    .text(getImpactIssueServiceDisplayName(issue))
+                    .addClass("impact-root-cause-label")
+                    .text("Root cause")
+            )
+            .append(
+                $("<button>")
+                    .attr("type", "button")
+                    .addClass("impact-root-cause-link")
+                    .text(getIssueRootCauseLabel(issue))
+                    .on("click", function () {
+                        openServiceFromImpact(issue.root_cause_service_id);
+                    })
+            )
+    );
+
+    const meta = $("<div>").addClass("impact-upstream-meta");
+
+    meta.append(renderImpactStatusBadge(issue.status));
+
+    if (issue.impact_status && issue.impact_status !== issue.status) {
+        meta.append(
+            $("<span>")
+                .addClass("impact-arrow")
+                .text("→")
+        );
+        meta.append(renderImpactStatusBadge(issue.impact_status));
+    }
+
+    meta.append(
+        $("<span>")
+            .addClass("impact-dependency-meta")
+            .text(
+                [
+                    issue.dependency_type || "dependency",
+                    issue.criticality || "important",
+                    "depth " + Number(issue.depth || 0)
+                ].join(" / ")
+            )
+    );
+
+    header.append(meta);
+    item.append(header);
+
+    item.append(
+        $("<div>")
+            .addClass("impact-path-row")
+            .append(
+                $("<span>")
+                    .addClass("impact-path-label")
+                    .text("Path")
+            )
+            .append(renderImpactPath(issue))
+    );
+
+    const flags = renderImpactIssueFlags(issue);
+    if (flags.children().length) {
+        item.append(flags);
+    }
+
+    if (issue.description) {
+        item.append(
+            $("<div>")
+                .addClass("impact-upstream-description")
+                .text(issue.description)
+        );
+    }
+
+    return item;
+}
+
+function renderImpactUpstreamGroup(group) {
+    const directNode = group.directNode;
+    const wrapper = $("<div>").addClass("impact-upstream-group");
+
+    const directStatus = directNode.status || "unknown";
+
+    const header = $("<div>").addClass("impact-upstream-group-header");
+
+    header.append(
+        $("<div>")
+            .addClass("impact-upstream-group-title")
+            .append(
+                $("<button>")
+                    .attr("type", "button")
+                    .addClass("impact-direct-upstream-link")
+                    .text(getPathNodeDisplayName(directNode))
+                    .on("click", function () {
+                        openServiceFromImpact(directNode.service_id);
+                    })
             )
             .append(
                 $("<span>")
                     .addClass("impact-upstream-team")
-                    .text(getImpactIssueTeamDisplayName(issue))
-            );
+                    .text(getPathNodeTeamDisplayName(directNode))
+            )
+    );
 
-        const meta = $("<div>").addClass("impact-upstream-meta");
-
-        meta.append(renderImpactStatusBadge(issue.status));
-
-        if (issue.impact_status && issue.impact_status !== issue.status) {
-            meta.append(
+    header.append(
+        $("<div>")
+            .addClass("impact-upstream-group-meta")
+            .append(renderImpactStatusBadge(directStatus))
+            .append(
                 $("<span>")
-                    .addClass("impact-arrow")
-                    .text("→")
-            );
-            meta.append(renderImpactStatusBadge(issue.impact_status));
-        }
+                    .addClass("impact-dependency-meta")
+                    .text(group.issues.length + " root cause" + (group.issues.length === 1 ? "" : "s"))
+            )
+    );
 
-        meta.append(
-            $("<span>")
-                .addClass("impact-dependency-meta")
-                .text(
-                    [
-                        issue.dependency_type || "dependency",
-                        issue.criticality || "important"
-                    ].join(" / ")
-                )
-        );
+    wrapper.append(header);
 
-        item.append(title);
-        item.append(meta);
+    const paths = $("<div>").addClass("impact-path-list");
 
-        if (issue.description) {
-            item.append(
-                $("<div>")
-                    .addClass("impact-upstream-description")
-                    .text(issue.description)
-            );
-        }
-
-        list.append(item);
+    group.issues.forEach(function (issue) {
+        paths.append(renderImpactIssuePathItem(issue));
     });
 
-    return list;
+    wrapper.append(paths);
+
+    return wrapper;
+}
+function impactStatusCssClass(status) {
+    const normalized = status || "unknown";
+
+    return {
+        major_outage: "impact-status-major",
+        partial_outage: "impact-status-partial",
+        degraded: "impact-status-degraded",
+        maintenance: "impact-status-maintenance",
+        operational: "impact-status-operational",
+        disabled: "impact-status-neutral",
+        unknown: "impact-status-neutral"
+    }[normalized] || "impact-status-neutral";
 }
