@@ -122,7 +122,12 @@ def match_alert(alert_data, matchers):
     labels = alert_data.get("labels") or {}
 
     for label_name, expected_value in (matchers.get("labels") or {}).items():
-        if not match_value(labels.get(label_name), expected_value):
+        actual_value = labels.get(label_name)
+
+        if actual_value is None and label_name in {"severity", "status"}:
+            actual_value = alert_data.get(label_name)
+
+        if not match_value(actual_value, expected_value):
             return False
 
     for field_name, expected_value in (matchers.get("fields") or {}).items():

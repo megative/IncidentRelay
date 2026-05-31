@@ -207,7 +207,6 @@ def can_respond_team(user, team_id):
 
 
 def can_write_team(user, team_id):
-    """Return True when a user can write team resources."""
     if not user:
         return False
 
@@ -218,12 +217,6 @@ def can_write_team(user, team_id):
 
     if not team or not team.group_id:
         return False
-
-    if can_write_group(user, team.group_id):
-        return True
-
-    if can_manage_group_users(user, team.group_id):
-        return True
 
     if not can_read_group(user, team.group_id):
         return False

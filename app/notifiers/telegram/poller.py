@@ -1,5 +1,7 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
+
+from telebot.apihelper import ApiTelegramException
 
 from app.db import database_proxy as db
 from app.modules.db import alerts_repo, channels_repo, users_repo
@@ -16,6 +18,30 @@ from app.notifiers.telegram.bot import (
 logger = logging.getLogger("oncall.telegram")
 
 _channel_offsets = {}
+_channel_auth_failed_until = {}
+
+TELEGRAM_AUTH_RETRY_SECONDS = 300
+
+
+def _telegram_exception_error_code(exc):
+    return getattr(exc, "error_code", None) or (
+        getattr(exc, "result_json", {}) or {}
+    ).get("error_code")
+
+
+def _is_telegram_unauthorized(exc):
+    return _telegram_exception_error_code(exc) == 401
+
+
+def _is_channel_auth_backoff_active(channel_id):
+    retry_at = _channel_auth_failed_until.get(channel_id)
+    return bool(retry_at and retry_at > datetime.utcnow())
+
+
+def _mark_channel_auth_failed(channel_id):
+    _channel_auth_failed_until[channel_id] = (
+        datetime.utcnow() + timedelta(seconds=TELEGRAM_AUTH_RETRY_SECONDS)
+    )
 
 
 def list_polling_telegram_channels():
@@ -35,14 +61,40 @@ def list_polling_telegram_channels():
 
 
 def poll_telegram_channels_once(timeout=20):
-    """
-    Poll all Telegram channels once.
-    """
+    """Poll all Telegram channels once."""
     processed = 0
 
     for channel in list_polling_telegram_channels():
+        if _is_channel_auth_backoff_active(channel.id):
+            continue
+
         try:
             processed += poll_telegram_channel_once(channel, timeout=timeout)
+
+        except ApiTelegramException as exc:
+            if _is_telegram_unauthorized(exc):
+                _mark_channel_auth_failed(channel.id)
+
+                logger.error(
+                    "telegram channel token is unauthorized; polling temporarily suspended",
+                    extra={
+                        "extra": {
+                            "event_type": "telegram_poll_auth_error",
+                            "channel_id": channel.id,
+                            "channel_name": getattr(channel, "name", None),
+                            "retry_after_seconds": TELEGRAM_AUTH_RETRY_SECONDS,
+                            "telegram_error_code": _telegram_exception_error_code(exc),
+                            "telegram_error": getattr(exc, "description", str(exc)),
+                        }
+                    },
+                )
+                continue
+
+            logger.exception(
+                "telegram channel poll failed",
+                extra={"extra": {"channel_id": channel.id}},
+            )
+
         except Exception:
             logger.exception(
                 "telegram channel poll failed",

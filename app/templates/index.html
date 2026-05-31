@@ -199,10 +199,29 @@
                         <select id="global-team-filter" class="input topbar-select"></select>
                     </div>
                     <button id="topbar-profile" type="button" class="btn btn-small topbar-profile-btn">
-                        <span class="topbar-avatar">U</span>
-                        <span id="topbar-username">user</span>
+                        <span class="topbar-user-avatar">U</span>
+
+                        <span class="topbar-user-text">
+                            <span id="topbar-username">user</span>
+                        </span>
+
+                        <span
+                            id="topbar-oncall-indicator"
+                            class="topbar-oncall-indicator topbar-oncall-unknown"
+                            title="Loading on-call status..."
+                            aria-label="Loading on-call status"
+                        ></span>
                     </button>
-                    <button id="topbar-logout" type="button" class="btn btn-small btn-danger">Logout</button>
+
+                    <button
+                        id="topbar-logout"
+                        type="button"
+                        class="topbar-icon-button"
+                        title="Logout"
+                        aria-label="Logout"
+                    >
+                        <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
+                    </button>
                     <span id="service-version" class="badge badge-info">version</span>
                 </div>
             </div>
@@ -269,6 +288,8 @@
 <script src="/static/js/core/api.js"></script>
 <script src="/static/js/core/auth.js"></script>
 <script src="/static/js/core/dates.js"></script>
+<script src="/static/js/core/oncall_status.js"></script>
+<script src="/static/js/core/topbar_oncall.js"></script>
 <script src="/static/js/core/ui.js"></script>
 <script src="/static/js/core/selects.js"></script>
 <script src="/static/js/core/sortable_table.js"></script>
@@ -277,6 +298,7 @@
 <script src="/static/js/sidebar.js"></script>
 <script src="/static/js/components/alerts_summary_grid.js"></script>
 <script src="/static/js/components/buttons.js"></script>
+<script src="/static/js/components/oncall_status_panel.js"></script>
 <script src="{{ url_for('static', filename='js/components/action_menu.js') }}"></script>
 <script src="/static/js/pages/alerts.js"></script>
 <script src="/static/js/pages/rotations.js"></script>

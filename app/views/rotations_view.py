@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, timezone as dt_timezone
+from zoneinfo import ZoneInfo
 
 from flask import Blueprint, jsonify, request
 
@@ -24,6 +25,47 @@ from app.services.validation import validate_body
 
 
 rotations_bp = Blueprint("rotations_api", __name__)
+
+
+def _rotation_timezone(rotation):
+    """Return ZoneInfo for rotation timezone."""
+    timezone_name = getattr(rotation, "timezone", None) or "UTC"
+
+    try:
+        return ZoneInfo(timezone_name)
+    except Exception:
+        return ZoneInfo("UTC")
+
+
+def _rotation_local_to_utc_naive(value, rotation):
+    """
+    Convert datetime from rotation timezone to UTC naive.
+
+    datetime-local from browser comes without tzinfo, so we treat it as
+    local time in rotation.timezone.
+    """
+    if value is None:
+        return None
+
+    zone = _rotation_timezone(rotation)
+
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=zone)
+
+    return value.astimezone(dt_timezone.utc).replace(tzinfo=None)
+
+
+def _utc_naive_to_rotation_local(value, rotation):
+    """Convert stored UTC naive datetime to rotation-local ISO datetime."""
+    if value is None:
+        return None
+
+    zone = _rotation_timezone(rotation)
+
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=dt_timezone.utc)
+
+    return value.astimezone(zone).replace(tzinfo=None)
 
 
 @rotations_bp.route("", methods=["GET"])
@@ -384,8 +426,14 @@ def list_rotation_overrides(rotation_id):
             "user_id": override.user.id,
             "username": override.user.username,
             "display_name": override.user.display_name,
-            "starts_at": override.starts_at.isoformat(),
-            "ends_at": override.ends_at.isoformat(),
+            "starts_at": _utc_naive_to_rotation_local(
+                override.starts_at,
+                rotation,
+            ).isoformat(timespec="minutes"),
+            "ends_at": _utc_naive_to_rotation_local(
+                override.ends_at,
+                rotation,
+            ).isoformat(timespec="minutes"),
             "reason": override.reason,
             "expired": override.ends_at <= datetime.utcnow(),
         }
@@ -416,11 +464,20 @@ def create_rotation_override(rotation_id):
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
 
+    starts_at = _rotation_local_to_utc_naive(payload.starts_at, rotation)
+    ends_at = _rotation_local_to_utc_naive(payload.ends_at, rotation)
+
+    if ends_at <= starts_at:
+        return jsonify({
+            "error": "validation_error",
+            "message": "ends_at must be greater than starts_at",
+        }), 400
+
     override = rotations_repo.create_rotation_override(
         rotation_id=rotation_id,
         user_id=payload.user_id,
-        starts_at=payload.starts_at,
-        ends_at=payload.ends_at,
+        starts_at=starts_at,
+        ends_at=ends_at,
         reason=payload.reason,
     )
     write_audit("rotation.override.create", object_type="rotation", object_id=rotation_id, team_id=override.rotation.team.id, data=payload.model_dump(mode="json"))

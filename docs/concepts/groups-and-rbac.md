@@ -28,6 +28,9 @@ A global admin should not be able to delete or disable themselves, and the syste
 | `editor` | Group Editor | Can create or edit group-level operational resources, for example create a team in the group |
 | `user_admin` | Group Admin | Can create and manage users only inside this group boundary |
 
+
+### Group Admin boundaries
+
 `user_admin` is intentionally limited:
 
 - can create a new user only inside the selected group;
@@ -38,6 +41,26 @@ A global admin should not be able to delete or disable themselves, and the syste
 - cannot add an existing user to a group;
 - cannot move a user between groups;
 - cannot globally disable or delete a user.
+
+### Group Editor boundaries
+
+`editor` is an operational group-level role.
+
+A Group Editor can:
+
+- create teams inside the group;
+- create and edit group-level operational resources;
+- manage a team only when they also have the `manager` role in that team.
+
+A Group Editor cannot:
+
+- manage users;
+- assign group roles;
+- assign `user_admin`;
+- manage every team in the group automatically;
+- edit rotations, routes, services, channels or silences of a team where they are not a Team Manager.
+
+When a Group Editor creates a new team, IncidentRelay adds that user as `manager` of the created team.
 
 Adding an existing user to a group changes the group boundary and is global-admin only.
 
@@ -64,6 +87,7 @@ When a non-admin group `editor` creates a new team, IncidentRelay should add tha
 | List group users | Group readable membership or global admin |
 | Create a user inside a group | Group `user_admin` or global admin |
 | Add existing user to group | Global admin |
+| Assign group roles | Group `user_admin` with restrictions, or global admin |
 | Assign `user_admin` role | Global admin |
 | Disable group membership | Group `user_admin` or global admin |
 | Remove group membership | Global admin |
@@ -72,3 +96,10 @@ When a non-admin group `editor` creates a new team, IncidentRelay should add tha
 | Acknowledge or resolve alert | Team `responder`, `manager` or global admin |
 | Manage team resources | Team `manager` or global admin |
 | Add user to team | Team `manager` or global admin; target user must already be in the team group |
+| Manage own created team | Team `manager` or global admin |
+| Manage any team in group | Not allowed by group role alone; requires Team `manager` |
+| Manage rotations | Team `manager` or global admin |
+| Manage routes | Team `manager` or global admin |
+| Manage services | Team `manager` or global admin |
+| Manage channels | Team `manager` or global admin |
+| Manage silences | Team `manager` or global admin |

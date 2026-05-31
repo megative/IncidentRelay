@@ -37,6 +37,8 @@ class ProfileUpdateSchema(ApiModel):
         default=None,
         max_length=CONTACT_ID_MAX_LENGTH,
     )
+    notify_oncall_shift_start_email: bool | None = None
+    notify_oncall_shift_end_email: bool | None = None
 
     @field_validator("phone")
     @classmethod

@@ -31,7 +31,7 @@ def main():
     signal.signal(signal.SIGTERM, _handle_shutdown)
     signal.signal(signal.SIGINT, _handle_shutdown)
 
-    app = create_app()
+    app = create_app(log_role="telegram")
 
     logger.info("telegram worker started")
 

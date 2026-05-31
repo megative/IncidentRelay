@@ -41,16 +41,11 @@ function parseDisplayDate(value) {
 }
 
 
-function getDateTimeFormatter(kind) {
+function getDateTimeFormatter(kind, overrides) {
     /*
      * Return cached browser-locale formatter.
      */
     const locales = getBrowserLocales();
-    const cacheKey = kind + ":" + JSON.stringify(locales);
-
-    if (dateTimeFormattersCache[cacheKey]) {
-        return dateTimeFormattersCache[cacheKey];
-    }
 
     const optionsByKind = {
         date: {
@@ -85,19 +80,41 @@ function getDateTimeFormatter(kind) {
             day: "2-digit",
             hour: "2-digit",
             minute: "2-digit"
+        },
+        shortDateTimeMinutes: {
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit"
         }
     };
 
+    const options = Object.assign(
+        {},
+        optionsByKind[kind] || optionsByKind.dateTime,
+        overrides || {}
+    );
+
+    const cacheKey = kind
+        + ":"
+        + JSON.stringify(locales)
+        + ":"
+        + JSON.stringify(options);
+
+    if (dateTimeFormattersCache[cacheKey]) {
+        return dateTimeFormattersCache[cacheKey];
+    }
+
     dateTimeFormattersCache[cacheKey] = new Intl.DateTimeFormat(
         locales,
-        optionsByKind[kind] || optionsByKind.dateTime
+        options
     );
 
     return dateTimeFormattersCache[cacheKey];
 }
 
 
-function formatBrowserDate(value, kind) {
+function formatBrowserDate(value, kind, overrides) {
     /*
      * Format date/time using browser locale preferences.
      */
@@ -107,7 +124,42 @@ function formatBrowserDate(value, kind) {
         return "-";
     }
 
-    return getDateTimeFormatter(kind || "dateTime").format(date);
+    return getDateTimeFormatter(kind || "dateTime", overrides).format(date);
+}
+
+function formatBrowserDateInTimezone(value, kind, timezone) {
+    /*
+     * Format date/time in a specific IANA timezone.
+     */
+    return formatBrowserDate(
+        value,
+        kind,
+        {
+            timeZone: timezone || "UTC",
+            hour12: false
+        }
+    );
+}
+
+function formatTimeMinutesInTimezone(value, timezone) {
+    /*
+     * Format HH:mm in a specific IANA timezone.
+     */
+    return formatBrowserDateInTimezone(value, "timeMinutes", timezone);
+}
+
+function formatDateTimeMinutesInTimezone(value, timezone) {
+    /*
+     * Format full date/time without seconds in a specific IANA timezone.
+     */
+    return formatBrowserDateInTimezone(value, "dateTimeMinutes", timezone);
+}
+
+function formatShortDateTimeMinutesInTimezone(value, timezone) {
+    /*
+     * Format short date/time without seconds in a specific IANA timezone.
+     */
+    return formatBrowserDateInTimezone(value, "shortDateTimeMinutes", timezone);
 }
 
 

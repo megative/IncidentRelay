@@ -23,6 +23,9 @@ const calendarUserColors = [
     "#005f73"
 ];
 
+function getCalendarEventTimezone(event) {
+    return event && event.timezone ? event.timezone : "UTC";
+}
 
 function dateToInputValue(date) {
     /*
@@ -55,13 +58,34 @@ function parseCalendarDate(value) {
 function parseCalendarDateTime(value) {
     /*
      * Parse calendar event datetime safely.
+     *
+     * Backend stores and returns UTC-naive datetimes like:
+     * 2026-05-30T08:11:00
+     *
+     * Browser treats such strings as local time, so we explicitly
+     * interpret timezone-less ISO datetime values as UTC.
      */
-
     if (!value) {
         return null;
     }
 
-    const date = new Date(value);
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? null : value;
+    }
+
+    let text = String(value).trim();
+
+    if (!text) {
+        return null;
+    }
+
+    const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text);
+
+    if (!hasTimezone) {
+        text += "Z";
+    }
+
+    const date = new Date(text);
 
     if (Number.isNaN(date.getTime())) {
         return null;
@@ -87,21 +111,6 @@ function formatDateTimeMinutes(value) {
     }
 
     return formatShortDate(date) + " " + padDateTimePart(date.getHours()) + ":" + padDateTimePart(date.getMinutes());
-}
-
-
-function formatTimeOnly(value) {
-    /*
-     * Format Date or ISO datetime as HH:mm.
-     */
-
-    const date = value instanceof Date ? value : new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return "-";
-    }
-
-    return padDateTimePart(date.getHours()) + ":" + padDateTimePart(date.getMinutes());
 }
 
 
@@ -1089,14 +1098,14 @@ function renderCalendarTimelineAssignment(event, dayStart, dayEnd, monthMode) {
         .attr(
             "title",
             label +
-                " / " +
-                (event.rotation_name || "-") +
-                " / " +
-                layerLabel +
-                " / " +
-                formatTimeOnly(clippedStart) +
-                " - " +
-                formatTimeOnly(clippedEnd)
+            " / " +
+            (event.rotation_name || "-") +
+            " / " +
+            layerLabel +
+            " / " +
+            formatTimeMinutesInTimezone(clippedStart, getCalendarEventTimezone(event))
+            + " - "
+            + formatTimeMinutesInTimezone(clippedEnd, getCalendarEventTimezone(event))
         )
         .on("click", function () {
             renderCalendarDetails(event, clippedStart, clippedEnd);
@@ -1347,8 +1356,22 @@ function renderCalendarDetails(event, clippedStart, clippedEnd) {
         .append(calendarDetailsItem("Layer priority", event.layer_priority === null || event.layer_priority === undefined ? "-" : String(event.layer_priority)))
         .append(calendarDetailsItem("Timezone", event.timezone || "-"))
         .append(calendarDetailsItem("Type", typeLabel))
-        .append(calendarDetailsItem("Start", formatDateTimeMinutes(clippedStart || event.start)))
-        .append(calendarDetailsItem("End", formatDateTimeMinutes(clippedEnd || event.end)));
+        .append(calendarDetailsItem(
+            "Start",
+            formatDateTimeMinutesInTimezone(
+                clippedStart || event.start,
+                getCalendarEventTimezone(event)
+            )
+            )
+        )
+        .append(calendarDetailsItem(
+            "End",
+            formatDateTimeMinutesInTimezone(
+                clippedEnd || event.end,
+                getCalendarEventTimezone(event)
+            )
+            )
+        );
 
     if (event.reason) {
         details.append(calendarDetailsItem("Reason", event.reason));

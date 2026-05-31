@@ -32,15 +32,14 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: Arial,
 .topbar h1 { margin: 0; font-size: 24px; font-weight: 600; }
 .page-subtitle { margin-top: 4px; color: var(--muted); }
 .topbar-actions, .toolbar, .actions { display: flex; align-items: center; gap: 8px; }
-.page { padding: 24px 28px; }
+.page { padding: 10px; }
 .view { display: none; }
 .cards-grid { display: grid; grid-template-columns: repeat(4, minmax(160px, 1fr)); gap: 16px; margin-bottom: 18px; }
 .grid-two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
-.card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); margin-bottom: 18px; }
+/*.card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); margin-bottom: 18px; }*/
 .metric-card { padding: 18px; }
 .metric-title { color: var(--muted); font-size: 13px; }
 .metric-value { margin-top: 10px; font-size: 30px; font-weight: 700; }
-.card-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 18px; border-bottom: 1px solid var(--border); }
 .card-header h2 { margin: 0; font-size: 18px; }
 .card-subtitle { margin-top: 4px; color: var(--muted); font-size: 13px; }
 .form-body { display: flex; flex-direction: column; gap: 9px; padding: 18px; }
@@ -394,17 +393,17 @@ summary {
     grid-template-columns: repeat(5, minmax(150px, 1fr));
 }
 
-.summary-card {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    min-height: 112px;
-    padding: 18px;
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    background: #ffffff;
-    box-shadow: var(--shadow);
-}
+/*.summary-card {*/
+/*    display: flex;*/
+/*    align-items: center;*/
+/*    gap: 14px;*/
+/*    min-height: 112px;*/
+/*    padding: 18px;*/
+/*    border: 1px solid var(--border);*/
+/*    border-radius: 16px;*/
+/*    background: #ffffff;*/
+/*    box-shadow: var(--shadow);*/
+/*}*/
 
 .summary-icon {
     display: flex;
@@ -518,7 +517,6 @@ summary {
 .first-div-page-layout {
     display: flex;
     flex-direction: column;
-    gap: 18px;
 }
 
 @media (max-width: 900px) {
@@ -567,12 +565,6 @@ summary {
 }
 
 @media (max-width: 760px) {
-    .card-header {
-        align-items: flex-start;
-        flex-direction: column;
-        gap: 12px;
-    }
-
     .card-header-actions {
         justify-content: flex-start;
         width: 100%;
@@ -1278,4 +1270,188 @@ body.has-app-sticky-x-scroll {
     border-left: 4px solid #fdb022;
     background: #fffdf0;
 }
+.app-checkbox-field {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+    cursor: pointer;
+}
 
+.app-checkbox-field input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    margin: 3px 0 0;
+}
+
+.app-checkbox-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.app-checkbox-title {
+    color: var(--text, #101828);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+.app-checkbox-description {
+    display: block;
+    color: var(--muted, #667085);
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.35;
+}
+
+.profile-oncall-status {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    min-height: 28px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-weight: 700;
+}
+
+.profile-oncall-status-active {
+    background: #ecfdf3;
+    color: #067647;
+}
+
+.profile-oncall-status-idle {
+    background: #f2f4f7;
+    color: #475467;
+}
+
+.profile-oncall-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.profile-oncall-next-header {
+    margin-top: 4px;
+    color: var(--muted, #667085);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.profile-oncall-slot {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border: 1px solid var(--border, #e5edf6);
+    border-radius: 12px;
+    background: var(--surface, #ffffff);
+}
+
+.profile-oncall-slot-title {
+    color: var(--text, #101828);
+    font-weight: 700;
+}
+
+.profile-oncall-slot-meta,
+.profile-oncall-slot-time,
+.profile-oncall-slot-reason,
+.profile-oncall-empty {
+    color: var(--muted, #667085);
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.topbar-user-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+.topbar-oncall-indicator {
+    display: inline-flex;
+    flex: 0 0 auto;
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    border: 2px solid #ffffff;
+    box-shadow: 0 0 0 1px rgba(16, 24, 40, 0.16);
+}
+
+.topbar-oncall-active {
+    background: #12b76a;
+}
+
+.topbar-oncall-idle {
+    background: #98a2b3;
+}
+
+.topbar-oncall-unknown {
+    background: #d0d5dd;
+}
+
+.topbar-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid var(--border, #e5edf6);
+    border-radius: 999px;
+    background: var(--surface, #ffffff);
+    color: var(--muted, #667085);
+    cursor: pointer;
+}
+
+.topbar-icon-button:hover {
+    color: var(--text, #101828);
+    background: var(--surface-muted, #f8fafc);
+}
+
+.topbar-icon {
+    width: 18px;
+    height: 18px;
+}
+.topbar-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid var(--border, #e5edf6);
+    border-radius: 999px;
+    background: var(--surface, #ffffff);
+    color: var(--muted, #667085);
+    cursor: pointer;
+}
+
+.topbar-icon-button:hover {
+    color: var(--text, #101828);
+    background: var(--surface-muted, #f8fafc);
+}
+
+.topbar-icon-button .fa-solid {
+    font-size: 16px;
+    line-height: 1;
+}
+.topbar-oncall-active {
+    color: #12b76a;
+}
+
+.topbar-oncall-escalation {
+    color: #f79009;
+}
+
+.topbar-oncall-idle {
+    color: #98a2b3;
+}
+
+.topbar-oncall-unknown {
+    color: #d0d5dd;
+}

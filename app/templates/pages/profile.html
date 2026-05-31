@@ -1,377 +1,478 @@
 <div class="first-div-page-layout page-stack">
-  <section class="card">
-    <div class="card-header">
-      <div class="person-inline">
-        <div id="profile-avatar" class="person-avatar">?</div>
-
-        <div>
-          <h2 id="profile-display-title">Profile</h2>
-          <div id="profile-display-meta" class="card-subtitle">
-            Loading profile...
-          </div>
-
-          <div id="profile-groups-summary" class="inline-pills"></div>
-        </div>
-      </div>
-
-      <div class="card-header-actions">
-        <button id="save-profile-top" type="button" class="btn btn-primary">
-          Save profile
-        </button>
-      </div>
-    </div>
-  </section>
-
-  <div class="page-layout-grid">
-    <section class="page-layout-main">
-      <div class="grid-two">
-        <section class="card">
-          <div class="card-header">
-            <div>
-              <h2>Personal information</h2>
-              <div class="card-subtitle">
-                Contact details used by notification channels.
-              </div>
-            </div>
-          </div>
-
-          <div class="form-body">
-            <label for="profile-username">Username</label>
-            <input
-              id="profile-username"
-              class="input"
-              type="text"
-              disabled
-            >
-
-            <label for="profile-display-name">Display name</label>
-            <input
-              id="profile-display-name"
-              class="input"
-              type="text"
-              autocomplete="name"
-            >
-
-            <label for="profile-email">Email</label>
-            <input
-              id="profile-email"
-              class="input"
-              type="email"
-              autocomplete="email"
-            >
-
-            <label for="profile-phone">Phone</label>
-            <input
-              id="profile-phone"
-              class="input"
-              type="tel"
-              inputmode="tel"
-              autocomplete="tel"
-              placeholder="+77001234567"
-            >
-
-            <div class="form-actions-inline">
-              <button id="save-profile" type="button" class="btn btn-primary">
-                Save profile
-              </button>
-
-              <span id="profile-save-status" class="inline-status"></span>
-            </div>
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="card-header">
-            <div>
-              <h2>Messenger IDs</h2>
-              <div class="card-subtitle">
-                Used by Telegram, Slack and Mattermost notifications.
-              </div>
-            </div>
-          </div>
-
-          <div class="form-body">
-            <label for="profile-telegram">Telegram user ID</label>
-            <input
-              id="profile-telegram"
-              class="input"
-              type="text"
-              autocomplete="off"
-              placeholder="123456789"
-            >
-
-            <label for="profile-slack">Slack user ID</label>
-            <input
-              id="profile-slack"
-              class="input"
-              type="text"
-              autocomplete="off"
-              placeholder="U012ABCDEF"
-            >
-
-            <label for="profile-mattermost">Mattermost user ID</label>
-            <input
-              id="profile-mattermost"
-              class="input"
-              type="text"
-              autocomplete="off"
-              placeholder="9x8y7z6abc"
-            >
-          </div>
-        </section>
-      </div>
-
-      <section class="card">
+    <section class="card">
         <div class="card-header">
-          <div>
-            <h2>Personal API tokens</h2>
-            <div class="card-subtitle">
-              Tokens for scripts, integrations and API access.
+            <div class="person-inline">
+                <div id="profile-avatar" class="person-avatar">?</div>
+
+                <div>
+                    <h2 id="profile-display-title">Profile</h2>
+
+                    <div id="profile-display-meta" class="card-subtitle">
+                        Loading profile...
+                    </div>
+
+                    <div id="profile-groups-summary" class="inline-pills"></div>
+                </div>
             </div>
-          </div>
 
-          <div class="card-header-actions">
-            <button id="open-profile-token-modal" type="button" class="btn btn-primary">
-              Generate token
-            </button>
-          </div>
+            <div class="card-header-actions">
+                <button id="save-profile-top" type="button" class="btn btn-primary">
+                    Save profile
+                </button>
+            </div>
         </div>
-
-        <div class="table-wrapper">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Prefix</th>
-                <th>Group</th>
-                <th>Scopes</th>
-                <th>Created</th>
-                <th>Expires</th>
-                <th>Last used</th>
-                <th>Status</th>
-                <th class="actions-th">Actions</th>
-              </tr>
-            </thead>
-
-            <tbody id="profile-tokens-table">
-              <tr>
-                <td colspan="9" class="empty-cell">Loading tokens...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
     </section>
 
-    <aside class="card page-details-card">
-      <div class="card-header">
-        <div>
-          <h2>Access context</h2>
-          <div class="card-subtitle">
-            Current group scope for list views.
-          </div>
-        </div>
-      </div>
-
-      <div class="details-body">
-        <label for="profile-active-group">Active group</label>
-        <select id="profile-active-group" class="input"></select>
-
-        <div class="details-actions">
-          <button id="save-active-group" type="button" class="btn btn-primary">
-            Set active group
-          </button>
-        </div>
-
-        <div id="profile-active-group-status" class="inline-status"></div>
-
-        <div class="details-list">
-          <div class="details-item">
-            <div class="details-label">Scope behavior</div>
-            <div class="details-value">
-              Select “All my groups” to see everything you can access.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card-header">
-        <div>
-          <h2>Password</h2>
-          <div class="card-subtitle">
-            Change your local account password.
-          </div>
-        </div>
-      </div>
-
-      <div class="details-body">
-        <div class="details-actions">
-          <button id="open-profile-password-modal" type="button" class="btn">
-            Change password
-          </button>
-        </div>
-
-        <div id="profile-password-status" class="inline-status"></div>
-      </div>
-    </aside>
-  </div>
-
-  <div id="profile-token-modal" class="app-modal" style="display: none;">
-    <div class="app-modal-dialog app-modal-dialog-medium">
-      <div class="app-modal-header">
-        <div>
-          <h2>Generate personal API token</h2>
-          <div class="card-subtitle">
-            The full token is shown only once.
-          </div>
-        </div>
+    <div id="profile-page-tabs" class="page-tabs">
+        <button
+            type="button"
+            class="page-tab is-active"
+            data-profile-tab="details"
+        >
+            Profile
+        </button>
 
         <button
-          id="close-profile-token-modal"
-          type="button"
-          class="app-modal-close"
-          aria-label="Close"
+            type="button"
+            class="page-tab"
+            data-profile-tab="oncall"
         >
-          ×
+            On-call
         </button>
-      </div>
-
-      <div class="app-modal-body">
-        <div class="form-body">
-          <label for="profile-token-name">Token name</label>
-          <input
-            id="profile-token-name"
-            class="input"
-            type="text"
-            placeholder="personal-api-token"
-            autocomplete="off"
-          >
-
-          <label for="profile-token-days">Expires in days</label>
-          <input
-            id="profile-token-days"
-            class="input"
-            type="number"
-            min="0"
-            value="30"
-          >
-
-          <label for="profile-token-group">Group</label>
-          <select id="profile-token-group" class="input"></select>
-
-          <div class="help-text">
-            Leave empty to create a token without group limit.
-          </div>
-
-          <label for="profile-token-scopes">Scopes</label>
-          <select id="profile-token-scopes" class="input" multiple>
-            <option value="alerts:read">alerts:read</option>
-            <option value="alerts:write">alerts:write</option>
-            <option value="resources:read">resources:read</option>
-            <option value="resources:write">resources:write</option>
-            <option value="profile:read">profile:read</option>
-            <option value="profile:write">profile:write</option>
-            <option value="*">*</option>
-          </select>
-
-          <div class="form-actions-inline">
-            <button id="create-profile-token" type="button" class="btn btn-primary">
-              Generate token
-            </button>
-
-            <span id="profile-token-status" class="inline-status"></span>
-          </div>
-
-          <label for="profile-token-result">Generated token</label>
-
-          <div class="json-editor">
-            <div class="json-editor-header">
-              <span>Token</span>
-
-              <button
-                id="copy-profile-token"
-                type="button"
-                class="btn btn-small is-hidden"
-              >
-                Copy token
-              </button>
-            </div>
-
-            <textarea
-              id="profile-token-result"
-              class="input code-textarea json-editor-textarea"
-              readonly
-              spellcheck="false"
-            >No token generated yet.</textarea>
-          </div>
-
-          <div class="help-text">
-            Copy it now. You will not be able to see it again.
-          </div>
-        </div>
-      </div>
-
-      <div class="app-modal-footer">
-        <button id="close-profile-token-modal-footer" type="button" class="btn">
-          Close
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <div id="profile-password-modal" class="app-modal" style="display: none;">
-    <div class="app-modal-dialog app-modal-dialog-medium">
-      <div class="app-modal-header">
-        <div>
-          <h2>Change password</h2>
-          <div class="card-subtitle">
-            Update your local account password.
-          </div>
-        </div>
 
         <button
-          id="close-profile-password-modal"
-          type="button"
-          class="app-modal-close"
-          aria-label="Close"
+            type="button"
+            class="page-tab"
+            data-profile-tab="tokens"
         >
-          ×
+            API tokens
         </button>
-      </div>
-
-      <div class="app-modal-body">
-        <div class="form-body">
-          <label for="profile-old-password">Old password</label>
-          <input
-            id="profile-old-password"
-            class="input"
-            type="password"
-            autocomplete="current-password"
-          >
-
-          <label for="profile-new-password">New password</label>
-          <input
-            id="profile-new-password"
-            class="input"
-            type="password"
-            autocomplete="new-password"
-          >
-
-          <div class="form-actions-inline">
-            <button id="change-profile-password" type="button" class="btn btn-primary">
-              Change password
-            </button>
-
-            <span id="profile-password-modal-status" class="inline-status"></span>
-          </div>
-        </div>
-      </div>
-
-      <div class="app-modal-footer">
-        <button id="close-profile-password-modal-footer" type="button" class="btn">
-          Close
-        </button>
-      </div>
     </div>
-  </div>
+
+    <section
+        id="profile-tab-details"
+        class="profile-tab-panel"
+        data-profile-panel="details"
+    >
+        <div class="page-layout-grid">
+            <section class="page-layout-main">
+                <div class="grid-two">
+                    <section class="card">
+                        <div class="card-header">
+                            <div>
+                                <h2>Personal information</h2>
+                                <div class="card-subtitle">
+                                    Contact details used by notification channels.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-body">
+                            <label for="profile-username">Username</label>
+                            <input
+                                id="profile-username"
+                                class="input"
+                                type="text"
+                                disabled
+                            >
+
+                            <label for="profile-display-name">Display name</label>
+                            <input
+                                id="profile-display-name"
+                                class="input"
+                                type="text"
+                                autocomplete="name"
+                            >
+
+                            <label for="profile-email">Email</label>
+                            <input
+                                id="profile-email"
+                                class="input"
+                                type="email"
+                                autocomplete="email"
+                            >
+
+                            <label for="profile-phone">Phone</label>
+                            <input
+                                id="profile-phone"
+                                class="input"
+                                type="tel"
+                                inputmode="tel"
+                                autocomplete="tel"
+                                placeholder="+77001234567"
+                            >
+
+                            <div class="form-actions-inline">
+                                <button id="save-profile" type="button" class="btn btn-primary">
+                                    Save profile
+                                </button>
+                                <span id="profile-save-status" class="inline-status"></span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="card">
+                        <div class="card-header">
+                            <div>
+                                <h2>Messenger IDs</h2>
+                                <div class="card-subtitle">
+                                    Used by Telegram, Slack and Mattermost notifications.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-body">
+                            <label for="profile-telegram">Telegram user ID</label>
+                            <input
+                                id="profile-telegram"
+                                class="input"
+                                type="text"
+                                autocomplete="off"
+                                placeholder="123456789"
+                            >
+
+                            <label for="profile-slack">Slack user ID</label>
+                            <input
+                                id="profile-slack"
+                                class="input"
+                                type="text"
+                                autocomplete="off"
+                                placeholder="U012ABCDEF"
+                            >
+
+                            <label for="profile-mattermost">Mattermost user ID</label>
+                            <input
+                                id="profile-mattermost"
+                                class="input"
+                                type="text"
+                                autocomplete="off"
+                                placeholder="9x8y7z6abc"
+                            >
+                        </div>
+                    </section>
+                </div>
+            </section>
+
+            <aside class="card page-details-card">
+                <div class="card-header">
+                    <div>
+                        <h2>Access context</h2>
+                        <div class="card-subtitle">
+                            Current group scope for list views.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="details-body">
+                    <label for="profile-active-group">Active group</label>
+                    <select id="profile-active-group" class="input"></select>
+
+                    <div class="details-actions">
+                        <button id="save-active-group" type="button" class="btn btn-primary">
+                            Set active group
+                        </button>
+                    </div>
+
+                    <div id="profile-active-group-status" class="inline-status"></div>
+
+                    <div class="details-list">
+                        <div class="details-item">
+                            <div class="details-label">Scope behavior</div>
+                            <div class="details-value">
+                                Select “All my groups” to see everything you can access.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-header">
+                    <div>
+                        <h2>Password</h2>
+                        <div class="card-subtitle">
+                            Change your local account password.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="details-body">
+                    <div class="details-actions">
+                        <button id="open-profile-password-modal" type="button" class="btn">
+                            Change password
+                        </button>
+                    </div>
+
+                    <div id="profile-password-status" class="inline-status"></div>
+                </div>
+            </aside>
+        </div>
+    </section>
+
+    <section
+        id="profile-tab-oncall"
+        class="profile-tab-panel"
+        data-profile-panel="oncall"
+        style="display: none;"
+    >
+        <div class="page-layout-grid">
+            <section class="page-layout-main">
+                <section class="card">
+                    <div class="card-header">
+                        <div>
+                            <h2>On-call status</h2>
+                            <div class="card-subtitle">
+                                Primary rotation shifts and escalation backup participation.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="details-body">
+                        <div id="profile-oncall-panel" class="oncall-panel"></div>
+                    </div>
+                </section>
+            </section>
+
+            <aside class="card page-details-card">
+                <div class="card-header">
+                    <div>
+                        <h2>On-call email notifications</h2>
+                        <div class="card-subtitle">
+                            Choose which shift notifications should be sent to your email.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="details-body">
+                    <label class="md-switch" for="profile-notify-shift-start-email">
+                        <input id="profile-notify-shift-start-email" type="checkbox">
+                        <span class="md-switch-ui"></span>
+                        <span>
+                            <strong>Email me when my on-call shift starts</strong>
+                            <small>Send an email when I become primary on-call.</small>
+                        </span>
+                    </label>
+
+                    <label class="md-switch" for="profile-notify-shift-end-email">
+                        <input id="profile-notify-shift-end-email" type="checkbox">
+                        <span class="md-switch-ui"></span>
+                        <span>
+                            <strong>Email me when my on-call shift ends</strong>
+                            <small>Send an email when my primary on-call shift is over.</small>
+                        </span>
+                    </label>
+
+                    <div class="details-list">
+                        <div class="details-item">
+                            <div class="details-label">Escalation backup</div>
+                            <div class="details-value">
+                                Escalation backup participation is shown in the UI but does not
+                                send shift start/end emails.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </section>
+
+    <section
+        id="profile-tab-tokens"
+        class="profile-tab-panel"
+        data-profile-panel="tokens"
+        style="display: none;"
+    >
+        <section class="card">
+            <div class="card-header">
+                <div>
+                    <h2>Personal API tokens</h2>
+                    <div class="card-subtitle">
+                        Tokens for scripts, integrations and API access.
+                    </div>
+                </div>
+
+                <div class="card-header-actions">
+                    <button id="open-profile-token-modal" type="button" class="btn btn-primary">
+                        Generate token
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Prefix</th>
+                            <th>Group</th>
+                            <th>Scopes</th>
+                            <th>Created</th>
+                            <th>Expires</th>
+                            <th>Last used</th>
+                            <th>Status</th>
+                            <th class="actions-th">Actions</th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="profile-tokens-table">
+                        <tr>
+                            <td colspan="9" class="empty-cell">Loading tokens...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </section>
+
+    <div id="profile-token-modal" class="app-modal" style="display: none;">
+        <div class="app-modal-dialog app-modal-dialog-medium">
+            <div class="app-modal-header">
+                <div>
+                    <h2>Generate personal API token</h2>
+                    <div class="card-subtitle">
+                        The full token is shown only once.
+                    </div>
+                </div>
+
+                <button
+                    id="close-profile-token-modal"
+                    type="button"
+                    class="app-modal-close"
+                    aria-label="Close"
+                >
+                    ×
+                </button>
+            </div>
+
+            <div class="app-modal-body">
+                <div class="form-body">
+                    <label for="profile-token-name">Token name</label>
+                    <input
+                        id="profile-token-name"
+                        class="input"
+                        type="text"
+                        placeholder="personal-api-token"
+                        autocomplete="off"
+                    >
+
+                    <label for="profile-token-days">Expires in days</label>
+                    <input
+                        id="profile-token-days"
+                        class="input"
+                        type="number"
+                        min="0"
+                        value="30"
+                    >
+
+                    <label for="profile-token-group">Group</label>
+                    <select id="profile-token-group" class="input"></select>
+                    <div class="help-text">
+                        Leave empty to create a token without group limit.
+                    </div>
+
+                    <label for="profile-token-scopes">Scopes</label>
+                    <select id="profile-token-scopes" class="input" multiple>
+                        <option value="alerts:read">alerts:read</option>
+                        <option value="alerts:write">alerts:write</option>
+                        <option value="resources:read">resources:read</option>
+                        <option value="resources:write">resources:write</option>
+                        <option value="profile:read">profile:read</option>
+                        <option value="profile:write">profile:write</option>
+                        <option value="*">*</option>
+                    </select>
+
+                    <div class="form-actions-inline">
+                        <button id="create-profile-token" type="button" class="btn btn-primary">
+                            Generate token
+                        </button>
+                        <span id="profile-token-status" class="inline-status"></span>
+                    </div>
+
+                    <label for="profile-token-result">Generated token</label>
+                    <div class="json-editor">
+                        <div class="json-editor-header">
+                            <span>Token</span>
+                            <button
+                                id="copy-profile-token"
+                                type="button"
+                                class="btn btn-small is-hidden"
+                            >
+                                Copy token
+                            </button>
+                        </div>
+
+                        <textarea
+                            id="profile-token-result"
+                            class="input code-textarea json-editor-textarea"
+                            readonly
+                            spellcheck="false"
+                        >No token generated yet.</textarea>
+                    </div>
+
+                    <div class="help-text">
+                        Copy it now. You will not be able to see it again.
+                    </div>
+                </div>
+            </div>
+
+            <div class="app-modal-footer">
+                <button id="close-profile-token-modal-footer" type="button" class="btn">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="profile-password-modal" class="app-modal" style="display: none;">
+        <div class="app-modal-dialog app-modal-dialog-medium">
+            <div class="app-modal-header">
+                <div>
+                    <h2>Change password</h2>
+                    <div class="card-subtitle">
+                        Update your local account password.
+                    </div>
+                </div>
+
+                <button
+                    id="close-profile-password-modal"
+                    type="button"
+                    class="app-modal-close"
+                    aria-label="Close"
+                >
+                    ×
+                </button>
+            </div>
+
+            <div class="app-modal-body">
+                <div class="form-body">
+                    <label for="profile-old-password">Old password</label>
+                    <input
+                        id="profile-old-password"
+                        class="input"
+                        type="password"
+                        autocomplete="current-password"
+                    >
+
+                    <label for="profile-new-password">New password</label>
+                    <input
+                        id="profile-new-password"
+                        class="input"
+                        type="password"
+                        autocomplete="new-password"
+                    >
+
+                    <div class="form-actions-inline">
+                        <button id="change-profile-password" type="button" class="btn btn-primary">
+                            Change password
+                        </button>
+                        <span id="profile-password-modal-status" class="inline-status"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="app-modal-footer">
+                <button id="close-profile-password-modal-footer" type="button" class="btn">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
 </div>

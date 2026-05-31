@@ -113,12 +113,14 @@ function updateAuthUi() {
 }
 
 function startAuthenticatedApp() {
-    /*
-     * Load user state and start the application.
-     */
     apiGet("/api/auth/me", function (user) {
         currentUser = user;
         updateAuthUi();
+
+        if (typeof startTopbarOncallStatusRefresh === "function") {
+            startTopbarOncallStatusRefresh();
+        }
+
         fillTeamSelect("#global-team-filter", true, function () {
             navigate(currentAppUrl(), false);
         });
@@ -173,13 +175,23 @@ $(document).ready(function () {
 
     $("#active-group-select").on("change", function () {
         const groupId = $(this).val();
-        apiPost("/api/profile/active-group", {group_id: groupId ? Number(groupId) : null}, function (user) {
-            currentUser = user;
-            updateAuthUi();
-            fillTeamSelect("#global-team-filter", true, function () {
-                navigate(currentAppUrl(), false);
-            });
-        });
+
+        apiPost(
+            "/api/profile/active-group",
+            {group_id: groupId ? Number(groupId) : null},
+            function (user) {
+                currentUser = user;
+                updateAuthUi();
+
+                if (typeof loadTopbarOncallStatus === "function") {
+                    loadTopbarOncallStatus();
+                }
+
+                fillTeamSelect("#global-team-filter", true, function () {
+                    navigate(currentAppUrl(), false);
+                });
+            }
+        );
     });
 
     $("#topbar-profile").on("click", function () {

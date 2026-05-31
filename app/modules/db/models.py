@@ -105,6 +105,8 @@ class User(SoftDeleteModel):
     telegram_user_id = CharField(null=True)
     slack_user_id = CharField(null=True)
     mattermost_user_id = CharField(null=True)
+    notify_oncall_shift_start_email = BooleanField(default=True)
+    notify_oncall_shift_end_email = BooleanField(default=True)
     password_hash = CharField(null=True)
     active = BooleanField(default=True)
     is_admin = BooleanField(default=False)
@@ -782,6 +784,39 @@ class AlertNotificationEvent(BaseModel):
     class Meta:
         indexes = (
             (("notification", "created_at"), False),
+        )
+
+
+class OnCallShiftEmailNotification(BaseModel):
+    """Deduplication log for on-call shift start/end email notifications."""
+
+    id = AutoField()
+
+    user = ForeignKeyField(User, backref="oncall_shift_email_notifications", on_delete="CASCADE")
+    rotation = ForeignKeyField(Rotation, backref="oncall_shift_email_notifications", on_delete="CASCADE")
+
+    event_type = CharField(index=True)  # shift_start | shift_end
+
+    slot_start_at = DateTimeField(index=True)
+    slot_end_at = DateTimeField(index=True)
+
+    layer_id = IntegerField(null=True)
+    override_id = IntegerField(null=True)
+
+    fingerprint = CharField(unique=True, index=True)
+
+    status = CharField(default="pending", index=True)  # pending | sent | failed | skipped
+    last_error = TextField(null=True)
+
+    created_at = DateTimeField(default=datetime.utcnow)
+    sent_at = DateTimeField(null=True)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "oncall_shift_email_notification"
+        indexes = (
+            (("user", "event_type", "slot_start_at", "slot_end_at"), False),
+            (("rotation", "event_type", "slot_start_at"), False),
         )
 
 

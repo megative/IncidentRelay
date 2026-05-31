@@ -100,6 +100,21 @@ class Config:
     DB_PORT = settings.get_int("database", "port", 0)
 
     LOG_FILE = settings.get("logging", "file", "./logs/incidentrelay.log")
+    LOG_APP_FILE = settings.get(
+        "logging",
+        "app_file",
+        LOG_FILE,
+    )
+    LOG_SCHEDULER_FILE = settings.get(
+        "logging",
+        "scheduler_file",
+        "./logs/incidentrelay-scheduler.log",
+    )
+    LOG_TELEGRAM_WORKER_FILE = settings.get(
+        "logging",
+        "telegram_worker_file",
+        "./logs/incidentrelay-telegram-worker.log",
+    )
     LOG_LEVEL = settings.get("logging", "level", "INFO")
     LOG_REQUESTS = False
 
@@ -137,3 +152,11 @@ class Config:
     VOICE_PROVIDER_CONFIG = settings.get_section("voice_provider", {})
 
     TELEGRAM_PROXY_URL = settings.get("telegram", "proxy_url", "")
+
+    ONCALL_SHIFT_EMAIL_CHECK_INTERVAL_SECONDS = settings.get(
+        "oncall",
+        "shift_email_check_interval_seconds", 60)
+
+    ONCALL_SHIFT_EMAIL_LOOKBACK_SECONDS = settings.get(
+        "oncall",
+        "shift_email_lookback_seconds", 300)

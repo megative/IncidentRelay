@@ -52,7 +52,7 @@ class FakeNotifier:
 
 def test_format_alert_message_contains_core_alert_fields(db):
     group = create_group(slug="infra")
-    team = create_team(group, slug="sre")
+    team = create_team(group, name="sre", slug="sre")
     route = create_route(team)
     alert = create_alert(route)
 

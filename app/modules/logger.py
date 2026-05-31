@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import sys
 import uuid
 from datetime import datetime
 
@@ -43,49 +44,115 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(redact_secrets(payload), ensure_ascii=False)
 
 
+LOG_ROLE_APP = "app"
+LOG_ROLE_SCHEDULER = "scheduler"
+LOG_ROLE_TELEGRAM = "telegram"
+
+
 class EventOnlyFilter(logging.Filter):
-    """
-    Allow only audit actions, alert intake records and errors.
+    """Allow only role-specific operational logs."""
 
-    This is a hard filter. Even if another module logs request records, they are
-    not written to the configured JSON log file.
-    """
+    def __init__(self, log_role=LOG_ROLE_APP):
+        super().__init__()
+        self.log_role = _normalize_log_role(log_role)
+        self.allowed_loggers = _allowed_loggers_for_role(self.log_role)
 
-    ALLOWED_LOGGERS = {
+    def filter(self, record):
+        """Return True when a record should be written."""
+        if record.name in self.allowed_loggers:
+            return True
+
+        # Keep non-role errors out of app log when they belong to workers.
+        if record.levelno >= logging.ERROR:
+            if self.log_role == LOG_ROLE_APP and record.name in {
+                "oncall.scheduler",
+                "oncall.telegram",
+            }:
+                return False
+
+            return True
+
+        return False
+
+
+def _normalize_log_role(log_role=None):
+    """Return normalized runtime log role."""
+    value = (
+        log_role
+        or os.environ.get("INCIDENTRELAY_LOG_ROLE")
+        or os.environ.get("INCEDENTRELAY_LOG_ROLE")
+        or LOG_ROLE_APP
+    )
+
+    value = str(value).strip().lower().replace("_", "-")
+
+    if value in {"web", "main", "api", "flask"}:
+        return LOG_ROLE_APP
+
+    if value in {"scheduler", "worker-scheduler"}:
+        return LOG_ROLE_SCHEDULER
+
+    if value in {"telegram", "telegram-worker", "telegram_worker"}:
+        return LOG_ROLE_TELEGRAM
+
+    return LOG_ROLE_APP
+
+
+def _log_file_for_role(log_role):
+    """Return log file path for runtime role."""
+    if log_role == LOG_ROLE_SCHEDULER:
+        return Config.LOG_SCHEDULER_FILE
+
+    if log_role == LOG_ROLE_TELEGRAM:
+        return Config.LOG_TELEGRAM_WORKER_FILE
+
+    return Config.LOG_APP_FILE
+
+
+def _allowed_loggers_for_role(log_role):
+    """
+    Return allowed logger names for runtime role.
+
+    The role filter keeps process logs isolated even when modules share
+    logger names.
+    """
+    if log_role == LOG_ROLE_SCHEDULER:
+        return {
+            "oncall.scheduler",
+            "oncall.alerts",
+            "oncall.notifications",
+            "oncall.voice",
+            "oncall.error",
+            "shift_notifications"
+        }
+
+    if log_role == LOG_ROLE_TELEGRAM:
+        return {
+            "oncall.telegram",
+            "oncall.error",
+        }
+
+    return {
         "oncall.audit",
         "oncall.alerts",
         "oncall.error",
-        "oncall.scheduler",
         "oncall.notifications",
         "oncall.voice",
-        "oncall.telegram",
     }
 
-    def filter(self, record):
-        """
-        Return True when a record should be written.
-        """
 
-        if record.levelno >= logging.ERROR:
-            return True
+def setup_json_logging(app=None, log_role=None):
+    """Configure JSON file logging for one runtime role."""
+    role = _normalize_log_role(log_role)
+    log_file = _log_file_for_role(role)
 
-        return record.name in self.ALLOWED_LOGGERS
-
-
-def setup_json_logging(app):
-    """
-    Configure JSON file logging for the service.
-    """
-
-    log_file = Config.LOG_FILE
     log_dir = os.path.dirname(log_file)
-
     if log_dir:
         os.makedirs(log_dir, exist_ok=True)
 
     handler = logging.FileHandler(log_file)
     handler.setFormatter(JsonFormatter())
-    handler.addFilter(EventOnlyFilter())
+    handler.addFilter(EventOnlyFilter(role))
 
     level = getattr(logging, Config.LOG_LEVEL.upper(), logging.INFO)
 
@@ -94,15 +161,25 @@ def setup_json_logging(app):
     root_logger.handlers.clear()
     root_logger.addHandler(handler)
 
-    # Disable werkzeug request logs in the service log. Access logs should be
-    # handled by a reverse proxy or process manager if needed.
+    # Avoid duplicate stdout/stderr logs from basicConfig or Werkzeug.
     logging.getLogger("werkzeug").disabled = True
 
-    app.logger.handlers.clear()
-    app.logger.propagate = True
-    app.logger.setLevel(level)
+    if app is not None:
+        app.logger.handlers.clear()
+        app.logger.propagate = True
+        app.logger.setLevel(level)
+        register_error_handlers(app)
 
-    register_error_handlers(app)
+    logging.getLogger("oncall.error").info(
+        "json logging configured",
+        extra={
+            "extra": {
+                "event_type": "logging",
+                "log_role": role,
+                "log_file": log_file,
+            }
+        },
+    )
 
 
 def register_error_handlers(app):

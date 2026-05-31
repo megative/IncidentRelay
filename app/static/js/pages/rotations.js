@@ -1089,9 +1089,7 @@ function addLayerCard() {
 
     apiPost("/api/rotations/" + selectedRotationForLayers + "/layers", payload, function (layer) {
         expandedLayerId = layer.id;
-        loadRotationLayerCards(selectedRotationForLayers, function () {
-            showAppSuccess("Layer created.");
-        });
+        loadRotationLayerCards(selectedRotationForLayers, function () {});
     });
 }
 
@@ -1102,7 +1100,6 @@ function saveRotationLayerFromCard(layerId) {
         expandedLayerId = layerId;
         loadRotationLayerCards(selectedRotationForLayers, function () {
             refreshRotations();
-            showAppSuccess("Layer updated.");
         });
     });
 }
@@ -1154,7 +1151,6 @@ function addLayerMemberFromCard(layerId) {
         loadOneLayerCardDetails(layerId, function () {
             renderRotationLayerCards();
             refreshRotations();
-            showAppSuccess("Layer member added.");
         });
     });
 }
@@ -1170,7 +1166,6 @@ function updateLayerMemberFromCard(layerId, memberId) {
         loadOneLayerCardDetails(layerId, function () {
             renderRotationLayerCards();
             refreshRotations();
-            showAppSuccess("Layer member updated.");
         });
     });
 }
@@ -1291,7 +1286,6 @@ function saveLayerRestrictionsFromCard(layerId) {
         loadOneLayerCardDetails(layerId, function () {
             renderRotationLayerCards();
             refreshRotations();
-            showAppSuccess("Restrictions saved.");
         });
     });
 }
@@ -1848,8 +1842,6 @@ function createOverride() {
         if (typeof rotationOverridesAfterChange === "function") {
             rotationOverridesAfterChange();
         }
-
-        showAppSuccess("Override created.");
     });
 }
 

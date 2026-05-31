@@ -11,6 +11,7 @@ from app.services.audit import write_audit
 from app.services.rbac import can_read_group
 from app.services.serializers import serialize_user, serialize_api_token
 from app.services.validation import validate_body
+from app.services.user_oncall_status import get_user_oncall_status
 
 
 profile_bp = Blueprint("profile_api", __name__)
@@ -252,3 +253,16 @@ def set_active_group():
     )
 
     return jsonify(serialize_user(user, groups=get_profile_groups(user)))
+
+
+@profile_bp.route("/oncall", methods=["GET"])
+def get_profile_oncall_status():
+    """Return current and next on-call shifts for current user."""
+    lookahead_days = request.args.get("days", default=30, type=int)
+
+    return jsonify(
+        get_user_oncall_status(
+            request.current_user,
+            lookahead_days=lookahead_days,
+        )
+    )

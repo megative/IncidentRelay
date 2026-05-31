@@ -61,6 +61,7 @@ from app.modules.db.models import (  # noqa: E402
     ServiceStatusHistory,
     MaintenanceWindow,
     MaintenanceWindowService,
+    OnCallShiftEmailNotification,
 )
 
 
@@ -83,6 +84,7 @@ CLEANUP_MODELS = [
     MaintenanceWindowService,
     AlertRoute,
     NotificationChannel,
+    OnCallShiftEmailNotification,
     RotationLayerRestriction,
     RotationLayerMember,
     RotationLayer,

@@ -106,6 +106,12 @@ def serialize_user(user, groups=None):
         "is_admin": user.is_admin,
         "active_group_id": user.active_group.id if user.active_group else None,
         "active_group_slug": user.active_group.slug if user.active_group else None,
+        "notify_oncall_shift_start_email": bool(
+            getattr(user, "notify_oncall_shift_start_email", True)
+        ),
+        "notify_oncall_shift_end_email": bool(
+            getattr(user, "notify_oncall_shift_end_email", True)
+        ),
     }
 
     if groups is not None:

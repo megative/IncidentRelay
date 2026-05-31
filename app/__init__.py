@@ -28,14 +28,14 @@ from app.services.db_errors import handle_integrity_error, handle_not_found_erro
 from app.views.services_view import services_bp
 
 
-def create_app():
+def create_app(log_role=None):
     """
     Create and configure the Flask application.
     """
 
     flask_app = Flask(__name__)
     flask_app.config.from_object(Config)
-    setup_json_logging(flask_app)
+    setup_json_logging(flask_app, log_role=log_role)
 
     flask_app.register_error_handler(IntegrityError, handle_integrity_error)
     flask_app.register_error_handler(DoesNotExist, handle_not_found_error)

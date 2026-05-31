@@ -126,6 +126,15 @@ function loadProfile() {
         $("#profile-telegram").val(profile.telegram_user_id || "");
         $("#profile-slack").val(profile.slack_user_id || "");
         $("#profile-mattermost").val(profile.mattermost_user_id || "");
+        $("#profile-notify-shift-start-email").prop(
+            "checked",
+            profile.notify_oncall_shift_start_email !== false
+        );
+
+        $("#profile-notify-shift-end-email").prop(
+            "checked",
+            profile.notify_oncall_shift_end_email !== false
+        );
 
         if (!profile.is_admin) {
             $('#profile-token-scopes option[value="*"]').remove();
@@ -150,6 +159,8 @@ function saveProfile() {
             telegram_user_id: $("#profile-telegram").val() || null,
             slack_user_id: $("#profile-slack").val() || null,
             mattermost_user_id: $("#profile-mattermost").val() || null,
+            notify_oncall_shift_start_email: $("#profile-notify-shift-start-email").is(":checked"),
+            notify_oncall_shift_end_email: $("#profile-notify-shift-end-email").is(":checked")
         },
         function (profile) {
             setProfileStatus("#profile-save-status", "Saved", false);
@@ -397,3 +408,125 @@ $(document).on("click", "#save-profile-top", saveProfile);
 $(document).on("click", "#save-active-group", saveActiveGroup);
 
 loadProfileTokens();
+function profileOncallDisplayName(name, slug, fallback) {
+    return name || slug || fallback || "-";
+}
+
+
+function renderProfileOncallSlot(slot) {
+    const item = $("<div>").addClass("profile-oncall-slot");
+
+    const title = $("<div>")
+        .addClass("profile-oncall-slot-title")
+        .text(profileOncallDisplayName(slot.team_name, slot.team_slug, "Team"));
+
+    const meta = [
+        slot.rotation_name || ("Rotation #" + slot.rotation_id),
+        slot.layer_name || (slot.type === "override" ? "Override" : "Layer"),
+        slot.timezone || "UTC"
+    ].filter(Boolean).join(" · ");
+
+    item.append(title);
+
+    item.append(
+        $("<div>")
+            .addClass("profile-oncall-slot-meta")
+            .text(meta)
+    );
+
+    item.append(
+        $("<div>")
+            .addClass("profile-oncall-slot-time")
+            .text(
+                formatShortDateTimeMinutesInTimezone(slot.start, slot.timezone)
+                + " → "
+                + formatShortDateTimeMinutesInTimezone(slot.end, slot.timezone)
+            )
+    );
+
+    if (slot.type === "override" && slot.reason) {
+        item.append(
+            $("<div>")
+                .addClass("profile-oncall-slot-reason")
+                .text(slot.reason)
+        );
+    }
+
+    return item;
+}
+
+function renderProfileOncallStatus(data) {
+    const current = asArray(data.current);
+    const next = asArray(data.next);
+
+    const status = $("#profile-oncall-status");
+    const currentList = $("#profile-oncall-current");
+    const nextList = $("#profile-oncall-next");
+
+    currentList.empty();
+    nextList.empty();
+
+    if (data.is_oncall) {
+        status
+            .removeClass("profile-oncall-status-idle")
+            .addClass("profile-oncall-status-active")
+            .text("You are on-call now");
+
+        current.forEach(function (slot) {
+            currentList.append(renderProfileOncallSlot(slot));
+        });
+    } else {
+        status
+            .removeClass("profile-oncall-status-active")
+            .addClass("profile-oncall-status-idle")
+            .text("You are not on-call now");
+    }
+
+    if (!next.length) {
+        nextList.append(
+            $("<div>")
+                .addClass("profile-oncall-empty")
+                .text("No upcoming shifts in the next " + (data.lookahead_days || 30) + " days.")
+        );
+        return;
+    }
+
+    next.forEach(function (slot) {
+        nextList.append(renderProfileOncallSlot(slot));
+    });
+}
+
+function loadProfileOncallStatus() {
+    $("#profile-oncall-status").text("Loading on-call status...");
+
+    apiGet("/api/profile/oncall?days=30", function (data) {
+        renderProfileOncallStatus(data || {});
+    });
+}
+$(document).on("click", "#refresh-profile-oncall", loadProfileOncallStatus);
+
+loadProfileOncallStatus();
+function switchProfileTab(tabName) {
+    const normalized = tabName || "details";
+
+    $("[data-profile-tab]")
+        .removeClass("is-active")
+        .filter("[data-profile-tab='" + normalized + "']")
+        .addClass("is-active");
+
+    $(".profile-tab-panel").hide();
+    $("#profile-tab-" + normalized).show();
+
+    if (normalized === "oncall") {
+        loadOncallStatusPanel("#profile-oncall-panel", {
+            days: 30,
+            endpoint: "/api/profile/oncall"
+        });
+    }
+}
+
+$(document).on("click", "[data-profile-tab]", function () {
+    switchProfileTab($(this).data("profile-tab"));
+});
+
+switchProfileTab("details");
