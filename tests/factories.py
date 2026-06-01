@@ -35,17 +35,23 @@ def create_group(name: str | None = None, slug: str | None = None) -> Group:
     return Group.create(name=name, slug=slug, active=True)
 
 
+_DEFAULT_EMAIL = object()
+
+
 def create_user(
     username: str | None = None,
     group: Group | None = None,
     *,
-    email: str | None = None,
+    email: str | None | object = _DEFAULT_EMAIL,
     is_admin: bool = False,
     active: bool = True,
     group_role: str = "editor",
 ) -> User:
     username = username or unique("user")
-    email = email or f"{username}@example.com"
+
+    if email is _DEFAULT_EMAIL:
+        email = f"{username}@example.com"
+
     user = User.create(
         username=username,
         display_name=username.title(),
@@ -55,8 +61,15 @@ def create_user(
         is_admin=is_admin,
         active_group=group,
     )
+
     if group is not None:
-        UserGroup.create(user=user, group=group, role=group_role, active=True)
+        UserGroup.create(
+            user=user,
+            group=group,
+            role=group_role,
+            active=True,
+        )
+
     return user
 
 

@@ -33,10 +33,13 @@ def test_user_oncall_status_reports_current_shift():
     )
 
     assert data["is_oncall"] is True
+    assert data["status"] == "primary"
     assert len(data["current"]) == 1
     assert data["current"][0]["team_name"] == "SRE"
     assert data["current"][0]["rotation_name"] == "Primary"
-    assert data["next"]
+
+    # One-person rotation is continuous, so there may be no separate next slot.
+    assert data["next"] == []
 
 
 def test_user_oncall_status_reports_next_shift_when_not_oncall():

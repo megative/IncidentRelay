@@ -5,8 +5,11 @@ from app.modules.db.models import (
     EscalationPolicyRule,
     Group,
     Rotation,
+    RotationLayer,
+    RotationLayerMember,
+    RotationOverride,
     Team,
-    TeamUser,
+    User,
 )
 from app.services.calendar_service import build_rotation_calendar
 
@@ -80,23 +83,77 @@ def _serialize_user_oncall_event(event):
     }
 
 
-def _list_user_rotations(user):
+def _list_user_rotations(user, *, start_at=None, end_at=None):
     """
-    Return enabled rotations from active teams where user is an active member.
+    Return enabled rotations where the user actually participates.
 
-    We intentionally use team membership here, not group membership only.
-    A user can belong to a group but not be part of a team's on-call schedule.
+    A user can be on-call because they are:
+    - a member of a rotation layer;
+    - assigned through a rotation override.
+
+    Team membership alone is not enough to determine on-call status.
     """
-    query = (
+    rotation_ids = set()
+
+    layer_member_rows = (
+        RotationLayerMember
+        .select(RotationLayerMember.layer)
+        .where(
+            (RotationLayerMember.user == user.id)
+            & (RotationLayerMember.active == True)
+        )
+    )
+
+    layer_ids = [
+        item.layer_id
+        for item in layer_member_rows
+    ]
+
+    if layer_ids:
+        layer_rows = (
+            RotationLayer
+            .select(RotationLayer.rotation)
+            .where(
+                (RotationLayer.id.in_(layer_ids))
+                & (RotationLayer.enabled == True)
+                & (RotationLayer.deleted == False)
+            )
+        )
+
+        rotation_ids.update(
+            item.rotation_id
+            for item in layer_rows
+            if item.rotation_id
+        )
+
+    override_query = (
+        RotationOverride
+        .select(RotationOverride.rotation)
+        .where(RotationOverride.user == user.id)
+    )
+
+    if start_at is not None and end_at is not None:
+        override_query = override_query.where(
+            (RotationOverride.starts_at < end_at)
+            & (RotationOverride.ends_at > start_at)
+        )
+
+    rotation_ids.update(
+        item.rotation_id
+        for item in override_query
+        if item.rotation_id
+    )
+
+    if not rotation_ids:
+        return []
+
+    return list(
         Rotation
         .select(Rotation)
         .join(Team, on=(Rotation.team == Team.id))
-        .join(TeamUser, on=(TeamUser.team == Team.id))
-        .switch(Team)
         .join(Group, on=(Team.group == Group.id))
         .where(
-            (TeamUser.user == user.id)
-            & (TeamUser.active == True)
+            (Rotation.id.in_(rotation_ids))
             & (Rotation.enabled == True)
             & (Rotation.deleted == False)
             & (Team.active == True)
@@ -106,8 +163,6 @@ def _list_user_rotations(user):
         )
         .order_by(Rotation.id.asc())
     )
-
-    return list(query)
 
 
 def _serialize_datetime_utc(value):
@@ -370,7 +425,11 @@ def get_user_oncall_status(
     current = []
     upcoming = []
 
-    for rotation in _list_user_rotations(user):
+    for rotation in _list_user_rotations(
+            user,
+            start_at=start_at,
+            end_at=end_at,
+    ):
         events = build_rotation_calendar(rotation, start_at, end_at)
 
         for event in events:

@@ -36,14 +36,7 @@ def _format_dt(value):
 
 
 def _notification_fingerprint(event, event_type):
-    """
-    Deduplicate shift notifications by actual transition point.
-
-    Calendar events can be split into multiple segments by overrides,
-    layer boundaries or active windows. A notification should be tied to
-    "user started being on-call" or "user stopped being on-call", not to
-    the full segment shape.
-    """
+    """Deduplicate shift notifications by transition point."""
     if event_type == SHIFT_START:
         transition_at = event.get("start")
     elif event_type == SHIFT_END:
@@ -229,12 +222,6 @@ def _send_shift_event(event, event_type):
         return False
 
     if not _user_wants_email(user, event_type):
-        return False
-
-    if event_type == SHIFT_START and _user_was_already_oncall_before_event(rotation, event):
-        return False
-
-    if event_type == SHIFT_END and _user_stays_oncall_after_event(rotation, event):
         return False
 
     log, _created = _get_or_create_log(user, rotation, event, event_type)

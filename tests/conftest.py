@@ -187,3 +187,8 @@ def admin_headers(admin_user):
     return {
         "Authorization": f"Bearer {token}",
     }
+
+
+@pytest.fixture
+def auth_headers(admin_headers):
+    return admin_headers
