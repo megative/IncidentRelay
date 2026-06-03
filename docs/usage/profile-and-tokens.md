@@ -22,6 +22,22 @@ Fill contact fields used by notification channels.
 
 Email and voice call channels send to the assigned user's profile contact data, not to channel-level recipient lists.
 
+## Browser push notifications
+
+Browser push notifications are configured per user in Profile.
+
+Use:
+
+```text
+Enable push on this device
+Send test push
+Disable
+```
+
+Browser push is not a notification channel. When an alert is assigned to the user, IncidentRelay can send push notifications to the user's active browser/PWA devices. ACK and Resolve buttons use short-lived one-time action tokens.
+
+Read more: [Browser Push](browser-push.md).
+
 ## Active group
 
 The active group controls the current group context in the UI and for group-scoped operations.

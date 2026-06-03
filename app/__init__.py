@@ -26,6 +26,8 @@ from app.views.sso_admin_view import sso_admin_bp
 from app.views.sso_auth_view import sso_auth_bp
 from app.services.db_errors import handle_integrity_error, handle_not_found_error
 from app.views.services_view import services_bp
+from app.views.push_view import push_bp
+from app.views.notification_rules_view import notification_rules_bp
 
 
 def create_app(log_role=None):
@@ -93,3 +95,5 @@ def register_blueprints(flask_app):
     flask_app.register_blueprint(silences_bp, url_prefix="/api/silences")
     flask_app.register_blueprint(integrations_bp, url_prefix="/api/integrations")
     flask_app.register_blueprint(sso_admin_bp, url_prefix="/api/admin/sso")
+    flask_app.register_blueprint(push_bp, url_prefix="/api")
+    flask_app.register_blueprint(notification_rules_bp, url_prefix="/api")

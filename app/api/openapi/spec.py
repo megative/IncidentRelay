@@ -1,20 +1,22 @@
 from app.api.openapi.endpoints import (
     alerts,
     auth,
+    browser_push,
     calendar,
     channels,
+    escalation_policies,
+    groups,
     integrations,
+    notification_rules,
     profile,
     rotations,
     routes,
+    services,
     silences,
+    sso,
     teams,
     users,
     version,
-    groups,
-    sso,
-    escalation_policies,
-    services
 )
 from app.version import get_service_version
 
@@ -33,6 +35,8 @@ ENDPOINT_MODULES = [
     silences,
     integrations,
     profile,
+    browser_push,
+    notification_rules,
     groups,
     sso,
     services,
@@ -40,10 +44,7 @@ ENDPOINT_MODULES = [
 
 
 def build_openapi_spec():
-    """
-    Build the OpenAPI specification from endpoint modules.
-    """
-
+    """Build the OpenAPI specification from endpoint modules."""
     paths = {}
     tags = []
 
@@ -57,8 +58,9 @@ def build_openapi_spec():
             "title": "IncidentRelay API",
             "version": get_service_version(),
             "description": (
-                "API-first on-call management service. The API manages teams, users, "
-                "rotations, alert routes, services, notification channels, silences, "
+                "API-first on-call management service. The API manages teams, "
+                "users, rotations, alert routes, services, notification channels, "
+                "profile notification rules, browser push subscriptions, silences, "
                 "incoming webhooks and alert acknowledgement workflow."
             ),
         },
@@ -69,7 +71,10 @@ def build_openapi_spec():
                 "bearerAuth": {
                     "type": "http",
                     "scheme": "bearer",
-                    "description": "JWT access token, regular API token, or channel alert intake token. Use: Authorization: Bearer <token>.",
+                    "description": (
+                        "JWT access token, regular API token, or channel alert "
+                        "intake token. Use: Authorization: Bearer <token>."
+                    ),
                 }
             }
         },

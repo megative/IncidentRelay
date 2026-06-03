@@ -1062,3 +1062,145 @@ class RotationLayerRestriction(BaseModel):
         indexes = (
             (("layer", "weekday"), False),
         )
+
+
+class BrowserPushSubscription(BaseModel):
+    id = AutoField()
+
+    user = ForeignKeyField(
+        User,
+        backref="browser_push_subscriptions",
+        on_delete="CASCADE",
+    )
+
+    endpoint = TextField(unique=True)
+    p256dh = TextField()
+    auth = TextField()
+
+    device_name = CharField(max_length=255, null=True)
+    user_agent = TextField(null=True)
+
+    enabled = BooleanField(default=True)
+    deleted = BooleanField(default=False)
+    deleted_at = DateTimeField(null=True)
+
+    last_seen_at = DateTimeField(null=True)
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "browser_push_subscription"
+        indexes = (
+            (("user", "enabled", "deleted"), False),
+        )
+
+
+class BrowserPushActionToken(BaseModel):
+    id = AutoField()
+
+    user = ForeignKeyField(
+        User,
+        backref="browser_push_action_tokens",
+        on_delete="CASCADE",
+    )
+
+    alert = ForeignKeyField(
+        Alert,
+        backref="browser_push_action_tokens",
+        on_delete="CASCADE",
+    )
+
+    action = CharField(max_length=32)
+    token_hash = CharField(max_length=128, unique=True)
+
+    used_at = DateTimeField(null=True)
+    expires_at = DateTimeField()
+    created_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "browser_push_action_token"
+        indexes = (
+            (("alert", "user", "action"), False),
+            (("expires_at", "used_at"), False),
+        )
+
+
+class UserNotificationRule(SoftDeleteModel):
+    """PagerDuty-like user notification rule."""
+
+    id = AutoField()
+
+    user = ForeignKeyField(
+        User,
+        backref="notification_rules",
+        on_delete="CASCADE",
+    )
+
+    position = IntegerField(default=0)
+    method = CharField(index=True)
+    delay_seconds = IntegerField(default=0)
+    enabled = BooleanField(default=True)
+    severities = JSONTextField(null=True)
+    event_types = JSONTextField(null=True)
+
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "user_notification_rule"
+        indexes = (
+            (("user", "position"), False),
+            (("user", "enabled", "deleted"), False),
+            (("method", "enabled"), False),
+        )
+
+
+class UserNotificationDelivery(BaseModel):
+    """Scheduled or sent user-level notification delivery."""
+
+    id = AutoField()
+
+    alert = ForeignKeyField(
+        Alert,
+        backref="user_notification_deliveries",
+        on_delete="CASCADE",
+    )
+
+    user = ForeignKeyField(
+        User,
+        backref="notification_deliveries",
+        on_delete="CASCADE",
+    )
+
+    rule = ForeignKeyField(
+        UserNotificationRule,
+        null=True,
+        backref="deliveries",
+        on_delete="SET NULL",
+    )
+
+    method = CharField(index=True)
+    event_type = CharField(index=True)
+
+    status = CharField(default="pending", index=True)
+    scheduled_at = DateTimeField(index=True)
+    sent_at = DateTimeField(null=True)
+
+    provider = CharField(null=True)
+    external_message_id = CharField(null=True, index=True)
+    external_channel_id = CharField(null=True)
+    provider_status = CharField(null=True)
+    provider_payload = JSONTextField(null=True)
+
+    last_error = TextField(null=True)
+
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "user_notification_delivery"
+        indexes = (
+            (("status", "scheduled_at"), False),
+            (("alert", "user", "method", "event_type"), False),
+            (("rule", "alert", "event_type"), False),
+        )

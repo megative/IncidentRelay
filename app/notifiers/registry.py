@@ -5,7 +5,6 @@ from app.notifiers.plugins import (
     TeamsNotifier,
 )
 from app.notifiers.mattermost.notifier import MattermostNotifier
-from app.notifiers.voice.notifier import VoiceCallNotifier
 from app.notifiers.email.notifier import EmailNotifier
 from app.notifiers.telegram.notifier import TelegramNotifier
 from app.notifiers.types import (
@@ -16,7 +15,6 @@ from app.notifiers.types import (
     SLACK_CHANNEL,
     TEAMS_CHANNEL,
     TELEGRAM_CHANNEL,
-    VOICE_CALL_CHANNEL,
     WEBHOOK_CHANNEL,
 )
 
@@ -28,7 +26,6 @@ NOTIFIERS = {
     DISCORD_CHANNEL: DiscordNotifier(),
     TEAMS_CHANNEL: TeamsNotifier(),
     EMAIL_CHANNEL: EmailNotifier(),
-    VOICE_CALL_CHANNEL: VoiceCallNotifier(),
 }
 
 

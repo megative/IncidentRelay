@@ -33,9 +33,7 @@ There are two ways:
 1. Select a default service on the route.
 2. Configure service match rules.
 
-Use a default service when all alerts through the route belong to the same system.
-
-Use service match rules when one route receives alerts for multiple systems.
+Use a default service when all alerts through the route belong to the same system. Use service match rules when one route receives alerts for multiple systems.
 
 Example service match rule:
 
@@ -64,6 +62,7 @@ This can attach matching alerts to an `API` or `Billing API` service.
   "message": "Deployment failed on api-prod-1",
   "severity": "critical",
   "team": "infra",
+  "event_link": "https://monitoring.example.com/events/deploy-incident-42",
   "labels": {
     "service": "api",
     "environment": "prod",
@@ -76,6 +75,21 @@ This can attach matching alerts to an `API` or `Billing API` service.
 }
 ```
 
+`event_link` is the recommended field for a direct link to the source event, dashboard, trace, deployment, log query, or another system page that explains the alert.
+
+Supported aliases:
+
+```text
+event_link
+event_url
+alert_url
+source_url
+dashboard_url
+runbook_url
+```
+
+The first non-empty value is stored in `labels.event_link` and exposed as `alert.event_link` in the alert API response.
+
 ## Normalized fields
 
 | IncidentRelay field | Source |
@@ -87,6 +101,7 @@ This can attach matching alerts to an `API` or `Billing API` service.
 | `title` | `title`, default `Webhook alert` |
 | `message` | `message` |
 | `severity` | `severity` |
-| `labels` | `labels` |
+| `labels` | `labels` plus helper labels such as `event_link` |
+| `event_link` | `event_link`, `event_url`, `alert_url`, `source_url`, `dashboard_url`, `runbook_url`, or matching label aliases |
 | `payload` | original payload |
 | `status` | `status`, default `firing` |

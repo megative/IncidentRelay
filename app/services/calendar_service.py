@@ -7,6 +7,11 @@ from app.modules.db import rotations_repo
 _OVERRIDE_PRIORITY = 1_000_000
 
 
+def utc_isoformat(value):
+    """Return UTC ISO datetime with Z suffix for browser-safe parsing."""
+    return as_utc_aware(value).isoformat().replace("+00:00", "Z")
+
+
 def parse_date_or_datetime(value):
     """Parse ISO date or datetime value."""
 
@@ -82,8 +87,15 @@ def build_layer_candidate_events(rotation, layer, start_at, end_at):
     if not members:
         return []
 
-    layer_start_at = as_utc_naive(
-        effective_layer_value(layer, "start_at", rotation.start_at)
+    timezone_name = effective_layer_value(
+        layer,
+        "timezone",
+        rotation.timezone,
+    ) or "UTC"
+
+    layer_start_at = as_rotation_timezone_utc_naive(
+        effective_layer_value(layer, "start_at", rotation.start_at),
+        timezone_name,
     )
 
     duration_seconds = int(
@@ -137,12 +149,7 @@ def build_layer_candidate_events(rotation, layer, start_at, end_at):
                             "layer_id": layer.id,
                             "layer_name": layer.name,
                             "layer_priority": layer.priority,
-                            "timezone": effective_layer_value(
-                                layer,
-                                "timezone",
-                                rotation.timezone,
-                            )
-                            or "UTC",
+                            "timezone": timezone_name,
                             "user_id": user.id,
                             "username": user.username,
                             "display_name": user.display_name,
@@ -251,8 +258,8 @@ def collapse_calendar_candidates(candidates, start_at, end_at):
         )
 
         event = dict(winner["event"])
-        event["start"] = segment_start.isoformat()
-        event["end"] = segment_end.isoformat()
+        event["start"] = utc_isoformat(segment_start)
+        event["end"] = utc_isoformat(segment_end)
 
         append_or_merge_calendar_event(result, event)
 
@@ -469,3 +476,24 @@ def as_utc_naive(value):
     """Return UTC datetime without tzinfo for DB-compatible comparisons."""
 
     return as_utc_aware(value).replace(tzinfo=None)
+
+
+def as_rotation_timezone_utc_naive(value, timezone_name):
+    """
+    Convert rotation/layer local datetime to UTC naive.
+
+    If value is naive, treat it as local time in rotation/layer timezone.
+    If value is aware, convert it to UTC.
+    """
+    if value is None:
+        return None
+
+    try:
+        zone = ZoneInfo(timezone_name or "UTC")
+    except Exception:
+        zone = ZoneInfo("UTC")
+
+    if value.tzinfo is None:
+        return value.replace(tzinfo=zone).astimezone(dt_timezone.utc).replace(tzinfo=None)
+
+    return value.astimezone(dt_timezone.utc).replace(tzinfo=None)

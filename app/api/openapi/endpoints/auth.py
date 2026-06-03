@@ -5,7 +5,7 @@ def tags():
 
     return [
         {
-            "name": "Authentication",
+            "name": "authentication",
             "description": "JWT authentication methods for the web UI and API clients.",
         }
     ]

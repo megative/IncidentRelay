@@ -11,7 +11,7 @@ from app.services.db_lock import acquire_db_lock, release_db_lock
 from app.services.oncall_shift_notifications import (
     send_due_oncall_shift_email_notifications,
 )
-
+from app.services.notification_rules import process_due_user_notifications
 
 logger = logging.getLogger("oncall.scheduler")
 _scheduler = None
@@ -38,6 +38,7 @@ def reminder_job():
         logger.info("reminder job started")
 
         count = send_unacked_reminders()
+        count += process_due_user_notifications()
 
         logger.info(
             "reminder job finished",
@@ -107,6 +108,48 @@ def oncall_shift_email_job():
             db.close()
 
 
+def user_notification_rules_job():
+    """Send due delayed user notification rules under a database lock."""
+    if db.is_closed():
+        db.connect(reuse_if_open=True)
+
+    owner = None
+
+    try:
+        owner = acquire_db_lock("user_notification_rules_job")
+
+        if not owner:
+            logger.debug("user notification rules job skipped because lock is busy")
+            return 0
+
+        logger.info("user notification rules job started")
+
+        count = process_due_user_notifications()
+
+        logger.info(
+            "user notification rules job finished",
+            extra={
+                "extra": {
+                    "event_type": "scheduler",
+                    "user_notification_deliveries_processed": count,
+                }
+            },
+        )
+
+        return count
+
+    except Exception:
+        logger.exception("user notification rules job failed")
+        return 0
+
+    finally:
+        if owner:
+            release_db_lock("user_notification_rules_job", owner)
+
+        if not db.is_closed():
+            db.close()
+
+
 def start_scheduler():
     """
     Start the background scheduler.
@@ -146,6 +189,23 @@ def start_scheduler():
         coalesce=True,
         next_run_time=datetime.utcnow(),
         id="oncall_shift_email_job",
+        replace_existing=True,
+    )
+
+    _scheduler.add_job(
+        user_notification_rules_job,
+        "interval",
+        seconds=int(
+            getattr(
+                Config,
+                "USER_NOTIFICATION_RULES_CHECK_INTERVAL_SECONDS",
+                30,
+            )
+        ),
+        max_instances=1,
+        coalesce=True,
+        next_run_time=datetime.utcnow(),
+        id="user_notification_rules_job",
         replace_existing=True,
     )
 

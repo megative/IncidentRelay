@@ -12,6 +12,7 @@ from app.modules.db.models import (
     SsoGroupMapping,
     SsoIdentity,
     SsoProvider,
+    User,
     UserGroup,
 )
 from app.modules.sso.crypto import decrypt_secret
@@ -742,3 +743,89 @@ def test_validate_phone_rejects_letters():
         assert "phone may contain" in str(exc)
     else:
         raise AssertionError("ValueError was not raised")
+
+
+def test_complete_sso_login_syncs_group_mapping_case_insensitive_and_sets_active_group():
+    provider = make_oidc_provider(
+        slug="group-sync-normalized",
+        auto_create_users=True,
+        sync_group_memberships=True,
+    )
+
+    infra_group = create_group(slug="infra-normalized", name="Infra Normalized")
+
+    SsoGroupMapping.create(
+        provider=provider,
+        external_group="infra-sso",
+        incidentrelay_group=infra_group,
+        group_role="editor",
+        active=True,
+        priority=10,
+    )
+
+    user = complete_sso_login(
+        provider,
+        {
+            "sub": "group-user-normalized",
+            "email": "group-user-normalized@example.com",
+            "email_verified": True,
+            "preferred_username": "group-user-normalized",
+            "name": "Group User Normalized",
+            "groups": ["  INFRA-SSO  "],
+        },
+    )
+
+    membership = UserGroup.get(
+        (UserGroup.user == user.id)
+        & (UserGroup.group == infra_group.id)
+    )
+
+    user = User.get_by_id(user.id)
+
+    assert membership.active is True
+    assert membership.role == "editor"
+    assert user.active_group_id == infra_group.id
+
+
+def test_complete_sso_login_denies_user_without_matching_group_mapping():
+    provider = make_oidc_provider(
+        slug="group-sync-required",
+        auto_create_users=True,
+        sync_group_memberships=True,
+        remove_missing_group_memberships=False,
+    )
+
+    infra_group = create_group(slug="infra-required", name="Infra Required")
+
+    SsoGroupMapping.create(
+        provider=provider,
+        external_group="infra-sso",
+        incidentrelay_group=infra_group,
+        group_role="viewer",
+        active=True,
+        priority=10,
+    )
+
+    with pytest.raises(SsoLoginError) as exc:
+        complete_sso_login(
+            provider,
+            {
+                "sub": "orphan-sso-user",
+                "email": "orphan-sso-user@example.com",
+                "email_verified": True,
+                "preferred_username": "orphan-sso-user",
+                "name": "Orphan SSO User",
+                "groups": ["unknown-sso-group"],
+            },
+        )
+
+    assert exc.value.error == "sso_group_mapping_not_matched"
+
+    assert not User.select().where(
+        User.username == "orphan-sso-user"
+    ).exists()
+
+    assert not SsoIdentity.select().where(
+        (SsoIdentity.provider == provider.id)
+        & (SsoIdentity.subject == "orphan-sso-user")
+    ).exists()

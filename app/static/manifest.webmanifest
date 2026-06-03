@@ -1,0 +1,99 @@
+{
+  "id": "/?source=pwa",
+  "name": "IncidentRelay",
+  "short_name": "IncidentRelay",
+  "description": "Self-hosted on-call scheduling, alert routing and incident notifications.",
+  "lang": "en",
+  "dir": "ltr",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#1570ef",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/static/images/pwa/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/images/pwa/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/images/pwa/maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/static/images/pwa/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Alerts",
+      "short_name": "Alerts",
+      "description": "Open active alerts",
+      "url": "/alerts?source=pwa-shortcut",
+      "icons": [
+        {
+          "src": "/static/images/pwa/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "On-call calendar",
+      "short_name": "Calendar",
+      "description": "Open on-call calendar",
+      "url": "/calendar?source=pwa-shortcut",
+      "icons": [
+        {
+          "src": "/static/images/pwa/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Services",
+      "short_name": "Services",
+      "description": "Open service impact",
+      "url": "/services?source=pwa-shortcut",
+      "icons": [
+        {
+          "src": "/static/images/pwa/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+    "screenshots": [
+      {
+        "src": "/static/images/pwa/screenshots/desktop-alerts.png",
+        "sizes": "1280x720",
+        "type": "image/png",
+        "form_factor": "wide",
+        "label": "IncidentRelay alerts dashboard"
+      },
+      {
+        "src": "/static/images/pwa/screenshots/mobile-alerts.png",
+        "sizes": "390x844",
+        "type": "image/png",
+        "form_factor": "narrow",
+        "label": "IncidentRelay mobile alerts"
+      }
+    ]
+}

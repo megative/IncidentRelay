@@ -2,9 +2,7 @@
 
 ## 500 on duplicate names or slugs
 
-Duplicate resources should return `409 Conflict`, not `500`.
-
-Check API logs for `IntegrityError` and add explicit error handling in the corresponding view.
+Duplicate resources should return `409 Conflict`, not `500`. Check API logs for `IntegrityError` and add explicit error handling in the corresponding view.
 
 Common examples:
 
@@ -33,9 +31,7 @@ Check:
 
 ## Voice call fails with missing phone
 
-Voice call sends to the assigned user's profile phone number.
-
-Set `phone` on the assigned user.
+Voice call sends to the assigned user's profile phone number. Set `phone` on the assigned user.
 
 ## Telegram token error
 
@@ -104,8 +100,49 @@ Runbook matcher behavior:
 
 ```text
 empty matchers -> generic runbook for all alerts of the service
-matchers set   -> only matching alerts
+matchers set -> only matching alerts
 ```
+
+## Browser push is disabled or VAPID public key is not configured
+
+Check the profile config endpoint:
+
+```text
+GET /api/profile/push/vapid-public-key
+```
+
+Expected response:
+
+```json
+{
+  "enabled": true,
+  "public_key": "B..."
+}
+```
+
+If `enabled` is false or `public_key` is null, fix the `[browser_push]` config and restart the web service. Restart the scheduler too if it sends notifications in your installation.
+
+## Browser push test works but real alert does not
+
+Test push sends to the current profile user. Real alert push sends to `alert.assignee_id`.
+
+Check:
+
+1. The alert has an assignee.
+2. The assignee is the same user who enabled push in Profile.
+3. The subscription row has `enabled = true` and `deleted = false`.
+4. Browser push is enabled in config.
+5. `/service-worker.js` is current in the user's browser.
+
+Browser push is not a channel, so it does not appear in route channel bindings.
+
+## Browser push action returns token_expired
+
+The one-time ACK/Resolve token was older than `[browser_push] action_token_ttl_seconds` when the browser sent the action.
+
+## Browser push action returns token_already_used
+
+The same notification action token was already consumed. This can happen after a double click, browser retry, or clicking the same notification action more than once.
 
 ## Service, team or group name shows as `-`
 

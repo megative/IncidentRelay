@@ -11,6 +11,7 @@ from app.settings import Config
 PUBLIC_API_PATHS = {
     "/api/auth/login",
     "/api/auth/logout",
+    "/api/push/actions",
 }
 
 PUBLIC_API_PREFIXES = (

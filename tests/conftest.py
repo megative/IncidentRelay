@@ -62,6 +62,10 @@ from app.modules.db.models import (  # noqa: E402
     MaintenanceWindow,
     MaintenanceWindowService,
     OnCallShiftEmailNotification,
+    BrowserPushActionToken,
+    BrowserPushSubscription,
+    UserNotificationDelivery,
+    UserNotificationRule,
 )
 
 
@@ -69,6 +73,10 @@ CLEANUP_MODELS = [
     AlertNotificationEvent,
     AlertNotification,
     AlertEvent,
+    BrowserPushActionToken,
+    BrowserPushSubscription,
+    UserNotificationDelivery,
+    UserNotificationRule,
     Silence,
     AlertRouteChannel,
     Alert,

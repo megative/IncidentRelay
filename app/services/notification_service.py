@@ -6,6 +6,8 @@ from app.notifiers.registry import get_notifier
 from app.services.links import build_alert_web_url
 from app.services.severity import normalize_severity, normalize_severity_list
 from app.services.service_context import format_service_context_plain, service_display_name
+from app.notifiers.browser_push import service as browser_push
+from app.services import notification_rules
 
 EDITABLE_EVENTS = {"acknowledged", "resolved"}
 
@@ -114,6 +116,95 @@ def notification_log_extra(channel, alert, event_type, result=None, error=None, 
     return {"extra": data}
 
 
+def browser_push_log_extra(alert, event_type, sent=None, error=None, reason=None):
+    data = {
+        "alert_id": getattr(alert, "id", None),
+        "event_type": event_type,
+        "provider": "browser_push",
+        "assignee_id": getattr(alert, "assignee_id", None),
+    }
+
+    if sent is not None:
+        data["sent"] = sent
+
+    if error is not None:
+        data["error"] = str(error)
+
+    if reason:
+        data["reason"] = reason
+
+    return {"extra": data}
+
+
+def send_profile_browser_push(alert, event_type="notification"):
+    """Send built-in browser push to alert assignee profile devices."""
+
+    assignee = getattr(alert, "assignee", None)
+
+    if not assignee:
+        logger.info(
+            "browser push skipped",
+            extra=browser_push_log_extra(
+                alert,
+                event_type,
+                reason="no_assignee",
+            ),
+        )
+        return 0
+
+    try:
+        sent = browser_push.send_alert_push_to_user(
+            assignee,
+            alert,
+            event_type=event_type,
+        )
+    except Exception as exc:
+        alerts_repo.create_alert_event(
+            alert.id,
+            f"{event_type}_browser_push_failed",
+            f"browser_push: {exc}",
+        )
+        logger.warning(
+            "browser push failed",
+            extra=browser_push_log_extra(
+                alert,
+                event_type,
+                error=exc,
+            ),
+        )
+        return 0
+
+    if not sent:
+        logger.info(
+            "browser push skipped",
+            extra=browser_push_log_extra(
+                alert,
+                event_type,
+                sent=0,
+                reason="no_active_push_subscriptions",
+            ),
+        )
+        return 0
+
+    alerts_repo.create_alert_event(
+        alert.id,
+        f"{event_type}_browser_push_sent",
+        f"Sent browser push to {sent} device(s)",
+    )
+
+    logger.info(
+        "browser push sent",
+        extra=browser_push_log_extra(
+            alert,
+            event_type,
+            sent=sent,
+        ),
+    )
+
+    # Return logical delivery count, not device count.
+    return 1
+
+
 def get_channel_notify_on_severities(channel):
     """Return normalized channel-level severity filter.
 
@@ -150,22 +241,23 @@ def channel_matches_alert_severity(channel, alert):
 
 
 def has_matching_notification_channel(alert):
-    """Return True if the alert has at least one enabled matching channel.
+    """Return True if the alert has at least one deliverable notification target.
 
-    Used by scheduler before reminder/escalation processing to avoid counting
-    reminders for alerts that cannot be delivered to any channel.
+    Browser push is profile-based, not route-channel-based.
+    If the assignee has active browser push subscriptions, reminders/escalations
+    can still be delivered even when the route has no regular channels.
     """
-    if not alert.route:
-        return False
+    if alert.route:
+        for link in routes_repo.list_route_channels(alert.route.id):
+            channel = link.channel
 
-    for link in routes_repo.list_route_channels(alert.route.id):
-        channel = link.channel
-        if not channel.enabled:
-            continue
-        if channel_matches_alert_severity(channel, alert):
-            return True
+            if not channel.enabled:
+                continue
 
-    return False
+            if channel_matches_alert_severity(channel, alert):
+                return True
+
+    return notification_rules.has_deliverable_user_notification(alert)
 
 
 def notify_alert(alert, event_type="notification"):
@@ -294,6 +386,11 @@ def notify_alert(alert, event_type="notification"):
                 "notification failed",
                 extra=notification_log_extra(channel, alert, event_type, error=exc),
             )
+
+    sent_count += notification_rules.enqueue_user_notifications(
+        alert,
+        event_type=event_type,
+    )
 
     if sent_count:
         alerts_repo.record_notification_time(alert, datetime.utcnow())

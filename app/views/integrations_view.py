@@ -1,16 +1,19 @@
 import logging
+from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 
 from app.api.schemas.integrations import AlertmanagerWebhookSchema, GenericWebhookSchema, ZabbixWebhookSchema
 from app.settings import Config
-from app.modules.db import channels_repo, users_repo, notifications_repo, alerts_repo
+from app.modules.db import channels_repo, users_repo, alerts_repo
 from app.services.alerts import acknowledge_alert, resolve_alert, upsert_alert
 from app.services.auth import require_alert_token
 from app.services.normalizers import normalize_alertmanager, normalize_webhook, normalize_zabbix
 from app.services.validation import validate_body
-from app.notifiers.voice.loader import create_voice_provider, resolve_env_values
+from app.notifiers.voice.loader import create_voice_provider
 from app.services.routing import find_route_for_alert
+from app.modules.db.models import UserNotificationDelivery
+from app.services.notification_rules import mark_delivery_failed
 
 
 integrations_bp = Blueprint("integrations_api", __name__)
@@ -193,35 +196,30 @@ def mattermost_action():
     })
 
 
-@integrations_bp.route("/voice/callback/<int:channel_id>/<secret>", methods=["POST"])
-def voice_callback(channel_id, secret):
-    """Handle voice provider callbacks.
-
-    Supported normalized events:
-    - status changes;
-    - DTMF button presses;
-    - provider errors.
-    """
-
-    channel = channels_repo.get_channel(channel_id)
-
-    if channel.channel_type != "voice_call":
-        return jsonify({"error": "channel is not voice_call"}), 400
-
-    config = channel.config or {}
+@integrations_bp.route("/voice/rule-callback/<int:delivery_id>/<secret>", methods=["POST"])
+def voice_rule_callback(delivery_id, secret):
+    """Handle voice callbacks for user notification rules."""
     expected_secret = Config.VOICE_CALLBACK_SECRET
 
     if not expected_secret or secret != expected_secret:
         return jsonify({"error": "voice callback rejected"}), 403
+
+    delivery = UserNotificationDelivery.get_or_none(
+        UserNotificationDelivery.id == delivery_id
+    )
+
+    if not delivery:
+        return jsonify({"error": "notification delivery was not found"}), 404
 
     payload = request.get_json(silent=True)
 
     if payload is None:
         payload = request.form.to_dict(flat=True)
 
-    provider_name = config.get("provider") or Config.VOICE_PROVIDER
-    provider_config = resolve_env_values(config.get("provider_config") or {})
-    provider = create_voice_provider(provider_name, provider_config)
+    provider = create_voice_provider(
+        Config.VOICE_PROVIDER,
+        Config.VOICE_PROVIDER_CONFIG,
+    )
 
     events = provider.parse_callback(
         payload=payload or {},
@@ -236,8 +234,9 @@ def voice_callback(channel_id, secret):
     processed = []
 
     for event in events:
-        result = _process_voice_callback_event(channel, config, event)
-        processed.append(result)
+        processed.append(
+            _process_voice_rule_callback_event(delivery, event)
+        )
 
     return jsonify(
         {
@@ -247,64 +246,33 @@ def voice_callback(channel_id, secret):
     )
 
 
-def _process_voice_callback_event(channel, config, event):
-    """Process one normalized voice provider callback event."""
+def _process_voice_rule_callback_event(delivery, event):
+    delivery.provider_status = event.status
+    delivery.provider_payload = event.raw
+    delivery.updated_at = datetime.utcnow()
+    delivery.save()
 
-    notification = notifications_repo.get_notification_by_external_id(
-        channel_id=channel.id,
-        external_message_id=event.call_id,
-    )
+    alert = delivery.alert
 
-    if not notification:
-        logging.getLogger("oncall.voice").warning(
-            "voice callback notification not found",
-            extra={
-                "extra": {
-                    "channel_id": channel.id,
-                    "call_id": event.call_id,
-                    "event_type": event.event_type,
-                    "status": event.status,
-                    "digit": event.digit,
-                }
-            },
-        )
+    action = None
 
-        return {
-            "call_id": event.call_id,
-            "status": "notification_not_found",
-        }
-
-    notifications_repo.update_notification_callback_state(
-        notification=notification,
-        event_type=event.event_type,
-        provider_status=event.status,
-        provider_payload=event.raw,
-    )
-
-    action = _resolve_voice_action(config, event)
-
-    notifications_repo.create_notification_event(
-        notification=notification,
-        event_type=event.event_type,
-        provider_status=event.status,
-        digit=event.digit,
-        action=action,
-        message=event.message,
-        payload=event.raw,
-    )
-
-    alert = notification.alert
+    if event.action in {"acknowledge", "resolve"}:
+        action = event.action
+    elif event.digit:
+        action = {
+            "1": "acknowledge",
+            "2": "resolve",
+        }.get(str(event.digit))
 
     alerts_repo.create_alert_event(
         alert.id,
         f"voice_{event.event_type}",
-        _voice_event_message(channel, event, action),
+        _voice_rule_event_message(delivery, event, action),
     )
 
     if action == "acknowledge":
         user_id = alert.assignee.id if alert.assignee else None
         acknowledge_alert(alert.id, user_id=user_id)
-
     elif action == "resolve":
         user_id = alert.assignee.id if alert.assignee else None
         resolve_alert(alert.id, user_id=user_id)
@@ -316,31 +284,13 @@ def _process_voice_callback_event(channel, config, event):
         "digit": event.digit,
         "action": action,
         "alert_id": alert.id,
+        "delivery_id": delivery.id,
     }
 
 
-def _resolve_voice_action(config, event):
-    """Return alert action from provider event or DTMF digit."""
-
-    if event.action in {"acknowledge", "resolve"}:
-        return event.action
-
-    if not event.digit:
-        return None
-
-    dtmf_actions = config.get("dtmf_actions") or {
-        "1": "acknowledge",
-        "2": "resolve",
-    }
-
-    return dtmf_actions.get(str(event.digit))
-
-
-def _voice_event_message(channel, event, action):
-    """Return human-readable alert history message."""
-
+def _voice_rule_event_message(delivery, event, action):
     parts = [
-        f"Voice callback from {channel.name}",
+        f"Voice notification rule delivery #{delivery.id}",
         f"event={event.event_type}",
     ]
 

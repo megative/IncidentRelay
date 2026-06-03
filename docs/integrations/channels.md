@@ -13,6 +13,11 @@ Incoming alert -> Route -> Notification channels
 
 A route can have one or more channels. When an alert is created or updated, IncidentRelay checks every channel attached to the matched route.
 
+!!! note "Browser push is profile-level"
+    Browser push is not a channel type. Users enable browser/PWA push in Profile, and alerts are sent to active browser push devices of the assigned user.
+
+    Browser push does not need a route-channel binding. Read more: [Browser Push](../usage/browser-push.md).
+
 ## Delivery checks
 
 For each channel IncidentRelay checks:
@@ -110,11 +115,21 @@ Check:
 
 ### Test works but real alert does not
 
-A channel test bypasses some of the real alert routing path. Real alerts still require:
+A channel test bypasses some of the real alert routing path.
+
+Real alerts still require:
 
 ```text
 route match -> route channel binding -> allowed severity -> assignee contact data
 ```
+
+For browser push, the check is different:
+
+```text
+alert assignee -> assignee has active browser push subscription
+```
+
+Browser push test sends to the current profile user. Real alert push sends to the assigned user.
 
 ### Logs show `notification sent`, but the user did not receive it
 

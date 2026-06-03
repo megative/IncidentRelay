@@ -3,6 +3,28 @@ from datetime import datetime, timezone
 from app.modules.sso.saml_security import get_saml_security
 
 
+def extract_alert_event_link(alert):
+    """Return external event/source link from alert labels."""
+    labels = alert.labels or {}
+
+    for key in (
+        "event_link",
+        "event_url",
+        "alert_url",
+        "source_url",
+        "generator_url",
+        "dashboard_url",
+        "panel_url",
+        "runbook_url",
+    ):
+        value = labels.get(key)
+
+        if value:
+            return value
+
+    return None
+
+
 def serialize_utc_datetime(value):
     """Serialize a datetime as an explicit UTC ISO-8601 string."""
     if not value:
@@ -434,6 +456,7 @@ def serialize_alert(
         "silenced": alert.silenced,
         "labels": alert.labels or {},
         "labels_count": len(alert.labels or {}),
+        "event_link": extract_alert_event_link(alert),
         "assignee": alert.assignee.username if alert.assignee else None,
         "assignee_id": alert.assignee.id if alert.assignee else None,
         "assignee_details": serialize_user_short(alert.assignee),

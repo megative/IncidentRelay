@@ -32,7 +32,7 @@ class VoiceCallNotifier(BaseNotifier):
         provider = create_voice_provider(provider_name, provider_config)
         call_text = self._build_call_text(alert, text, event_type)
         callback_secret = self._callback_secret()
-        callback_url = self._callback_url(channel, callback_secret)
+        callback_url = config.get("callback_url")
 
         request = VoiceCallRequest(
             phone=phone,

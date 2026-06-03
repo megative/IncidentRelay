@@ -110,35 +110,6 @@ body.md-theme .dashboard-list {
   padding: 16px 18px 18px;
 }
 
-body.md-theme .overview-list-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 12px;
-  background: #fbfdff;
-  border: 1px solid var(--md-border);
-  border-radius: var(--md-radius-md);
-}
-
-body.md-theme .overview-list-button {
-  border: 1px solid var(--md-border);
-  cursor: pointer;
-  text-align: left;
-}
-
-body.md-theme .overview-list-button:hover {
-  background: var(--md-surface-hover);
-  border-color: var(--md-border-strong);
-}
-
-body.md-theme .overview-list-dot {
-  width: 10px;
-  height: 10px;
-  flex: 0 0 10px;
-  border-radius: 999px;
-}
-
 body.md-theme .overview-dot-firing {
   background: var(--md-danger);
 }
@@ -153,45 +124,6 @@ body.md-theme .overview-dot-resolved {
 
 body.md-theme .overview-dot-silenced {
   background: var(--md-muted);
-}
-
-body.md-theme .overview-list-main {
-  flex: 1;
-  min-width: 0;
-}
-
-body.md-theme .overview-list-title {
-  color: var(--md-text);
-  font-weight: 850;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-body.md-theme .overview-list-subtitle {
-  margin-top: 4px;
-  color: var(--md-muted);
-  font-size: 12px;
-}
-
-body.md-theme .overview-list-time {
-  color: var(--md-muted);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-body.md-theme .overview-team-avatar {
-  width: 38px;
-  height: 38px;
-  flex: 0 0 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: var(--md-primary-soft);
-  color: var(--md-primary);
-  font-size: 12px;
-  font-weight: 900;
 }
 
 body.md-theme .overview-team-count {
@@ -271,9 +203,6 @@ body.md-theme .empty-table-cell {
   body.md-theme .dashboard-bottom-grid {
     grid-template-columns: 1fr;
   }
-}
-.overview-impact-card .overview-list {
-    gap: 8px;
 }
 
 .dashboard-impact-item {

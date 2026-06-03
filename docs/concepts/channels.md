@@ -20,6 +20,10 @@ email
 voice_call
 ```
 
+Browser push is intentionally not listed here. It is profile-level: users enable it in Profile, and IncidentRelay sends push notifications to active browser/PWA devices of the assigned user.
+
+Read more: [Browser Push](../usage/browser-push.md).
+
 Channels do not have alert intake tokens. A route receives alerts through its route intake token and then sends notifications to one or more channels.
 
 ```text
@@ -71,5 +75,7 @@ Some channels can support ACK/Resolve actions from the message itself.
 | Voice call | DTMF actions if provider supports callbacks |
 | Email | No interactive actions |
 | Slack/Discord/Teams/webhook | Usually one-way notification only |
+
+Browser push notifications can also include ACK/Resolve actions, but browser push is profile-level and is not configured as a channel.
 
 Read more in [Notification channels](../integrations/channels.md).

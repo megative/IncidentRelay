@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 
 from flask import Blueprint, jsonify, request
 
@@ -93,4 +93,57 @@ def get_calendar():
     if error:
         return error
 
-    return jsonify(build_team_calendar(team_id, start_at, end_at))
+    query_start_at = start_at
+    query_end_at = end_at
+
+    # Calendar inputs are local date boundaries.
+    # On-call shifts are calculated in rotation/layer timezones and stored/processed as UTC.
+    # Expand query range so local midnight handoffs are not clipped by UTC midnight.
+    build_start_at = start_at - timedelta(days=1)
+    build_end_at = end_at + timedelta(days=1)
+
+    events = build_team_calendar(team_id, build_start_at, build_end_at)
+
+    return jsonify(
+        [
+            event
+            for event in events
+            if event_overlaps_range(event, query_start_at, query_end_at)
+        ]
+    )
+
+
+def _as_utc_naive(value):
+    if value.tzinfo is None:
+        return value
+
+    return value.astimezone(dt_timezone.utc).replace(tzinfo=None)
+
+
+def _parse_calendar_event_datetime(value):
+    if not value:
+        return None
+
+    value = str(value)
+
+    # Python 3.10 datetime.fromisoformat() does not parse "Z",
+    # so convert it to a regular UTC offset.
+    if value.endswith("Z"):
+        value = value[:-1] + "+00:00"
+
+    parsed = datetime.fromisoformat(value)
+
+    return _as_utc_naive(parsed)
+
+
+def event_overlaps_range(event, start_at, end_at):
+    event_start = _parse_calendar_event_datetime(event.get("start"))
+    event_end = _parse_calendar_event_datetime(event.get("end"))
+
+    if not event_start or not event_end:
+        return False
+
+    start_at = _as_utc_naive(start_at)
+    end_at = _as_utc_naive(end_at)
+
+    return event_start < end_at and event_end > start_at

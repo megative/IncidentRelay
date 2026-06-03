@@ -194,12 +194,12 @@ function renderDashboardRecentAlerts(alerts) {
                 .addClass("overview-dot-" + normalizeAlertValue(alert.status))
         );
         item.append(
-            $("<span>")
-                .addClass("overview-list-main")
-                .append($("<span>").addClass("overview-list-title").text(alert.title || "-"))
+            $("<div>")
+                .addClass("list-main")
+                .append($("<div>").addClass("list-title").text(alert.title || "-"))
                 .append(
-                    $("<span>")
-                        .addClass("overview-list-subtitle")
+                    $("<div>")
+                        .addClass("list-subtitle")
                         .text(
                             (alert.team_slug || "-") +
                             " · " +
@@ -239,17 +239,17 @@ function renderDashboardTeamsNow(activeAlerts) {
     items.slice(0, 6).forEach(function (item) {
         target.append(
             $("<div>")
-                .addClass("overview-list-item")
+                .addClass("list-item")
                 .append(
                     $("<span>")
-                        .addClass("overview-team-avatar")
+                        .addClass("avatar")
                         .text(item.team.slice(0, 2).toUpperCase())
                 )
                 .append(
                     $("<span>")
-                        .addClass("overview-list-main")
-                        .append($("<span>").addClass("overview-list-title").text(item.team))
-                        .append($("<span>").addClass("overview-list-subtitle").text("Active alerts"))
+                        .addClass("list-main")
+                        .append($("<span>").addClass("list-title").text(item.team))
+                        .append($("<span>").addClass("list-subtitle").text("Active alerts"))
                 )
                 .append(
                     $("<span>")
@@ -512,7 +512,7 @@ function renderDashboardServiceImpactItem(row) {
             .addClass("overview-dot-" + String(row.effective_status || "unknown").replace(/_/g, "-"))
     );
 
-    const main = $("<div>").addClass("overview-list-main");
+    const main = $("<div>").addClass("list-main");
 
     main.append(
         $("<div>")
@@ -531,7 +531,7 @@ function renderDashboardServiceImpactItem(row) {
 
     main.append(
         $("<div>")
-            .addClass("overview-list-subtitle")
+            .addClass("list-subtitle")
             .text(subtitleParts.join(" · "))
     );
 

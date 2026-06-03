@@ -1,7 +1,15 @@
 <!doctype html>
 <html lang="en">
 <head>
-    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/favicon/apple-touch-icon.png') }}">
+    <link rel="manifest" href="/manifest.webmanifest">
+
+    <meta name="theme-color" content="#1570ef">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="IncidentRelay">
+    <meta name="application-name" content="IncidentRelay">
+
+    <link rel="apple-touch-icon" href="/static/images/pwa/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon/favicon-32x32.png') }}">
     <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='images/favicon/favicon-16x16.png') }}">
     <link rel="shortcut icon" href="{{ url_for('static', filename='images/favicon/favicon.ico') }}">
@@ -13,10 +21,14 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='/css/vendor/fontawesome/all.min.css') }}">
     <link rel="stylesheet" href="/static/css/oncall.css">
     <link rel="stylesheet" href="/static/css/material.css">
+    <link rel="stylesheet" href="/static/css/table_pages.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/vendor/tom-select/tom-select.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/table_filters.css') }}">
     <link rel="stylesheet" href="/static/css/vendor/select2/select2.min.css">
     <link rel="stylesheet" href="/static/css/vendor/select2/override-select2.css">
     <script src="/static/js/vendor/jquery-3.7.1.min.js"></script>
     <script src="/static/js/vendor/select2.min.js"></script>
+    <script src="{{ url_for('static', filename='js/vendor/tom-select.complete.min.js') }}"></script>
 </head>
 <body class="md-theme">
 <section class="layout">
@@ -222,6 +234,15 @@
                     >
                         <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
                     </button>
+                    <button
+                        id="topbar-install-app"
+                        type="button"
+                        class="topbar-icon-button is-hidden"
+                        title="Install app"
+                        aria-label="Install app"
+                    >
+                        <i class="fa-solid fa-download" aria-hidden="true"></i>
+                    </button>
                     <span id="service-version" class="badge badge-info">version</span>
                 </div>
             </div>
@@ -291,8 +312,12 @@
 <script src="/static/js/core/oncall_status.js"></script>
 <script src="/static/js/core/topbar_oncall.js"></script>
 <script src="/static/js/core/ui.js"></script>
+<script src="/static/js/core/table_pagination.js"></script>
+<script src="{{ url_for('static', filename='js/core/table_filters.js') }}"></script>
 <script src="/static/js/core/selects.js"></script>
 <script src="/static/js/core/sortable_table.js"></script>
+<script src="/static/js/core/pwa.js"></script>
+<script src="/static/js/core/browser_push.js"></script>
 <script src="/static/js/core/router.js"></script>
 <script src="/static/js/core/forms.js"></script>
 <script src="/static/js/sidebar.js"></script>
@@ -300,7 +325,7 @@
 <script src="/static/js/components/buttons.js"></script>
 <script src="/static/js/components/oncall_status_panel.js"></script>
 <script src="{{ url_for('static', filename='js/components/action_menu.js') }}"></script>
-<script src="/static/js/pages/alerts.js"></script>
+<script src="{{ url_for('static', filename='js/pages/alerts.js') }}"></script>
 <script src="/static/js/pages/rotations.js"></script>
 <script src="/static/js/pages/calendar.js"></script>
 <script src="/static/js/pages/routes.js"></script>

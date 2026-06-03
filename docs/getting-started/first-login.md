@@ -62,9 +62,7 @@ User: ivan
 Role: rw
 ```
 
-Repeat for all users.
-
-You can view group members on the same page by clicking `Members` next to the group.
+Repeat for all users. You can view group members on the same page by clicking `Members` next to the group.
 
 ## Step 4. Create a team
 
@@ -93,9 +91,7 @@ Open:
 Teams
 ```
 
-Click `Members` next to the team.
-
-Use `Add user to selected team`.
+Click `Members` next to the team. Use `Add user to selected team`.
 
 Example:
 
@@ -125,9 +121,9 @@ Timezone: UTC or your team timezone
 Reminder interval: 300 seconds
 ```
 
-A rotation is the calendar object used by routes, services and alerts.
+A rotation is the calendar object used by routes, services and alerts. When a rotation is created, IncidentRelay creates a `Default layer` inside it.
 
-When a rotation is created, IncidentRelay creates a `Default layer` inside it. If `Add all active team members to this rotation` is enabled, all active team members are added to the default layer in team order.
+If `Add all active team members to this rotation` is enabled, all active team members are added to the default layer in team order.
 
 ## Step 7. Configure rotation layers
 
@@ -175,9 +171,7 @@ Open:
 Calendar
 ```
 
-Check that the final schedule looks correct.
-
-The calendar displays one rotation calendar at a time. If a team has multiple rotations, select the required rotation.
+Check that the final schedule looks correct. The calendar displays one rotation calendar at a time. If a team has multiple rotations, select the required rotation.
 
 The calendar uses the final schedule:
 
@@ -252,6 +246,20 @@ Callback secret: optional
 
 Channels do not have alert intake tokens. They only define where notifications are sent.
 
+### Optional: enable browser push for responders
+
+Browser push is not a channel. It is enabled by each user in Profile and is delivered to that user's browser/PWA devices when an alert is assigned to them.
+
+Open:
+
+```text
+Profile
+```
+
+Use `Enable push on this device`, allow browser notifications, then use `Send test push`.
+
+Read more: [Browser Push](../usage/browser-push.md).
+
 ## Step 11. Create a route
 
 Open:
@@ -272,13 +280,13 @@ Matchers JSON: {"labels": {"team": "infra"}}
 Group by JSON: ["alertname", "instance"]
 ```
 
-Copy the route intake token after creating the route.
-
-If a route token is lost, open Routes and click `Regenerate token` next to the route.
+Copy the route intake token after creating the route. If a route token is lost, open Routes and click `Regenerate token` next to the route.
 
 Use `Default service` when all alerts that enter the route belong to one logical system.
 
-If one route receives alerts for multiple systems, create service match rules. Example RabbitMQ service match rule:
+If one route receives alerts for multiple systems, create service match rules.
+
+Example RabbitMQ service match rule:
 
 ```json
 {

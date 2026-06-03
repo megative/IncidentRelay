@@ -39,7 +39,7 @@
         >
             On-call
         </button>
-
+        <button type="button" class="page-tab" data-profile-tab="notifications">Notifications</button>
         <button
             type="button"
             class="page-tab"
@@ -207,12 +207,7 @@
         </div>
     </section>
 
-    <section
-        id="profile-tab-oncall"
-        class="profile-tab-panel"
-        data-profile-panel="oncall"
-        style="display: none;"
-    >
+    <section id="profile-tab-oncall" class="profile-tab-panel" data-profile-panel="oncall" style="display: none;">
         <div class="page-layout-grid">
             <section class="page-layout-main">
                 <section class="card">
@@ -273,6 +268,267 @@
             </aside>
         </div>
     </section>
+    <div id="profile-tab-notifications" class="profile-tab-panel" style="display: none;">
+        <section class="card" id="browser-push-card">
+            <div class="card-header">
+                <div>
+                    <h2>Browser push notifications</h2>
+                    <div class="card-subtitle">
+                        Receive alert notifications directly in this browser, including ACK and Resolve actions.
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-body">
+                <label for="push-device-name">Device name</label>
+                <input
+                    type="text"
+                    id="push-device-name"
+                    class="input"
+                    placeholder="My laptop, work phone..."
+                    autocomplete="off"
+                >
+
+                <div class="form-actions-inline">
+                    <button type="button" class="btn btn-primary" id="enable-push-btn">
+                        Enable push on this device
+                    </button>
+
+                    <button type="button" class="btn" id="send-test-push-btn">
+                        Send test push
+                    </button>
+
+                    <button type="button" class="btn" id="reload-push-devices-btn">
+                        Reload devices
+                    </button>
+
+                    <span id="push-status" class="inline-status"></span>
+                </div>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="data-table" id="push-devices-table">
+                    <thead>
+                        <tr>
+                            <th>Device</th>
+                            <th>Status</th>
+                            <th>Last seen</th>
+                            <th>Created</th>
+                            <th class="actions-th">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="push-devices-body">
+                        <tr>
+                            <td colspan="5">Loading devices...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <script src="{{ url_for('static', filename='js/components/profile/profile-push.js') }}"></script>
+        <section class="card" id="notification-rules-card">
+            <div class="card-header">
+                <div>
+                    <h2>Notification rules</h2>
+                    <div class="card-subtitle">
+                        Configure how IncidentRelay should notify you when an alert is assigned to you.
+                    </div>
+                </div>
+
+                <div class="card-actions">
+                    <button type="button" class="btn btn-primary" id="open-notification-rule-modal">
+                        New rule
+                    </button>
+                    <button type="button" class="btn" id="reload-notification-rules-btn">
+                        Reload
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="data-table" id="notification-rules-table">
+                    <thead>
+                        <tr>
+                            <th>Order</th>
+                            <th>Method</th>
+                            <th>Delay</th>
+                            <th>Severities</th>
+                            <th>Event types</th>
+                            <th>Status</th>
+                            <th class="actions-th">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="notification-rules-body">
+                        <tr>
+                            <td colspan="7" class="empty-cell">Loading notification rules...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <div id="notification-rule-modal" class="app-modal is-hidden">
+            <div class="app-modal-dialog app-modal-dialog-wide">
+                <div class="app-modal-header">
+                    <div>
+                        <h2 id="notification-rule-modal-title">Create notification rule</h2>
+                        <div class="card-subtitle">
+                            Personal notification rule for assigned alerts.
+                        </div>
+                    </div>
+
+                    <button
+                        id="close-notification-rule-modal"
+                        type="button"
+                        class="app-modal-close"
+                        aria-label="Close"
+                    >
+                        ×
+                    </button>
+                </div>
+
+                <div class="app-modal-body">
+                    <input type="hidden" id="notification-rule-id">
+
+                    <div class="grid-two">
+                        <section class="card">
+                            <div class="card-header">
+                                <div>
+                                    <h2>Rule</h2>
+                                    <div class="card-subtitle">
+                                        Delivery method, delay and enabled state.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-body">
+                                <label for="notification-rule-method">Method</label>
+                                <select id="notification-rule-method" class="input">
+                                    <option value="browser_push">Browser push</option>
+                                    <option value="email">Email</option>
+                                    <option value="voice_call">Voice call</option>
+                                </select>
+
+                                <label for="notification-rule-delay">Delay</label>
+                                <select id="notification-rule-delay" class="input">
+                                    <option value="0">Immediately</option>
+                                    <option value="60">After 1 minute</option>
+                                    <option value="120">After 2 minutes</option>
+                                    <option value="300">After 5 minutes</option>
+                                    <option value="600">After 10 minutes</option>
+                                    <option value="900">After 15 minutes</option>
+                                    <option value="1800">After 30 minutes</option>
+                                </select>
+
+                                <label class="md-checkbox">
+                                    <input id="notification-rule-enabled" type="checkbox" checked>
+                                    <span>Enabled</span>
+                                </label>
+
+                                <div class="help-text">
+                                    Disabled rules stay visible but are not used for alert delivery.
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="card">
+                            <div class="card-header">
+                                <div>
+                                    <h2>Filters</h2>
+                                    <div class="card-subtitle">
+                                        Optional severity and event filters.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-body">
+                                <div>
+                                    <label>Severities</label>
+
+                                    <div class="checkbox-grid">
+                                        <label class="md-checkbox">
+                                            <input type="checkbox" class="notification-rule-severity" value="critical">
+                                            <span>Critical</span>
+                                        </label>
+
+                                        <label class="md-checkbox">
+                                            <input type="checkbox" class="notification-rule-severity" value="warning">
+                                            <span>Warning</span>
+                                        </label>
+
+                                        <label class="md-checkbox">
+                                            <input type="checkbox" class="notification-rule-severity" value="info">
+                                            <span>Info</span>
+                                        </label>
+
+                                        <label class="md-checkbox">
+                                            <input type="checkbox" class="notification-rule-severity" value="unknown">
+                                            <span>Unknown</span>
+                                        </label>
+                                    </div>
+
+                                    <div class="help-text">
+                                        Leave empty to match all severities.
+                                    </div>
+                                </div>
+
+                                <div class="form-divider"></div>
+
+                                <div>
+                                    <label>Event types</label>
+
+                                    <div class="checkbox-grid">
+                                        <label class="md-checkbox">
+                                            <input type="checkbox" class="notification-rule-event-type" value="notification">
+                                            <span>Initial alert</span>
+                                        </label>
+
+                                        <label class="md-checkbox">
+                                            <input type="checkbox" class="notification-rule-event-type" value="reminder">
+                                            <span>Reminder</span>
+                                        </label>
+
+                                        <label class="md-checkbox">
+                                            <input type="checkbox" class="notification-rule-event-type" value="escalation">
+                                            <span>Escalation</span>
+                                        </label>
+
+                                        <label class="md-checkbox">
+                                            <input type="checkbox" class="notification-rule-event-type" value="acknowledged">
+                                            <span>Acknowledged</span>
+                                        </label>
+
+                                        <label class="md-checkbox">
+                                            <input type="checkbox" class="notification-rule-event-type" value="resolved">
+                                            <span>Resolved</span>
+                                        </label>
+                                    </div>
+
+                                    <div class="help-text">
+                                        Leave empty for initial alert, reminders and escalations.
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                <div class="app-modal-footer">
+                    <button id="cancel-notification-rule" type="button" class="btn">
+                        Cancel
+                    </button>
+
+                    <button id="save-notification-rule-btn" type="button" class="btn btn-primary">
+                        Save rule
+                    </button>
+                </div>
+            </div>
+        </div>
+
+
+        <script src="{{ url_for('static', filename='js/components/profile/profile-notification-rules.js') }}"></script>
+    </div>
 
     <section
         id="profile-tab-tokens"

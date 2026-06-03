@@ -1,4 +1,8 @@
 from datetime import datetime
+from functools import reduce
+from operator import or_
+
+from peewee import fn
 
 from app.modules.db.models import (
     ApiToken,
@@ -12,6 +16,161 @@ from app.modules.db.models import (
 )
 
 
+DEFAULT_USERS_PAGE_SIZE = 25
+MAX_USERS_PAGE_SIZE = 100
+
+
+def _normalize_page(value):
+    try:
+        return max(1, int(value or 1))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _normalize_page_size(value):
+    try:
+        page_size = int(value or DEFAULT_USERS_PAGE_SIZE)
+    except (TypeError, ValueError):
+        page_size = DEFAULT_USERS_PAGE_SIZE
+
+    return min(MAX_USERS_PAGE_SIZE, max(1, page_size))
+
+
+def _build_user_search_condition(search):
+    """Build a simple user search condition."""
+    search = str(search or "").strip()
+
+    if not search:
+        return None
+
+    pattern = f"%{search.lower()}%"
+    conditions = [
+        fn.LOWER(User.username) % pattern,
+        fn.LOWER(User.display_name) % pattern,
+        fn.LOWER(User.email) % pattern,
+        fn.LOWER(User.phone) % pattern,
+        fn.LOWER(User.telegram_user_id) % pattern,
+        fn.LOWER(User.slack_user_id) % pattern,
+        fn.LOWER(User.mattermost_user_id) % pattern,
+    ]
+
+    if search.isdigit():
+        conditions.append(User.id == int(search))
+
+    return reduce(or_, conditions)
+
+
+def apply_user_search(query, search=None):
+    """Apply search filter to a user query."""
+    condition = _build_user_search_condition(search)
+
+    if condition is None:
+        return query
+
+    return query.where(condition)
+
+
+def build_all_users_query(active_only=False, include_deleted=False):
+    """Build query for all users."""
+    query = User.select().order_by(User.id.asc())
+
+    if not include_deleted:
+        query = query.where(User.deleted == False)
+
+    if active_only:
+        query = query.where(User.active == True)
+
+    return query
+
+
+def build_users_by_group_ids_query(group_ids, active_only=True):
+    """Build query for unique users from provided group ids."""
+    if not group_ids:
+        return None
+
+    query = (
+        User
+        .select()
+        .join(UserGroup)
+        .where(
+            (UserGroup.group.in_(group_ids))
+            & (UserGroup.active == True)
+            & (User.deleted == False)
+        )
+        .distinct()
+        .order_by(User.id.asc())
+    )
+
+    if active_only:
+        query = query.where(User.active == True)
+
+    return query
+
+
+def paginate_user_query(query, page=1, page_size=DEFAULT_USERS_PAGE_SIZE, search=None):
+    """Paginate a user query and return items, pagination metadata and summary."""
+    page = _normalize_page(page)
+    page_size = _normalize_page_size(page_size)
+
+    if query is None:
+        return {
+            "items": [],
+            "pagination": {
+                "page": 1,
+                "page_size": page_size,
+                "total_items": 0,
+                "total_pages": 1,
+                "from": 0,
+                "to": 0,
+                "has_prev": False,
+                "has_next": False,
+            },
+            "summary": {
+                "total": 0,
+                "active": 0,
+                "inactive": 0,
+                "admins": 0,
+            },
+        }
+
+    filtered_query = apply_user_search(query, search)
+    count_query = filtered_query.order_by()
+
+    total_items = count_query.count()
+    total_pages = max(1, (total_items + page_size - 1) // page_size)
+    page = min(page, total_pages)
+
+    if total_items:
+        page_from = ((page - 1) * page_size) + 1
+        page_to = min(page * page_size, total_items)
+    else:
+        page_from = 0
+        page_to = 0
+
+    active_count = count_query.where(User.active == True).count()
+    admin_count = count_query.where(User.is_admin == True).count()
+
+    return {
+        "items": list(filtered_query.paginate(page, page_size)),
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total_items": total_items,
+            "total_pages": total_pages,
+            "from": page_from,
+            "to": page_to,
+            "has_prev": page > 1,
+            "has_next": page < total_pages,
+        },
+        "summary": {
+            "total": total_items,
+            "active": active_count,
+            "inactive": total_items - active_count,
+            "admins": admin_count,
+        },
+    }
+
+
 def list_users_by_group_ids(group_ids, active_only=True):
     """
     Return unique users that belong to one of the provided groups.
@@ -23,24 +182,10 @@ def list_users_by_group_ids(group_ids, active_only=True):
     Returns:
         list[User]: Users ordered by id.
     """
-    if not group_ids:
+    query = build_users_by_group_ids_query(group_ids, active_only=active_only)
+
+    if query is None:
         return []
-
-    query = (
-        User
-        .select()
-        .join(UserGroup)
-        .where(
-            (UserGroup.group.in_(group_ids)) &
-            (UserGroup.active == True) &
-            (User.deleted == False)
-        )
-        .distinct()
-        .order_by(User.id.asc())
-    )
-
-    if active_only:
-        query = query.where(User.active == True)
 
     return list(query)
 
@@ -49,29 +194,10 @@ def list_users(group_ids=None, include_deleted=False):
     """
     Return users ordered by id.
     """
-
-    query = User.select().order_by(User.id.asc())
-
-    if not include_deleted:
-        query = query.where(User.deleted == False)
-
     if group_ids is not None:
-        if not group_ids:
-            return []
-        query = (
-            query
-            .join(UserGroup)
-            .where(
-                (UserGroup.group.in_(group_ids))
-                & (UserGroup.active == True)
-                & (User.active == True)
-                & (User.deleted == False)
-            )
-            .distinct()
-            .order_by(User.id.asc())
-        )
+        return list_users_by_group_ids(group_ids, active_only=True)
 
-    return list(query)
+    return list(build_all_users_query(include_deleted=include_deleted))
 
 
 def get_user(user_id, include_deleted=False):
@@ -169,14 +295,13 @@ def soft_delete_user(user_id):
         RotationMember.delete().where(RotationMember.user == user.id).execute()
         RotationOverride.delete().where(RotationOverride.user == user.id).execute()
         UserRole.delete().where(UserRole.user == user.id).execute()
-
         ApiToken.update(
             active=False,
             deleted=True,
             deleted_at=now,
         ).where(
-            (ApiToken.user == user.id) &
-            (ApiToken.deleted == False)
+            (ApiToken.user == user.id)
+            & (ApiToken.deleted == False)
         ).execute()
 
         user.active = False
@@ -231,16 +356,12 @@ def list_all_users(active_only=False, include_deleted=False):
     """
     Return all users ordered by id.
     """
-
-    query = User.select().order_by(User.id.asc())
-
-    if not include_deleted:
-        query = query.where(User.deleted == False)
-
-    if active_only:
-        query = query.where(User.active == True)
-
-    return list(query)
+    return list(
+        build_all_users_query(
+            active_only=active_only,
+            include_deleted=include_deleted,
+        )
+    )
 
 
 def set_active_group(user_id, group_id):
@@ -265,9 +386,9 @@ def count_active_admins(exclude_user_id=None):
         int: Number of active admin users.
     """
     query = User.select().where(
-        (User.is_admin == True) &
-        (User.active == True) &
-        (User.deleted == False)
+        (User.is_admin == True)
+        & (User.active == True)
+        & (User.deleted == False)
     )
 
     if exclude_user_id:

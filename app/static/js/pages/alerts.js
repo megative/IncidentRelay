@@ -8,6 +8,7 @@ let alertsPageSize = 25;
 let alertsSortState = createTableSortState("activity", "desc");
 let alertsServiceFilterApplying = false;
 let alertsServiceFilterLoaded = false;
+let alertsServiceFilterTeamKey = null;
 let alertsPagination = {
     page: 1,
     page_size: 25,
@@ -90,41 +91,90 @@ function getAlertIdFromPath(pathname) {
 }
 
 function buildAlertDetailsUrl(alertId) {
-    return "/alerts/" + encodeURIComponent(alertId);
-}
-function alertServiceLabel(alert) {
-    if (!alert.service_id) {
-        return "No service";
-    }
+    const query = window.location.search || buildAlertsQueryString();
 
-    return alert.service_name || alert.service_slug || ("Service #" + alert.service_id);
-}
-
-
-function alertServiceDetailsLabel(alert) {
-    if (!alert.service_id) {
-        return "-";
-    }
-
-    const parts = [alertServiceLabel(alert)];
-
-    if (alert.service_criticality) {
-        parts.push(alert.service_criticality);
-    }
-
-    if (alert.service_status) {
-        parts.push(alert.service_status);
-    }
-
-    return parts.join(" / ");
+    return "/alerts/" + encodeURIComponent(alertId) + query;
 }
 function buildAlertListUrl() {
-    return "/alerts" + (window.location.search || "");
+    const query = window.location.search || buildAlertsQueryString();
+
+    return "/alerts" + query;
+}
+
+
+
+function buildAlertsStateParams() {
+    const params = new URLSearchParams();
+
+    appendTableFilterParams(params, "status", getTableFilterValues("#status-filter"));
+    appendTableFilterParams(params, "severity", getTableFilterValues("#severity-filter"));
+    appendTableFilterParams(params, "service_id", getTableFilterValues("#alerts-service-filter"));
+
+    const search = String($("#alerts-search").val() || "").trim();
+
+    if (search) {
+        params.set("search", search);
+    }
+
+    params.set("page", String(alertsCurrentPage || 1));
+    params.set("page_size", String(alertsPageSize || 25));
+    params.set("sort", alertsSortState.column || "activity");
+    params.set("order", alertsSortState.direction || "desc");
+
+    return params;
+}
+
+
+function buildAlertsQueryString() {
+    const query = buildAlertsStateParams().toString();
+
+    return query ? "?" + query : "";
+}
+
+
+function buildAlertsApiUrl() {
+    const params = buildAlertsStateParams();
+
+    if (typeof selectedTeamId === "function" && selectedTeamId()) {
+        params.set("team_id", selectedTeamId());
+    }
+
+    const query = params.toString();
+
+    return "/api/alerts" + (query ? "?" + query : "");
+}
+
+
+function writeAlertsQueryParams() {
+    const nextUrl = window.location.pathname + buildAlertsQueryString();
+
+    history.replaceState(
+        Object.assign({}, history.state || {}, {
+            path: nextUrl,
+            alerts_state: true
+        }),
+        "",
+        nextUrl
+    );
+
+    alertsLastAppliedQueryString = window.location.search || "";
 }
 
 function openAlertDetailsPage(alertId) {
+    writeAlertsQueryParams();
+
     const url = buildAlertDetailsUrl(alertId);
-    history.pushState({ path: url }, "", url);
+
+    history.pushState(
+        {
+            path: url,
+            alert_id: alertId,
+            alerts_state: true
+        },
+        "",
+        url
+    );
+
     showAlertDetails(alertId);
 }
 
@@ -206,108 +256,63 @@ function statusLabel(status) {
 function severityBadgeClass(severity) {
     const value = normalizeAlertValue(severity);
     if (value === "critical") {
-        return "alerts-badge-critical";
+        return "ui-pill-critical";
     }
     if (value === "high") {
-        return "alerts-badge-high";
+        return "ui-pill-high";
     }
     if (value === "warning" || value === "medium") {
-        return "alerts-badge-medium";
+        return "ui-pill-medium";
     }
     if (value === "low") {
-        return "alerts-badge-low";
+        return "ui-pill-low";
     }
     if (value === "info") {
-        return "alerts-badge-info";
+        return "ui-pill-info";
     }
-    return "alerts-badge-muted";
+    return "ui-pill-muted";
 }
 
 function statusBadgeClass(status) {
     const value = normalizeAlertValue(status);
     if (value === "firing") {
-        return "alerts-badge-firing";
+        return "ui-pill-firing";
     }
     if (value === "acknowledged") {
-        return "alerts-badge-acknowledged";
+        return "ui-pill-acknowledged";
     }
     if (value === "resolved") {
-        return "alerts-badge-resolved";
+        return "ui-pill-resolved";
     }
     if (value === "silenced") {
-        return "alerts-badge-silenced";
+        return "ui-pill-silenced";
     }
-    return "alerts-badge-muted";
+    return "ui-pill-muted";
 }
 
 function makeAlertBadge(text, cssClass) {
-    return $("<span>")
-        .addClass("alerts-pill")
-        .addClass(cssClass)
-        .text(text || "-");
+    return makeUiPill(text, cssClass);
 }
 
-function buildAlertsApiUrl() {
-    const params = [];
-    if (typeof selectedTeamId === "function" && selectedTeamId()) {
-        params.push("team_id=" + encodeURIComponent(selectedTeamId()));
-    }
-    if ($("#status-filter").val()) {
-        params.push("status=" + encodeURIComponent($("#status-filter").val()));
-    }
-    if ($("#severity-filter").val()) {
-        params.push("severity=" + encodeURIComponent($("#severity-filter").val()));
-    }
-    if ($("#alerts-search").val()) {
-        params.push("search=" + encodeURIComponent($("#alerts-search").val()));
-    }
-    if ($("#alerts-service-filter").val()) {
-        params.push("service_id=" + encodeURIComponent($("#alerts-service-filter").val()));
-    }
 
-    params.push("page=" + encodeURIComponent(alertsCurrentPage));
-    params.push("page_size=" + encodeURIComponent(alertsPageSize));
-    params.push("sort=" + encodeURIComponent(alertsSortState.column || "activity"));
-    params.push("order=" + encodeURIComponent(alertsSortState.direction || "desc"));
-    return "/api/alerts" + (params.length ? "?" + params.join("&") : "");
-}
-
-function writeAlertsQueryParams() {
-    const params = new URLSearchParams();
-    if (typeof selectedTeamId === "function" && selectedTeamId()) {
-        params.set("team_id", selectedTeamId());
-    }
-    if ($("#status-filter").val()) {
-        params.set("status", $("#status-filter").val());
-    }
-    if ($("#severity-filter").val()) {
-        params.set("severity", $("#severity-filter").val());
-    }
-    if ($("#alerts-search").val()) {
-        params.set("search", $("#alerts-search").val());
-    }
-    if (alertsCurrentPage > 1) {
-        params.set("page", String(alertsCurrentPage));
-    }
-    if (alertsPageSize !== 25) {
-        params.set("page_size", String(alertsPageSize));
-    }
-    if ($("#alerts-service-filter").val()) {
-        params.set("service_id", $("#alerts-service-filter").val());
-    }
-    if (
-        alertsSortState.column &&
-        (alertsSortState.column !== "activity" || alertsSortState.direction !== "desc")
-    ) {
-        params.set("sort", alertsSortState.column);
-        params.set("order", alertsSortState.direction || "desc");
-    }
-
-    const query = params.toString();
-    const nextUrl = window.location.pathname + (query ? "?" + query : "");
-    history.replaceState({path: nextUrl}, "", nextUrl);
-    alertsLastAppliedQueryString = window.location.search || "";
-}
+// function buildAlertsApiUrl() {
+//     const params = [];
+//     if (typeof selectedTeamId === "function" && selectedTeamId()) {
+//         params.push("team_id=" + encodeURIComponent(selectedTeamId()));
+//     }
+//     appendTableFilterParams(params, "status", getTableFilterValues("#status-filter"));
+//     appendTableFilterParams(params, "severity", getTableFilterValues("#severity-filter"));
+//     appendTableFilterParams(params, "service_id", getTableFilterValues("#alerts-service-filter"));
+//     if ($("#alerts-search").val()) {
+//         params.push("search=" + encodeURIComponent($("#alerts-search").val()));
+//     }
+//
+//     params.push("page=" + encodeURIComponent(alertsCurrentPage));
+//     params.push("page_size=" + encodeURIComponent(alertsPageSize));
+//     params.push("sort=" + encodeURIComponent(alertsSortState.column || "activity"));
+//     params.push("order=" + encodeURIComponent(alertsSortState.direction || "desc"));
+//     return "/api/alerts" + (params.length ? "?" + params.join("&") : "");
+// }
 
 function loadAlerts() {
     applyAlertsQueryParams();
@@ -318,12 +323,16 @@ function loadAlerts() {
             alertsCache = alertsResponseItems(response);
             alertsPagination = alertsResponsePagination(response);
             alertsSummary = alertsResponseSummary(response);
-            alertsCurrentPage = alertsPagination.page || alertsCurrentPage;
-            alertsPageSize = alertsPagination.page_size || alertsPageSize;
+            alertsPagination = response.pagination || {};
+            alertsCurrentPage = alertsPagination.page || alertsCurrentPage || 1;
+            alertsPageSize = alertsPagination.page_size || alertsPageSize || 25;
+
+            renderAlertsTable(response.items || []);
+            renderAlertsPagination(alertsPagination);
+            renderAlertsPage();
 
             writeAlertsQueryParams();
             updateSortableTableHeaders("#alerts-table-view", alertsSortState);
-            renderAlertsPage();
         });
     });
 }
@@ -339,39 +348,117 @@ function renderAlertsPage() {
 
 function renderAlertsPagination(pagination) {
     pagination = pagination || {};
-    $("#alerts-current-page").text(pagination.page || 1);
-    $("#alerts-total-pages").text(pagination.total_pages || 1);
-    $("#alerts-prev-page").prop("disabled", !pagination.has_prev);
-    $("#alerts-next-page").prop("disabled", !pagination.has_next);
-    $("#alerts-page-size").val(String(pagination.page_size || alertsPageSize));
-    $(".alerts-pagination").toggle((pagination.total_items || 0) > 0);
+
+    renderTablePaginationControls({
+        id: "alerts-pagination",
+        prefix: "alerts",
+        tableSelector: "#alerts-table-view",
+        pagination: pagination,
+        pageSize: alertsPageSize,
+        rowsLabel: "Rows per page",
+        pageSizeOptions: [10, 25, 50, 100],
+        alwaysVisible: true,
+    });
+}
+
+function ensureAlertsPaginationControls() {
+    return ensureTablePaginationControls({
+        id: "alerts-pagination",
+        prefix: "alerts",
+        tableSelector: "#alerts-table-view",
+        rowsLabel: "Rows per page",
+        pageSizeOptions: [10, 25, 50, 100],
+    });
 }
 
 function resetAlertsPagination() {
     alertsCurrentPage = 1;
 }
 
-function renderActiveAlertFilters(pagination) {
-    const target = $("#alerts-active-filters");
-    target.empty();
-
+function renderActiveAlertFilters() {
     const chips = [];
-    if ($("#status-filter").val()) {
-        chips.push("Status: " + statusLabel($("#status-filter").val()));
-    }
-    if ($("#severity-filter").val()) {
-        chips.push("Severity: " + severityLabel($("#severity-filter").val()));
-    }
-    if ($("#alerts-search").val()) {
-        chips.push("Search: " + $("#alerts-search").val());
-    }
-    chips.push("Result: " + ((pagination && pagination.total_items) || 0));
 
-    chips.forEach(function (chip) {
-        target.append($("<span>").addClass("alerts-filter-chip").text(chip));
-    });
+    const search = String($("#alerts-search").val() || "").trim();
+    const statuses = getTableFilterValues("#status-filter");
+    const severities = getTableFilterValues("#severity-filter");
+    const serviceIds = getTableFilterValues("#alerts-service-filter");
+
+    if (search) {
+        chips.push({
+            label: "Search",
+            value: search
+        });
+    }
+
+    if (statuses.length) {
+        chips.push({
+            label: "Status",
+            value: statuses
+                .map(function (status) {
+                    return statusLabel(status);
+                })
+                .join(", ")
+        });
+    }
+
+    if (severities.length) {
+        chips.push({
+            label: "Severity",
+            value: severities
+                .map(function (severity) {
+                    return severityLabel(severity);
+                })
+                .join(", ")
+        });
+    }
+
+    if (serviceIds.length) {
+        chips.push({
+            label: "Service",
+            value: serviceIds
+                .map(function (serviceId) {
+                    return tableSelectOptionLabel("#alerts-service-filter", serviceId);
+                })
+                .join(", ")
+        });
+    }
+
+    if (typeof selectedTeamId === "function" && selectedTeamId()) {
+        chips.push({
+            label: "Team",
+            value: getSelectedTeamLabel()
+        });
+    }
+
+    renderTableFilterChips("#alerts-active-filters", chips);
+
+    $("#alerts-active-filters").toggle(chips.length > 0);
 }
+function getSelectedTeamLabel() {
+    const teamId = typeof selectedTeamId === "function"
+        ? selectedTeamId()
+        : null;
 
+    if (!teamId) {
+        return "-";
+    }
+
+    const teamSelect = $("#global-team-filter").filter(function () {
+        return $(this).length && $(this).find("option").length;
+    }).first();
+
+    if (teamSelect.length) {
+        const option = teamSelect.find("option").filter(function () {
+            return String($(this).val()) === String(teamId);
+        }).first();
+
+        if (option.length && option.text()) {
+            return option.text();
+        }
+    }
+
+    return String(teamId);
+}
 function renderAlertsTable(alerts) {
     const tbody = $("#alerts-table");
     tbody.empty();
@@ -396,8 +483,8 @@ function renderAlertPageRow(alert) {
     row.append(
         $("<td>").append(
             $("<div>")
-                .addClass("alerts-status-cell")
-                .append($("<span>").addClass("alerts-status-dot alerts-dot-" + normalizeAlertValue(alert.status)))
+                .addClass("status-cell")
+                .append($("<span>").addClass("status-dot dot-" + normalizeAlertValue(alert.status)))
                 .append(makeAlertBadge(statusLabel(alert.status), statusBadgeClass(alert.status)))
         )
     );
@@ -417,18 +504,18 @@ function renderAlertPageRow(alert) {
     row.append(
         $("<td>")
             .addClass("alert-title-cell")
-            .append($("<div>").addClass("alerts-title").text(alert.title || "-"))
-            .append($("<div>").addClass("alerts-subtitle").text(buildAlertSubtitle(alert)))
-            .append($("<div>").addClass("alerts-age").text("Age: " + alertDuration(alert)))
+            .append($("<div>").addClass("table-title").text(alert.title || "-"))
+            .append($("<div>").addClass("table-subtitle").text(buildAlertSubtitle(alert)))
+            .append($("<div>").addClass("table-age").text("Age: " + alertDuration(alert)))
     );
     row.append($("<td>").append(makeAlertBadge(severityLabel(alert.severity), severityBadgeClass(alert.severity))));
     row.append(
         $("<td>")
             .append($("<div>").addClass("alerts-team").text(alert.team_slug || "-"))
-            .append($("<div>").addClass("alerts-subtitle").text(alert.route_name || "No route"))
+            .append($("<div>").addClass("table-subtitle").text(alert.route_name || "No route"))
             .append(
                 $("<div>")
-                    .addClass("alerts-subtitle")
+                    .addClass("table-subtitle")
                     .text(alert.service_id ? "Service: " + alertServiceLabel(alert) : "No service")
             )
     );
@@ -514,7 +601,7 @@ function alertServiceDetailsLabel(alert) {
 function renderReminderCount(alert) {
     const count = alert.reminder_count || 0;
     return $("<span>")
-        .addClass("alerts-reminder-badge")
+        .addClass("counter-badge")
         .toggleClass("is-active", count > 0)
         .text(count);
 }
@@ -523,8 +610,8 @@ function renderEscalationModeBadge(alert) {
     const label = isPolicy ? "Policy" : "Rotation";
 
     return $("<span>")
-        .addClass("alerts-pill")
-        .addClass(isPolicy ? "alerts-badge-info" : "alerts-badge-muted")
+        .addClass("pill")
+        .addClass(isPolicy ? "alerts-badge-info" : "badge-muted")
         .attr("title", isPolicy
             ? "Escalation policy: " + alert.escalation_policy_name
             : "Simple rotation escalation")
@@ -611,8 +698,10 @@ function alertTeamEscalationLabel(alert) {
 }
 function showAlertDetails(alertId) {
     currentDetailsAlertId = alertId;
+
     apiGet("/api/alerts/" + alertId, function (alert) {
         const modal = alertDetailsModal();
+
         if (!modal.length) {
             console.error("Alert details modal not found");
             return;
@@ -621,16 +710,18 @@ function showAlertDetails(alertId) {
         currentDetailsAlertId = alert.id;
         currentDetailsAlertCanRespond = canRespondObject(alert);
 
-        modal.find("#alert-details-title").text("Alert #" + alert.id + ": " + (alert.title || "-"));
-        modal.find("#alert-details-subtitle").text(
-            (alert.team_slug || "-") + " / " + (alert.status || "-") + " / " + (alert.severity || "-")
-        );
+        modal.find("#alert-details-title").text(alert.title || "Alert #" + alert.id);
+        modal.find("#alert-details-subtitle").text(buildAlertDetailsSubtitle(alert));
+
+        renderAlertPrimaryDetails(alert, modal);
+        renderAlertServiceContext(alert, modal);
         renderAlertDetailsSummary(alert, modal);
+
         modal.find("#alert-details-labels").text(JSON.stringify(alert.labels || {}, null, 2));
         modal.find("#alert-details-payload").text(JSON.stringify(alert.payload || {}, null, 2));
+
         renderEvents(alert.events || [], modal);
         renderNotifications(alert.notifications || [], modal);
-        renderAlertServiceContext(alert, modal);
 
         if (!currentDetailsAlertCanRespond || normalizeAlertValue(alert.status) === "resolved") {
             modal.find("#modal-alert-ack").hide();
@@ -643,6 +734,207 @@ function showAlertDetails(alertId) {
         openAlertDetailsModal();
     });
 }
+function buildAlertDetailsSubtitle(alert) {
+    return [
+        alert.source || null,
+        alert.team_slug || null,
+        alert.status || null,
+        alert.severity || null
+    ].filter(Boolean).join(" / ");
+}
+
+
+function ensureAlertPrimaryDetails(modal) {
+    let target = modal.find("#alert-primary-details");
+
+    if (target.length) {
+        return target;
+    }
+
+    target = $("<section>")
+        .attr("id", "alert-primary-details")
+        .addClass("alert-primary-details");
+
+    modal.find("#alert-details-summary").before(target);
+
+    return target;
+}
+
+
+function renderAlertPrimaryDetails(alert, modal) {
+    const target = ensureAlertPrimaryDetails(modal);
+    const message = alert.message || alert.description || alert.summary || "";
+    const labels = alert.labels || {};
+    const eventLink = alert.event_link || (labels && labels.event_link);
+
+    target.empty();
+
+    const header = $("<div>").addClass("alert-primary-header");
+
+    header.append(
+        $("<div>")
+            .addClass("badge-success")
+            .append(makeAlertBadge(statusLabel(alert.status), statusBadgeClass(alert.status)))
+            .append(makeAlertBadge(severityLabel(alert.severity), severityBadgeClass(alert.severity)))
+            .append($("<span>").addClass("pill badge-muted").text("#" + alert.id))
+    );
+
+    header.append(
+        $("<div>")
+            .addClass("alert-primary-time")
+            .text(buildAlertPrimaryTimeLine(alert))
+    );
+
+    target.append(header);
+
+    target.append(
+        $("<div>")
+            .addClass("alert-primary-title")
+            .text(alert.title || "Alert #" + alert.id)
+    );
+
+    if (message) {
+        target.append(
+            $("<pre>")
+                .addClass("alert-primary-message")
+                .text(message)
+        );
+    } else {
+        target.append(
+            $("<div>")
+                .addClass("help-text")
+                .text("No alert message was provided by the integration.")
+        );
+    }
+
+    if (eventLink) {
+        target.append(
+            $("<div>")
+                .addClass("alert-primary-links")
+                .append(
+                    $("<a>")
+                        .attr("href", eventLink)
+                        .attr("target", "_blank")
+                        .attr("rel", "noopener noreferrer")
+                        .addClass("btn btn-secondary btn-sm")
+                        .text("Open source event")
+                )
+        );
+    }
+
+    target.append(renderAlertPrimaryLabels(labels));
+
+    const context = buildAlertPrimaryContext(alert);
+
+    if (context.length) {
+        const contextGrid = $("<div>").addClass("alert-primary-context");
+
+        context.forEach(function (item) {
+            contextGrid.append(
+                $("<div>")
+                    .addClass("alert-primary-context-item")
+                    .append($("<span>").addClass("detail-label").text(item.label))
+                    .append($("<span>").addClass("detail-value").text(item.value || "-"))
+            );
+        });
+
+        target.append(contextGrid);
+    }
+}
+
+
+function buildAlertPrimaryTimeLine(alert) {
+    const parts = [];
+
+    if (alert.first_seen_at || alert.created_at) {
+        parts.push("Created: " + formatDateTimeMinutes(alert.first_seen_at || alert.created_at));
+    }
+
+    if (alert.last_seen_at) {
+        parts.push("Last seen: " + formatDateTimeMinutes(alert.last_seen_at));
+    }
+
+    return parts.join(" · ");
+}
+
+
+function buildAlertPrimaryContext(alert) {
+    return [
+        {
+            label: "Assignee",
+            value: alert.assignee || "-"
+        },
+        {
+            label: "Route",
+            value: alert.route_name || "-"
+        },
+        {
+            label: "Service",
+            value: alertServiceDetailsLabel(alert)
+        },
+        {
+            label: "Next escalation",
+            value: formatDateTimeMinutes(alert.next_escalation_at)
+        }
+    ];
+}
+
+
+function renderAlertPrimaryLabels(labels) {
+    const wrapper = $("<div>").addClass("alert-primary-labels");
+    const preferredKeys = [
+        "alertname",
+        "event_name",
+        "problem_name",
+        "instance",
+        "host",
+        "hostname",
+        "job",
+        "service",
+        "team",
+        "severity"
+    ];
+
+    const rendered = new Set();
+
+    preferredKeys.forEach(function (key) {
+        if (labels[key] === undefined || labels[key] === null || labels[key] === "") {
+            return;
+        }
+
+        rendered.add(key);
+        wrapper.append(renderAlertLabelChip(key, labels[key]));
+    });
+
+    Object.keys(labels).sort().forEach(function (key) {
+        if (rendered.has(key)) {
+            return;
+        }
+
+        if (wrapper.children().length >= 12) {
+            return;
+        }
+
+        wrapper.append(renderAlertLabelChip(key, labels[key]));
+    });
+
+    if (!wrapper.children().length) {
+        wrapper.append(
+            $("<span>")
+                .addClass("help-text")
+                .text("No labels.")
+        );
+    }
+
+    return wrapper;
+}
+
+
+function renderAlertLabelChip(key, value) {
+    return $("<span>")
+        .addClass("alert-label-chip")
+        .text(key + "=" + value);
+}
 function ensureAlertServiceContext(modal) {
     let target = modal.find("#alert-service-context");
 
@@ -654,7 +946,13 @@ function ensureAlertServiceContext(modal) {
         .attr("id", "alert-service-context")
         .addClass("alert-service-context");
 
-    modal.find("#alert-details-summary").after(target);
+    const primary = modal.find("#alert-primary-details");
+
+    if (primary.length) {
+        primary.after(target);
+    } else {
+        modal.find("#alert-details-summary").before(target);
+    }
 
     return target;
 }
@@ -829,14 +1127,20 @@ function alertMatchesSimpleMatchers(alert, matchers) {
 }
 function renderAlertDetailsSummary(alert, modal) {
     const summary = modal.find("#alert-details-summary");
+
     summary.empty();
 
     summary.append(detailItem("Source", alert.source));
     summary.append(detailItem("External ID", alert.external_id));
+    summary.append(detailItem("Group key", alert.group_key));
+    summary.append(detailItem("Dedup key", alert.dedup_key));
+
+    summary.append(detailItem("Team", alert.team_slug));
     summary.append(detailItem("Route", alert.route_name));
     summary.append(detailItem("Service", alertServiceDetailsLabel(alert)));
     summary.append(detailItem("Service status", alert.service_status));
     summary.append(detailItem("Service criticality", alert.service_criticality));
+
     summary.append(detailItem("Escalation mode", alertEscalationModeLabel(alert)));
     summary.append(detailItem("Escalation policy", alert.escalation_policy_name));
     summary.append(detailItem("Policy rule", alertPolicyRuleLabel(alert)));
@@ -847,12 +1151,11 @@ function renderAlertDetailsSummary(alert, modal) {
     summary.append(detailItem("Escalation level", alert.escalation_level || 0));
     summary.append(detailItem("Policy repeat count", alert.escalation_repeat_count || 0));
     summary.append(detailItem("Default rotation", alertTeamEscalationLabel(alert)));
+
     summary.append(detailItem("Acknowledged by", alert.acknowledged_by));
     summary.append(detailItem("Created", formatDateTimeMinutes(alert.first_seen_at || alert.created_at)));
     summary.append(detailItem("Last seen", formatDateTimeMinutes(alert.last_seen_at)));
     summary.append(detailItem("Last notification", formatDateTimeMinutes(alert.last_notification_at)));
-    summary.append(detailItem("Group key", alert.group_key));
-    summary.append(detailItem("Dedup key", alert.dedup_key));
     summary.append(detailItem("Reminder count", alert.reminder_count || 0));
     summary.append(detailItem(
         "Reminder interval",
@@ -922,22 +1225,16 @@ function alertDetailsModal() {
     return $("#alert-details-modal");
 }
 
+
 function openAlertDetailsModal() {
-    const modal = alertDetailsModal();
-    if (!modal.length) {
-        console.error("Alert details modal not found");
-        return;
-    }
-    modal.css("display", "flex").addClass("is-open");
-    $("body").addClass("modal-open");
+    openAppModal("#alert-details-modal");
 }
 
 function closeAlertDetailsModal(options) {
     options = options || {};
-    alertDetailsModal()
-        .css("display", "none")
-        .removeClass("is-open");
-    $("body").removeClass("modal-open");
+
+    closeAppModal("#alert-details-modal");
+
     currentDetailsAlertId = null;
     currentDetailsAlertCanRespond = false;
 
@@ -946,7 +1243,15 @@ function closeAlertDetailsModal(options) {
     }
     if (getAlertIdFromPath(window.location.pathname)) {
         const url = buildAlertListUrl();
-        history.pushState({ path: url }, "", url);
+
+        history.pushState(
+            {
+                path: url,
+                alerts_state: true
+            },
+            "",
+            url
+        );
     }
 }
 
@@ -998,72 +1303,115 @@ function renderAlertsInboxCounter(pagination) {
 
 function applyAlertsQueryParams() {
     const queryString = window.location.search || "";
+
     if (alertsLastAppliedQueryString === queryString) {
         return;
     }
 
-    alertsLastAppliedQueryString = queryString;
     const params = new URLSearchParams(queryString);
-    $("#status-filter").val(params.get("status") || "");
-    $("#severity-filter").val(params.get("severity") || "");
-    $("#alerts-search").val(params.get("search") || "");
-    $("#alerts-service-filter").val(params.get("service_id") || "");
 
-    if (params.get("team_id")) {
-        $("#global-team-filter").val(params.get("team_id"));
-    }
-    if (params.get("page")) {
-        alertsCurrentPage = Math.max(1, Number(params.get("page")) || 1);
-    } else {
-        alertsCurrentPage = 1;
-    }
-    if (params.get("page_size")) {
-        alertsPageSize = Number(params.get("page_size")) || alertsPageSize;
-        $("#alerts-page-size").val(String(alertsPageSize));
-    }
-    if (params.get("sort")) {
-        alertsSortState.column = params.get("sort");
-    }
-    if (params.get("order")) {
-        alertsSortState.direction = params.get("order") === "asc" ? "asc" : "desc";
-    }
-    if (typeof updateSortableTableHeaders === "function") {
-        updateSortableTableHeaders("#alerts-table-view", alertsSortState);
-    }
+    setTableFilterValues(
+        "#status-filter",
+        getTableFilterParamValues(params, "status", ["statuses"])
+    );
+
+    setTableFilterValues(
+        "#severity-filter",
+        getTableFilterParamValues(params, "severity", ["severities"])
+    );
+
+    setTableFilterValues(
+        "#alerts-service-filter",
+        getTableFilterParamValues(params, "service_id", ["service_ids"])
+    );
+
+    $("#alerts-search").val(params.get("search") || "");
+
+    alertsCurrentPage = parseInt(params.get("page") || "1", 10) || 1;
+    alertsPageSize = parseInt(params.get("page_size") || "25", 10) || 25;
+
+    alertsSortState.column = params.get("sort") || "activity";
+    alertsSortState.direction = params.get("order") === "asc" ? "asc" : "desc";
+
+    alertsLastAppliedQueryString = queryString;
 }
 
 $(document).on("click", "#reload-alerts", function () {
     loadAlerts();
 });
-$(document).on("change", "#status-filter", function () {
-    resetAlertsPagination();
-    writeAlertsQueryParams();
-    loadAlerts();
-});
-$(document).on("change", "#severity-filter", function () {
-    resetAlertsPagination();
-    writeAlertsQueryParams();
-    loadAlerts();
-});
+$(document)
+    .off("change.tableFilters", "#status-filter, #severity-filter, #alerts-service-filter")
+    .on("change.tableFilters", "#status-filter, #severity-filter, #alerts-service-filter", function () {
+        if (
+            typeof isTableFilterSilent === "function"
+            && isTableFilterSilent(this)
+        ) {
+            return;
+        }
+
+        if (alertsServiceFilterApplying) {
+            return;
+        }
+
+        resetAlertsPagination();
+        writeAlertsQueryParams();
+        loadAlerts();
+    });
 $(document).on("input", "#alerts-search", function () {
     resetAlertsPagination();
     writeAlertsQueryParams();
     loadAlerts();
 });
-$(document).on("change", "#alerts-page-size", function () {
-    alertsPageSize = Number($(this).val() || 25);
-    resetAlertsPagination();
-    writeAlertsQueryParams();
-    loadAlerts();
-});
-$(document).on("click", "#alerts-prev-page", function () {
-    if (!alertsPagination.has_prev) {
-        return;
-    }
-    alertsCurrentPage = Math.max(1, alertsCurrentPage - 1);
-    writeAlertsQueryParams();
-    loadAlerts();
-});
+$(document)
+    .off("change.alertsPageSize", "#alerts-page-size")
+    .on("change.alertsPageSize", "#alerts-page-size", function () {
+        alertsPageSize = parseInt($(this).val(), 10) || 25;
+        alertsCurrentPage = 1;
+        loadAlerts();
+    });
+
+$(document)
+    .off("click.alertsPrevPage", "#alerts-prev-page")
+    .on("click.alertsPrevPage", "#alerts-prev-page", function () {
+        if (alertsCurrentPage <= 1) {
+            return;
+        }
+
+        alertsCurrentPage -= 1;
+        loadAlerts();
+    });
+
+$(document)
+    .off("click.alertsNextPage", "#alerts-next-page")
+    .on("click.alertsNextPage", "#alerts-next-page", function () {
+        if (!alertsPagination || !alertsPagination.has_next) {
+            return;
+        }
+
+        alertsCurrentPage += 1;
+        loadAlerts();
+    });
+$(document)
+    .off("click.sort-indicator", "[data-alerts-sort]")
+    .on("click.alertsSort", "[data-alerts-sort]", function () {
+        const column = $(this).data("alerts-sort");
+
+        if (!column) {
+            return;
+        }
+
+        if (alertsSortState.column === column) {
+            alertsSortState.direction = alertsSortState.direction === "asc" ? "desc" : "asc";
+        } else {
+            alertsSortState.column = column;
+            alertsSortState.direction = "desc";
+        }
+
+        alertsCurrentPage = 1;
+
+        writeAlertsQueryParams();
+        loadAlerts();
+    });
 $(document).on("click", "#alerts-next-page", function () {
     if (!alertsPagination.has_next) {
         return;
@@ -1115,15 +1463,6 @@ $(document).on("click", "#modal-alert-resolve", function () {
         loadAlerts();
     });
 });
-$(document).on("change", "#alerts-service-filter", function () {
-    if (alertsServiceFilterApplying) {
-        return;
-    }
-
-    resetAlertsPagination();
-    writeAlertsQueryParams();
-    loadAlerts();
-});
 function loadAlertServiceFilter(callback) {
     const select = $("#alerts-service-filter");
 
@@ -1131,39 +1470,63 @@ function loadAlertServiceFilter(callback) {
         if (typeof callback === "function") {
             callback();
         }
+
         return;
     }
 
-    const params = new URLSearchParams(window.location.search || "");
-    const currentValue = select.val() || params.get("service_id") || "";
+    const teamKey = (
+        typeof selectedTeamId === "function" && selectedTeamId()
+            ? String(selectedTeamId())
+            : "all"
+    );
+
+    if (
+        alertsServiceFilterLoaded
+        && alertsServiceFilterTeamKey === teamKey
+    ) {
+        refreshTableMultiSelect(select);
+
+        if (typeof callback === "function") {
+            callback();
+        }
+
+        return;
+    }
 
     alertsServiceFilterApplying = true;
 
-    select.empty();
-    select.append($("<option>").val("").text("All services"));
+    const params = new URLSearchParams(window.location.search || "");
+    const currentValues = getTableFilterValues(select).length
+        ? getTableFilterValues(select)
+        : getTableFilterParamValues(params, "service_id", ["service_ids"]);
 
-    apiGet("/api/services" + selectedTeamQuery(), function (services) {
-        asArray(services).forEach(function (service) {
-            if (!service.enabled) {
-                return;
-            }
+    apiGet("/api/services" + selectedTeamQuery(), function (response) {
+        const services = asArray(response && response.items ? response.items : response);
 
-            select.append(
-                $("<option>")
-                    .val(String(service.id))
-                    .text(
-                        (service.team_slug || service.team_name || "-")
-                        + " / "
-                        + (service.name || service.slug || service.id)
-                    )
-            );
-        });
+        const serviceOptions = services
+            .filter(function (service) {
+                return service.enabled !== false;
+            })
+            .map(function (service) {
+                return {
+                    value: String(service.id),
+                    text: [
+                        service.team_slug || service.team_name || null,
+                        service.name || service.slug || service.id
+                    ].filter(Boolean).join(" / ")
+                };
+            });
 
-        if (currentValue) {
-            select.val(String(currentValue));
-        }
+        replaceTableSelectOptions(
+            select,
+            serviceOptions,
+            currentValues
+        );
+
+        refreshTableMultiSelect(select);
 
         alertsServiceFilterLoaded = true;
+        alertsServiceFilterTeamKey = teamKey;
         alertsServiceFilterApplying = false;
 
         if (typeof callback === "function") {
@@ -1171,3 +1534,16 @@ function loadAlertServiceFilter(callback) {
         }
     });
 }
+window.addEventListener("popstate", function () {
+    if (getAlertIdFromPath(window.location.pathname)) {
+        syncAlertDetailsFromUrl();
+        return;
+    }
+
+    if (alertDetailsModal().hasClass("is-open")) {
+        closeAlertDetailsModal({ updateUrl: false });
+    }
+
+    loadAlerts();
+});
+initTableMultiSelects(document);

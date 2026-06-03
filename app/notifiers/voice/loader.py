@@ -107,50 +107,10 @@ def create_voice_provider(
     config: dict | None = None,
 ) -> BaseVoiceProvider:
     """Create a configured voice provider instance."""
-
     provider_cls = get_voice_provider_class(provider_name)
-    provider_config = config or {}
+    provider_config = resolve_env_values(config or {})
     provider_cls.validate_config(provider_config)
-
     return provider_cls(provider_config)
-
-
-def list_voice_providers() -> list[dict]:
-    """Return built-in and custom voice provider metadata."""
-
-    providers = []
-
-    names = set()
-
-    builtin_dir = Path(__file__).resolve().parent / "providers"
-    for path in builtin_dir.glob("*.py"):
-        if path.name != "__init__.py":
-            names.add(path.stem)
-
-    custom_dir = Path(_get_providers_dir()).expanduser()
-    if custom_dir.is_dir():
-        for path in custom_dir.glob("*.py"):
-            if path.name != "__init__.py" and PROVIDER_NAME_RE.match(path.stem):
-                names.add(path.stem.lower())
-
-    for name in sorted(names):
-        provider_cls = get_voice_provider_class(name)
-        capabilities = provider_cls.capabilities
-
-        providers.append(
-            {
-                "name": provider_cls.name,
-                "module": name,
-                "capabilities": {
-                    "tts": capabilities.tts,
-                    "status_callback": capabilities.status_callback,
-                    "dtmf_callback": capabilities.dtmf_callback,
-                    "status_polling": capabilities.status_polling,
-                },
-            }
-        )
-
-    return providers
 
 
 def resolve_env_values(value):

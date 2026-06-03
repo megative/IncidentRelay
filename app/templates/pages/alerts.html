@@ -4,7 +4,7 @@
     {% set summary_id = "alerts-alerts-summary" %}
     {% include 'pages/include/alerts_summary_grid.html' %}
     <section class="card alerts-table-card">
-        <div class="card-header alerts-card-header">
+        <div class="card-header table-card-header">
             <div>
                 <h2>Alert inbox</h2>
                 <div class="card-subtitle">
@@ -25,48 +25,57 @@
                 <button id="reload-alerts" type="button" class="btn btn-primary">Reload</button>
             </div>
         </div>
-        <div class="alerts-toolbar page-toolbar">
-            <div class="alerts-search page-toolbar-search">
-        <span class="alerts-search-icon page-toolbar-search-icon">⌕</span>
-        <input
-          id="alerts-search"
-          class="input"
-          type="search"
-          placeholder="Search by ID, alert name, team, assignee, source..."
-          autocomplete="off"
-        >
-      </div>
-            <select id="alerts-service-filter" class="input page-toolbar-filter">
-              <option value="">All services</option>
+        <div class="table-toolbar page-toolbar">
+            <div class="table-search page-toolbar-search">
+                <span class="table-search-icon page-toolbar-search-icon">⌕</span>
+                <input
+                  id="table-search"
+                  class="input"
+                  type="search"
+                  placeholder="Search by ID, alert name, team, assignee, source..."
+                  autocomplete="off"
+                >
+            </div>
+                <select
+                    id="alerts-service-filter"
+                    multiple
+                    data-table-multi-select
+                    data-placeholder="All services"
+                ></select>
+            <select
+                id="status-filter"
+                multiple
+                data-table-multi-select
+                data-placeholder="All statuses"
+            >
+                <option value="firing">Firing</option>
+                <option value="acknowledged">Acknowledged</option>
+                <option value="silenced">Silenced</option>
+                <option value="resolved">Resolved</option>
             </select>
-      <select id="status-filter" class="input alerts-filter-select page-toolbar-filter">
-        <option value="">All statuses</option>
-        <option value="firing">Firing</option>
-        <option value="acknowledged">Acknowledged</option>
-        <option value="resolved">Resolved</option>
-        <option value="silenced">Silenced</option>
-      </select>
+                <select
+                    id="severity-filter"
+                    multiple
+                    data-table-multi-select
+                    data-placeholder="All severities"
+                >
+                    <option value="critical">Critical</option>
+                    <option value="high">High</option>
+                    <option value="warning">Warning</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                    <option value="info">Info</option>
+                </select>
 
-      <select id="severity-filter" class="input alerts-filter-select page-toolbar-filter">
-        <option value="">All severities</option>
-        <option value="critical">Critical</option>
-        <option value="high">High</option>
-        <option value="warning">Warning</option>
-        <option value="medium">Medium</option>
-        <option value="low">Low</option>
-        <option value="info">Info</option>
-      </select>
-
-      <select id="alerts-sort" class="input alerts-filter-select page-toolbar-filter">
-        <option value="activity_desc">Newest activity</option>
-        <option value="created_desc">Newest created</option>
-        <option value="created_asc">Oldest created</option>
-        <option value="severity_desc">Severity first</option>
-        <option value="status_asc">Status</option>
-      </select>
-    </div>
-
-    <div id="alerts-active-filters" class="alerts-active-filters"></div>
+            <select id="alerts-sort" class="input table-filter-select page-toolbar-filter">
+                <option value="activity_desc">Newest activity</option>
+                <option value="created_desc">Newest created</option>
+                <option value="created_asc">Oldest created</option>
+                <option value="severity_desc">Severity first</option>
+                <option value="status_asc">Status</option>
+            </select>
+        </div>
+        <div id="alerts-active-filters" class="table-active-filters"></div>
 
     <div class="table-wrapper">
       <table id="alerts-table-view" class="data-table alerts-table alerts-inbox-table sortable-table">
@@ -90,32 +99,5 @@
       </table>
     </div>
 
-    <div class="alerts-pagination page-toolbar">
-      <div class="alerts-pagination-left">
-        <span>Rows per page</span>
-
-        <select id="alerts-page-size" class="input alerts-page-size">
-          <option value="10">10</option>
-          <option value="25" selected>25</option>
-          <option value="50">50</option>
-          <option value="100">100</option>
-        </select>
-      </div>
-
-      <div class="alerts-pagination-center">
-        Page <span id="alerts-current-page">1</span>
-        of <span id="alerts-total-pages">1</span>
-      </div>
-
-      <div class="alerts-pagination-actions">
-        <button id="alerts-prev-page" type="button" class="btn btn-small">
-          Previous
-        </button>
-
-        <button id="alerts-next-page" type="button" class="btn btn-small">
-          Next
-        </button>
-      </div>
-    </div>
   </section>
 </div>

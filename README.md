@@ -13,6 +13,8 @@ It provides the core building blocks of an on-call system:
 - alert intake routes with per-route tokens;
 - Alertmanager, Zabbix, and generic webhook integrations;
 - Mattermost, Slack, Telegram, Discord, Microsoft Teams, email, webhook, and voice-call notifications;
+- profile-level browser/PWA push notifications;
+- profile notification rules for browser push, email, and voice-call follow-up;
 - acknowledge and resolve workflows;
 - reminders and escalation to the next on-call user;
 - rotation overrides;
@@ -44,6 +46,8 @@ ROUTE_INTAKE_TOKEN -> Route -> Team -> Rotation -> Channels
 ```
 
 Channels only describe where notifications are delivered. Routes decide which team receives the alert and which channels are used.
+
+Profile browser push and profile notification rules are separate from route channels. They target the assigned user's own browser devices and contact methods.
 
 This keeps alert delivery easier to reason about, easier to audit, and safer for self-hosted deployments.
 
@@ -81,6 +85,12 @@ Telegram notifications can include action buttons and alert links. Telegram call
 
 IncidentRelay can be extended with custom voice providers for self-hosted installations. Providers can implement text-to-speech calls, call status callbacks, DTMF button callbacks, ACK / Resolve actions from phone keypad, and optional call status polling.
 
+### Browser/PWA push and profile rules
+
+Users can enable browser push from their profile and receive alert notifications on active browser or installed PWA devices. Browser push can include `Acknowledge` and `Resolve` actions.
+
+Profile notification rules let users define follow-up delivery through browser push, email, or voice call without turning browser push into a route channel.
+
 ### API-first
 
 IncidentRelay includes Swagger/OpenAPI documentation and personal API tokens with scopes for alerts, resources, and profile access.
@@ -111,6 +121,8 @@ IncidentRelay includes Swagger/OpenAPI documentation and personal API tokens wit
 | Email | Email recipients |
 | Webhook | Generic outbound webhook |
 | Voice call | Pluggable provider API for self-hosted voice integrations |
+
+Browser/PWA push is profile-level, not a notification channel. Users enable it in Profile, and IncidentRelay sends push notifications to the assigned user's active browser/PWA devices.
 
 ---
 
@@ -310,9 +322,11 @@ After the first login:
 8. Create notification channels
 9. Create a route
 10. Copy the route intake token
-11. Configure Alertmanager, Zabbix, or webhook sender
-12. Send a test alert
-13. Acknowledge or resolve the alert
+11. Configure browser push VAPID keys if browser/PWA notifications are required
+12. Ask users to enable browser push or profile notification rules if required
+13. Configure Alertmanager, Zabbix, or webhook sender
+14. Send a test alert
+15. Acknowledge or resolve the alert
 ```
 
 Detailed guide: [First login and initial setup](docs/getting-started/first-login.md)
@@ -398,7 +412,7 @@ Start here:
 - [Callbacks and DTMF](docs/voice-providers/callbacks.md)
 - [Security](docs/voice-providers/security.md)
 - [Troubleshooting](docs/voice-providers/troubleshooting.md)
-- [Example providers](examples/voice_providers/)
+- [Example providers](docs/examples/voice_providers/)
 
 ---
 
@@ -424,7 +438,7 @@ OpenAPI JSON is available at:
 |---|---|
 | Getting started | [docs/getting-started/](docs/getting-started/index.md) |
 | Docker installation | [docs/getting-started/docker.md](docs/getting-started/docker.md) |
-| RedHat RPM installation | [docs/getting-started/redhat-rpm-installation.md](docs/getting-started/redhat-rpm-installation.md) |
+| RedHat RPM installation | [docs/getting-started/rpm-installation.md](docs/getting-started/rpm-installation.md) |
 | Systemd installation | [docs/getting-started/systemd.md](docs/getting-started/systemd.md) |
 | Configuration | [docs/getting-started/configuration.md](docs/getting-started/configuration.md) |
 | First login | [docs/getting-started/first-login.md](docs/getting-started/first-login.md) |
@@ -437,6 +451,7 @@ OpenAPI JSON is available at:
 | Generic webhook | [docs/integrations/generic-webhook.md](docs/integrations/generic-webhook.md) |
 | Mattermost | [docs/integrations/mattermost.md](docs/integrations/mattermost.md) |
 | Alerts | [docs/usage/alerts.md](docs/usage/alerts.md) |
+| Browser push | [docs/usage/browser-push.md](docs/usage/browser-push.md) |
 | Calendar | [docs/usage/calendar.md](docs/usage/calendar.md) |
 | Silences | [docs/usage/silences.md](docs/usage/silences.md) |
 | Rotation overrides | [docs/usage/rotation-overrides.md](docs/usage/rotation-overrides.md) |

@@ -1,0 +1,353 @@
+const IR_PWA_VERSION = "incidentrelay-pwa-v1.0.1";
+const IR_STATIC_CACHE = IR_PWA_VERSION + "-static";
+const IR_OFFLINE_CACHE = IR_PWA_VERSION + "-offline";
+const OFFLINE_URL = "/static/offline.html";
+
+const PRECACHE_URLS = [
+    OFFLINE_URL,
+    "/manifest.webmanifest",
+    "/static/images/pwa/icon-192.png",
+    "/static/images/pwa/icon-512.png",
+    "/static/images/pwa/maskable-192.png",
+    "/static/images/pwa/maskable-512.png",
+    "/static/images/pwa/apple-touch-icon.png",
+    "/static/images/pwa/screenshots/desktop-alerts.png",
+    "/static/images/pwa/screenshots/mobile-alerts.png"
+];
+
+const STATIC_CACHE_LIMIT = 120;
+
+function isSameOrigin(url) {
+    return url.origin === self.location.origin;
+}
+
+function isApiRequest(url) {
+    return (
+        url.pathname.startsWith("/api/")
+        || url.pathname.startsWith("/integrations/")
+        || url.pathname.startsWith("/auth/")
+    );
+}
+
+function isStaticAsset(url) {
+    return (
+        url.pathname.startsWith("/static/")
+        || url.pathname === "/manifest.webmanifest"
+    );
+}
+
+function isCacheableStaticResponse(response) {
+    return response && response.ok && response.status === 200;
+}
+
+async function trimCache(cacheName, maxEntries) {
+    const cache = await caches.open(cacheName);
+    const keys = await cache.keys();
+
+    if (keys.length <= maxEntries) {
+        return;
+    }
+
+    await cache.delete(keys[0]);
+    return trimCache(cacheName, maxEntries);
+}
+
+async function staleWhileRevalidateStatic(request) {
+    const cache = await caches.open(IR_STATIC_CACHE);
+    const cached = await cache.match(request);
+
+    const networkPromise = fetch(request)
+        .then(function (response) {
+            if (isCacheableStaticResponse(response)) {
+                cache.put(request, response.clone());
+                trimCache(IR_STATIC_CACHE, STATIC_CACHE_LIMIT);
+            }
+
+            return response;
+        })
+        .catch(function () {
+            return cached;
+        });
+
+    return cached || networkPromise;
+}
+
+async function networkOnlyWithOfflineFallback(request) {
+    try {
+        return await fetch(request);
+    } catch (error) {
+        const cache = await caches.open(IR_OFFLINE_CACHE);
+        const offline = await cache.match(OFFLINE_URL);
+
+        if (offline) {
+            return offline;
+        }
+
+        throw error;
+    }
+}
+
+self.addEventListener("install", function (event) {
+    event.waitUntil(
+        caches.open(IR_OFFLINE_CACHE)
+            .then(function (cache) {
+                return cache.addAll(PRECACHE_URLS);
+            })
+            .then(function () {
+                return self.skipWaiting();
+            })
+    );
+});
+
+self.addEventListener("activate", function (event) {
+    event.waitUntil(
+        caches.keys()
+            .then(function (cacheNames) {
+                return Promise.all(
+                    cacheNames
+                        .filter(function (cacheName) {
+                            return (
+                                cacheName.startsWith("incidentrelay-pwa-")
+                                && cacheName.indexOf(IR_PWA_VERSION) !== 0
+                            );
+                        })
+                        .map(function (cacheName) {
+                            return caches.delete(cacheName);
+                        })
+                );
+            })
+            .then(function () {
+                return self.clients.claim();
+            })
+    );
+});
+
+self.addEventListener("message", function (event) {
+    if (event.data && event.data.type === "SKIP_WAITING") {
+        self.skipWaiting();
+    }
+});
+
+self.addEventListener("fetch", function (event) {
+    const request = event.request;
+
+    if (request.method !== "GET") {
+        return;
+    }
+
+    const url = new URL(request.url);
+
+    if (!isSameOrigin(url)) {
+        return;
+    }
+
+    if (isApiRequest(url)) {
+        return;
+    }
+
+    if (request.mode === "navigate") {
+        event.respondWith(networkOnlyWithOfflineFallback(request));
+        return;
+    }
+
+    if (isStaticAsset(url)) {
+        event.respondWith(staleWhileRevalidateStatic(request));
+    }
+});
+self.addEventListener("push", event => {
+    let payload = {};
+
+    if (event.data) {
+        try {
+            payload = event.data.json();
+        } catch (error) {
+            payload = {
+                title: "IncidentRelay",
+                body: event.data.text()
+            };
+        }
+    }
+
+    const title = payload.title || "IncidentRelay";
+    const actionTokens = payload.action_tokens || {};
+
+    const actions = [];
+
+    if (actionTokens.ack) {
+        actions.push({
+            action: "ack",
+            title: "Acknowledge"
+        });
+    }
+
+    if (actionTokens.resolve) {
+        actions.push({
+            action: "resolve",
+            title: "Resolve"
+        });
+    }
+
+    const options = {
+        body: payload.body || "",
+        tag: payload.tag || `incidentrelay-${Date.now()}`,
+        renotify: payload.renotify !== false,
+        requireInteraction: payload.require_interaction !== false,
+        silent: payload.silent === true,
+        data: {
+            url: payload.url || "/alerts",
+            alert_id: payload.alert_id,
+            alert_title: payload.alert_title || payload.title || "Alert",
+            status: payload.status,
+            action_tokens: actionTokens
+        },
+        actions
+    };
+
+    if (!options.silent && Array.isArray(payload.vibrate)) {
+        options.vibrate = payload.vibrate;
+    }
+
+    event.waitUntil(
+        self.registration.showNotification(title, options)
+    );
+});
+
+
+self.addEventListener("notificationclick", event => {
+    const notification = event.notification;
+    const action = event.action;
+    const data = notification.data || {};
+    const actionTokens = data.action_tokens || {};
+
+    notification.close();
+
+    if (action === "ack" || action === "resolve") {
+        const token = actionTokens[action];
+
+        if (!token) {
+            event.waitUntil(openIncidentRelayUrl(data.url || "/alerts"));
+            return;
+        }
+
+        event.waitUntil(
+            fetch("/api/push/actions", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    action,
+                    token
+                })
+            })
+                .then(response => response.json().catch(() => ({})))
+                .then(result => {
+                    if (!result.ok) {
+                        return self.registration.showNotification("IncidentRelay", {
+                            body: `Action failed: ${result.error || "unknown_error"}`,
+                            tag: `incidentrelay-action-error-${Date.now()}`
+                        });
+                    }
+
+                    const alertTitle = data.alert_title || `Alert #${result.alert_id}`;
+
+                    return self.registration.showNotification("IncidentRelay", {
+                        body: action === "ack"
+                            ? `${alertTitle} acknowledged`
+                            : `${alertTitle} resolved`,
+                        tag: `incidentrelay-alert-${result.alert_id}`,
+                        renotify: true,
+                        silent: false,
+                        data: {
+                            url: data.url || "/alerts"
+                        }
+                    });
+                })
+                .catch(() => {
+                    return self.registration.showNotification("IncidentRelay", {
+                        body: "Action failed: network error",
+                        tag: `incidentrelay-action-error-${Date.now()}`
+                    });
+                })
+        );
+
+        return;
+    }
+
+    event.waitUntil(openIncidentRelayUrl(data.url || "/alerts"));
+});
+
+
+function openIncidentRelayUrl(url) {
+    return clients.matchAll({
+        type: "window",
+        includeUncontrolled: true
+    }).then(clientList => {
+        for (const client of clientList) {
+            if ("focus" in client) {
+                client.focus();
+
+                if ("navigate" in client) {
+                    return client.navigate(url);
+                }
+
+                return client;
+            }
+        }
+
+        if (clients.openWindow) {
+            return clients.openWindow(url);
+        }
+
+        return null;
+    });
+}
+
+self.addEventListener("notificationclick", function (event) {
+    event.notification.close();
+
+    const action = event.action || "open";
+    const data = event.notification.data || {};
+    const actionTokens = data.action_tokens || {};
+    const url = data.url || "/alerts";
+
+    if (action === "ack" || action === "resolve") {
+        const token = actionTokens[action];
+
+        if (!token) {
+            event.waitUntil(clients.openWindow(url));
+            return;
+        }
+
+        event.waitUntil(
+            fetch("/api/push/actions", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                credentials: "include",
+                body: JSON.stringify({
+                    action: action,
+                    token: token
+                })
+            })
+                .then(function () {
+                    return self.registration.showNotification(
+                        action === "ack" ? "Alert acknowledged" : "Alert resolved",
+                        {
+                            body: "IncidentRelay action completed.",
+                            icon: "/static/images/pwa/icon-192.png",
+                            tag: "incidentrelay-action-" + (data.alert_id || Date.now())
+                        }
+                    );
+                })
+                .catch(function () {
+                    return clients.openWindow(url);
+                })
+        );
+
+        return;
+    }
+
+    event.waitUntil(clients.openWindow(url));
+});

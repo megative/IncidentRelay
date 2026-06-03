@@ -180,18 +180,6 @@
     border-right: 0;
 }
 
-.calendar-month-day-cell {
-    min-height: 80px;
-    padding: 9px;
-    border-right: 1px solid #eef2f6;
-    border-bottom: 1px solid #eef2f6;
-    background: #ffffff;
-}
-
-.calendar-month-day-cell:nth-child(7n) {
-    border-right: 0;
-}
-
 .calendar-day-outside-month {
     background: #f8fafc;
     color: #98a2b3;

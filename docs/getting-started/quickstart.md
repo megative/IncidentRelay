@@ -18,6 +18,7 @@ Use this checklist after installation.
 - [ ] Database settings are correct
 - [ ] SMTP is configured globally if email channel will be used
 - [ ] Voice provider is configured if voice calls will be used
+- [ ] Browser push VAPID keys are configured if PWA/browser push will be used
 - [ ] Logs are visible in journal, container logs, or log file
 
 ## RBAC and teams
@@ -37,8 +38,8 @@ Use this checklist after installation.
 - [ ] Reminder interval is configured:
 
 ```text
-0       reminders disabled
->= 60   reminders enabled
+0 reminders disabled
+>= 60 reminders enabled
 ```
 
 - [ ] Escalation policy is configured on the team
@@ -51,6 +52,10 @@ Use this checklist after installation.
 - [ ] Channel severity filter is correct or empty
 - [ ] Required user profile contact fields are filled
 - [ ] Channel test works
+- [ ] Responders who want browser push enabled it in Profile
+- [ ] Browser push test works from Profile
+
+Browser push is profile-level and does not need a channel or route binding.
 
 ## Route setup
 

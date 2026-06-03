@@ -22,6 +22,38 @@ from app.services.service_resolution import (
 logger = logging.getLogger("oncall.alerts")
 
 
+def apply_initial_escalation_policy_assignment(policy, fallback_rotation):
+    """Return initial policy rule, rotation, assignee and next escalation time."""
+    policy_rule = None
+    rotation = fallback_rotation
+    assignee = get_current_oncall_user(rotation) if rotation else None
+    next_escalation_at = None
+
+    if not policy:
+        return policy_rule, rotation, assignee, next_escalation_at
+
+    policy_rule = escalation_policy_service.get_first_enabled_rule(policy)
+
+    if not policy_rule:
+        return policy_rule, rotation, assignee, next_escalation_at
+
+    policy_target_user = escalation_policy_service.resolve_rule_user(policy_rule)
+
+    if policy_rule.target_type == "rotation" and policy_rule.target_rotation:
+        rotation = policy_rule.target_rotation
+    else:
+        rotation = None
+
+    assignee = policy_target_user
+
+    delay_seconds = escalation_policy_service.get_rule_delay_seconds(policy_rule)
+
+    if delay_seconds:
+        next_escalation_at = datetime.utcnow() + timedelta(seconds=delay_seconds)
+
+    return policy_rule, rotation, assignee, next_escalation_at
+
+
 def upsert_alert(alert_data):
     """
     Create or update an alert from normalized alert data.
@@ -77,25 +109,10 @@ def upsert_alert(alert_data):
         return None, False
 
     policy = get_effective_escalation_policy(route, service) if route else None
-    policy_rule = None
-    next_escalation_at = None
 
-    assignee = get_current_oncall_user(rotation) if rotation else None
-
-    if policy:
-        policy_rule = escalation_policy_service.get_first_enabled_rule(policy)
-
-        if policy_rule:
-            policy_target_user = escalation_policy_service.resolve_rule_user(policy_rule)
-
-            if policy_rule.target_type == "rotation" and policy_rule.target_rotation:
-                rotation = policy_rule.target_rotation
-
-            assignee = policy_target_user
-            delay_seconds = escalation_policy_service.get_rule_delay_seconds(policy_rule)
-
-            if delay_seconds:
-                next_escalation_at = datetime.utcnow() + timedelta(seconds=delay_seconds)
+    policy_rule, rotation, assignee, next_escalation_at = (
+        apply_initial_escalation_policy_assignment(policy, rotation)
+    )
 
     silence = find_active_silence(team.id if team else None, alert_data)
     if silence and status == "firing":

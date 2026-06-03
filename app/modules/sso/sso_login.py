@@ -56,6 +56,34 @@ def extract_claim(claims, claim_name, default=None):
     return current
 
 
+def normalize_sso_group_name(value):
+    """Normalize external SSO group value for matching."""
+    if value is None:
+        return ""
+
+    return str(value).strip().casefold()
+
+
+def normalize_sso_group_set(values):
+    """Normalize external SSO group claim values for matching."""
+    return {
+        normalize_sso_group_name(item)
+        for item in normalize_groups(values)
+        if normalize_sso_group_name(item)
+    }
+
+
+def ensure_user_active_group(user):
+    """Ensure user's active_group points to one of active group memberships."""
+    active_memberships = groups_repo.list_user_groups(user.id)
+    active_group_ids = [membership.group.id for membership in active_memberships]
+
+    if active_group_ids and user.active_group_id not in active_group_ids:
+        user = users_repo.set_active_group(user.id, active_group_ids[0])
+
+    return user, active_group_ids
+
+
 def normalize_groups(value):
     """Normalize SSO group claim to a list of strings."""
     if value in (None, ""):
@@ -319,11 +347,13 @@ def _effective_group_role(mapping_role: str) -> str:
 def _sync_group_memberships(user, provider, claims):
     """Sync IncidentRelay group memberships from SSO group mappings."""
     if not provider.sync_group_memberships:
+        user, _active_group_ids = ensure_user_active_group(user)
         return
 
-    external_groups = set(normalize_groups(extract_claim(claims, provider.groups_claim)))
-    if not external_groups and not provider.remove_missing_group_memberships:
-        return
+    external_groups_raw = normalize_groups(
+        extract_claim(claims, provider.groups_claim)
+    )
+    external_groups = normalize_sso_group_set(external_groups_raw)
 
     mappings = list(
         SsoGroupMapping
@@ -336,23 +366,40 @@ def _sync_group_memberships(user, provider, claims):
     )
 
     if not mappings:
+        user, _active_group_ids = ensure_user_active_group(user)
+        return
+
+    if not external_groups and not provider.remove_missing_group_memberships:
+        user, active_group_ids = ensure_user_active_group(user)
+
+        if not active_group_ids and not user.is_admin:
+            raise SsoLoginError(
+                "sso_group_mapping_not_matched",
+                (
+                    "SSO login did not assign any IncidentRelay group. "
+                    "Check the configured groups claim and SSO group mappings."
+                ),
+                403,
+            )
+
         return
 
     provider_group_ids = []
     matched_group_ids = []
 
     for mapping in mappings:
-        group_id = mapping.incidentrelay_group.id
+        group_id = mapping.incidentrelay_group_id
         provider_group_ids.append(group_id)
 
-        if mapping.external_group not in external_groups:
+        if normalize_sso_group_name(mapping.external_group) not in external_groups:
             continue
 
         groups_repo.add_user_to_group(
             user_id=user.id,
-            group_id=mapping.incidentrelay_group_id,
+            group_id=group_id,
             role=_effective_group_role(mapping.group_role),
         )
+
         matched_group_ids.append(group_id)
 
     if provider.remove_missing_group_memberships and provider_group_ids:
@@ -366,12 +413,20 @@ def _sync_group_memberships(user, provider, claims):
 
         UserGroup.update(active=False).where(query).execute()
 
-    active_memberships = groups_repo.list_user_groups(user.id)
-    active_group_ids = [item.group.id for item in active_memberships]
     _sync_global_admin(user, mappings, external_groups)
 
-    if active_group_ids and user.active_group_id not in active_group_ids:
-        users_repo.set_active_group(user.id, active_group_ids[0])
+    user = users_repo.get_user(user.id)
+    user, active_group_ids = ensure_user_active_group(user)
+
+    if not active_group_ids and not user.is_admin:
+        raise SsoLoginError(
+            "sso_group_mapping_not_matched",
+            (
+                "SSO login did not assign any IncidentRelay group. "
+                "Check the configured groups claim and SSO group mappings."
+            ),
+            403,
+        )
 
 
 def _sync_global_admin(user, mappings, external_groups):
@@ -388,7 +443,7 @@ def _sync_global_admin(user, mappings, external_groups):
         return
 
     should_be_admin = any(
-        mapping.external_group in external_groups
+        normalize_sso_group_name(mapping.external_group) in external_groups
         for mapping in admin_mappings
     )
 

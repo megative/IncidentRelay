@@ -5,11 +5,13 @@ description: Incoming alert sources and outgoing notification channels
 
 # Integrations
 
-IncidentRelay has two different integration layers. Keep them separate when configuring or troubleshooting.
+IncidentRelay has two different integration layers. Keep them separate when configuring or troubleshooting the system.
 
 ```text
 Monitoring system -> Incoming integration -> Route -> Notification channels -> User action
 ```
+
+Profile-level browser push is separate from notification channels. Users enable browser/PWA push in Profile, and alerts are delivered to active browser push devices of the assigned user. Read more: [Browser Push](../usage/browser-push.md).
 
 ## Incoming alert integrations
 
@@ -29,14 +31,14 @@ Notification channels deliver alerts after a route has matched an incoming alert
 
 | Channel type | Purpose | Documentation |
 |---|---|---|
-| Mattermost | Chat notifications, optional ACK/Resolve buttons and message updates | [Mattermost](mattermost.md) |
-| Telegram | Telegram Bot API notifications, optional inline actions | [Telegram](telegram.md) |
-| Email | Sends email to the assigned user's profile email address | [Email](email.md) |
+| Mattermost | Chat notifications, optional ACK/Resolve buttons, message updates | [Mattermost channel](mattermost.md) |
+| Telegram | Telegram Bot API notifications, optional inline actions | [Telegram channel](telegram.md) |
+| Email | Sends email to the assigned user's profile email | [Email channel](email.md) |
 | Slack | Sends notifications to a Slack incoming webhook | [Webhook-based channels](webhook-channels.md) |
 | Discord | Sends notifications to a Discord webhook | [Webhook-based channels](webhook-channels.md) |
 | Microsoft Teams | Sends notifications to a Teams webhook | [Webhook-based channels](webhook-channels.md) |
 | Webhook | Sends notification payloads to a custom HTTP endpoint | [Webhook-based channels](webhook-channels.md) |
-| Voice call | Calls the assigned user's phone through the globally configured voice provider | [Voice call](voice-call.md) |
+| Voice call | Calls the assigned user's phone through the globally configured voice provider | [Voice call channel](voice-call.md) |
 
 Read the common channel behavior first: [Notification channels](channels.md).
 
@@ -45,27 +47,31 @@ Read the common channel behavior first: [Notification channels](channels.md).
 ```text
 1. Create a group
 2. Create users and fill contact fields, such as email, phone, Telegram ID
-3. Create a team
-4. Create a rotation and assign on-call users
-5. Create notification channels
-6. Create a route and attach channels
-7. Copy the route intake token
-8. Configure Alertmanager, Zabbix or webhook sender
-9. Send a test alert
-10. Verify notification delivery and ACK/Resolve flow
+3. Optional: configure browser push and ask users to enable it in Profile
+4. Create a team
+5. Create a rotation and assign on-call users
+6. Create notification channels
+7. Create a route and attach channels
+8. Copy the route intake token
+9. Configure Alertmanager, Zabbix, or webhook sender
+10. Send a test alert
+11. Verify notification delivery and ACK/Resolve flow
 ```
 
 ## Troubleshooting direction
 
-When an alert does not notify a user, check the chain in order:
+When an alert does not notify a user through a channel, check the chain in order:
 
 ```text
-Incoming payload
-  -> route match
-  -> route channels
-  -> channel severity filter
-  -> notifier
-  -> external provider
+Incoming payload -> route match -> route channels -> channel severity filter -> notifier -> external provider
+```
+
+For browser push, check the profile-level chain instead:
+
+```text
+alert assignee -> assignee has active browser push subscription -> service worker/browser notification
 ```
 
 If a test channel notification works but real alerts do not, the issue is usually route matching, route-channel binding, severity filtering, missing assignee contact data, or a silence rule.
+
+If browser push test works but real alert push does not, check that the alert is assigned to the same user who enabled push in Profile.

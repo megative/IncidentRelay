@@ -792,8 +792,11 @@ function renderRotationCalendars(monthMode) {
     let days;
 
     if (monthMode) {
-        const firstVisibleDay = startOfCalendarWeek(start);
-        const lastVisibleDay = startOfCalendarWeek(addCalendarDays(end, 6));
+        const monthStart = startOfCalendarMonth(start);
+        const monthEnd = endOfCalendarMonth(monthStart);
+
+        const firstVisibleDay = startOfCalendarWeek(monthStart);
+        const lastVisibleDay = endOfCalendarWeek(addCalendarDays(monthEnd, -1));
 
         days = calendarDaysBetween(firstVisibleDay, lastVisibleDay);
     } else {
@@ -814,10 +817,24 @@ function renderRotationCalendars(monthMode) {
     }
 
     calendars.forEach(function (calendar) {
+        if (monthMode) {
+            const monthStart = startOfCalendarMonth(start);
+            const monthEnd = endOfCalendarMonth(monthStart);
+
+            grid.append(
+                renderRotationCalendarBlock(
+                    calendar,
+                    days,
+                    monthMode,
+                    monthStart,
+                    monthEnd
+                )
+            );
+            return;
+        }
+
         grid.append(renderRotationCalendarBlock(calendar, days, monthMode, start, end));
     });
-
-    // renderCalendarLegend();
 }
 
 
@@ -1496,3 +1513,9 @@ $(document).on("input", "#calendar-search", function () {
 $(document).on("change", "#calendar-start, #calendar-end", function () {
     refreshCalendar();
 });
+function endOfCalendarWeek(date) {
+    /*
+     * Return Monday after the week containing the provided date.
+     */
+    return addCalendarDays(startOfCalendarWeek(date), 7);
+}

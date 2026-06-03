@@ -248,6 +248,24 @@ def paths():
                 "description": "Alertmanager alert fingerprint. Used for deduplication when available.",
                 "example": "target-missing-10.101.164.165",
             },
+            "silenceURL": {
+                "type": "string",
+                "nullable": True,
+                "description": "Alertmanager silence URL.",
+                "example": "https://alertmanager.example.com/#/silences/new",
+            },
+            "dashboardURL": {
+                "type": "string",
+                "nullable": True,
+                "description": "Dashboard URL related to this alert.",
+                "example": "https://grafana.example.com/d/node",
+            },
+            "panelURL": {
+                "type": "string",
+                "nullable": True,
+                "description": "Panel URL related to this alert.",
+                "example": "https://grafana.example.com/d/node?viewPanel=12",
+            },
         },
     }
 
@@ -298,6 +316,8 @@ def paths():
                 "description": "Alertmanager commonAnnotations field.",
                 "example": {
                     "summary": "Target missing or down",
+                    "event_link": "https://grafana.example.com/d/node?viewPanel=12",
+                    "runbook_url": "https://wiki.example.com/runbooks/disk-full",
                 },
             },
             "externalURL": {
@@ -438,20 +458,83 @@ def paths():
                 "description": "Optional stable deduplication key.",
                 "example": "zabbix-100500",
             },
-        },
-        "example": {
-            "event_id": "100500",
-            "status": "firing",
-            "severity": "high",
-            "host": "host1",
-            "trigger": "Disk space is low",
-            "message": "/var is 95% full",
-            "labels": {
-                "team": "infra",
-                "host": "host1",
-                "trigger": "DiskSpaceLow",
+            "event_name": {
+                "type": "string",
+                "nullable": True,
+                "description": "Zabbix event name, usually {EVENT.NAME}.",
+                "example": "Disk space is low on host1",
+            },
+            "problem_name": {
+                "type": "string",
+                "nullable": True,
+                "description": "Problem name fallback.",
+                "example": "Disk space is low on host1",
+            },
+            "trigger_name": {
+                "type": "string",
+                "nullable": True,
+                "description": "Zabbix trigger name.",
+                "example": "Free disk space is less than 10%",
+            },
+            "event_tag": {
+                "nullable": True,
+                "description": "Zabbix event tags, for example {EVENT.TAGS} or {EVENT.TAGSJSON}.",
+                "example": "team: infra, service: filesystem",
+            },
+            "tags": {
+                "nullable": True,
+                "description": "Zabbix tags. Can be object, array, JSON string or EVENT.TAGSJSON.",
+                "example": [
+                    {"tag": "team", "value": "infra"},
+                    {"tag": "service", "value": "filesystem"}
+                ],
+            },
+            "event_link": {
+                "type": "string",
+                "nullable": True,
+                "description": "Direct URL to the Zabbix event/problem.",
+                "example": "https://zabbix.example.com/tr_events.php?triggerid=98765&eventid=123456",
+            },
+            "event_url": {
+                "type": "string",
+                "nullable": True,
+                "description": "Alias for event_link.",
+            },
+            "problem_url": {
+                "type": "string",
+                "nullable": True,
+                "description": "Alias for event_link.",
+            },
+            "trigger_url": {
+                "type": "string",
+                "nullable": True,
+                "description": "Alias for event_link.",
+            },
+            "zabbix_url": {
+                "type": "string",
+                "nullable": True,
+                "description": "Base Zabbix frontend URL. IncidentRelay can build event_link from it when event_id is present.",
+                "example": "https://zabbix.example.com",
             },
         },
+        "example": {
+            "status": "firing",
+            "event_id": "123456",
+            "trigger_id": "98765",
+            "event_name": "High CPU load on host1",
+            "host": "host1",
+            "event_severity": "High",
+            "event_status": "PROBLEM",
+            "opdata": "CPU load is above 90%",
+            "event_tag": "team: infra, service: cpu",
+            "event_link": "https://zabbix.example.com/tr_events.php?triggerid=98765&eventid=123456",
+            "team": "infra",
+            "labels": {
+                "host": "host1",
+                "service": "cpu",
+                "environment": "prod"
+            }
+        }
     }
 
     webhook_body = {
@@ -510,6 +593,37 @@ def paths():
                 "description": "External system event id.",
                 "example": "event-123",
             },
+            "event_link": {
+                "type": "string",
+                "nullable": True,
+                "description": "Direct URL to the source event.",
+                "example": "https://monitoring.example.com/events/deploy-incident-42",
+            },
+            "event_url": {
+                "type": "string",
+                "nullable": True,
+                "description": "Alias for event_link.",
+            },
+            "alert_url": {
+                "type": "string",
+                "nullable": True,
+                "description": "Alias for event_link.",
+            },
+            "source_url": {
+                "type": "string",
+                "nullable": True,
+                "description": "Alias for event_link.",
+            },
+            "dashboard_url": {
+                "type": "string",
+                "nullable": True,
+                "description": "Dashboard URL related to the alert.",
+            },
+            "runbook_url": {
+                "type": "string",
+                "nullable": True,
+                "description": "Runbook URL related to the alert.",
+            },
         },
         "example": {
             "title": "Disk is full",
@@ -522,6 +636,7 @@ def paths():
                 "instance": "host1",
                 "alertname": "DiskFull",
             },
+            "event_link": "https://monitoring.example.com/events/deploy-incident-42",
         },
     }
 

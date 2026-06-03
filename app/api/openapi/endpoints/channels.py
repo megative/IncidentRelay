@@ -1,14 +1,17 @@
 from app.api.openapi.common import ERROR_SCHEMA, json_body, path_param, query_param, response
+from app.notifiers.email.email_templates import (
+    DEFAULT_EMAIL_HTML_TEMPLATE,
+    EMAIL_HTML_TEMPLATE_MAX_LENGTH,
+)
 from app.notifiers.types import CHANNEL_TYPE_VALUES
-from app.notifiers.email.email_templates import DEFAULT_EMAIL_HTML_TEMPLATE, EMAIL_HTML_TEMPLATE_MAX_LENGTH
+
 
 SEVERITY_FILTER_SCHEMA = {
     "type": "array",
     "description": (
-        "Optional channel-level alert severity filter. "
-        "If empty or omitted, the channel receives all severities. "
-        "Values are normalized, for example crit -> critical, "
-        "warn -> warning, information -> info."
+        "Optional channel-level alert severity filter. If empty or omitted, "
+        "the channel receives all severities. Values are normalized, for example "
+        "crit -> critical, warn -> warning, information -> info."
     ),
     "items": {
         "type": "string",
@@ -16,6 +19,7 @@ SEVERITY_FILTER_SCHEMA = {
     },
     "example": ["critical", "high"],
 }
+
 
 EMAIL_CONFIG_SCHEMA = {
     "type": "object",
@@ -42,6 +46,7 @@ EMAIL_CONFIG_SCHEMA = {
     "additionalProperties": True,
 }
 
+
 CHANNEL_SCHEMA = {
     "type": "object",
     "required": ["team_id", "name", "channel_type", "config"],
@@ -52,7 +57,12 @@ CHANNEL_SCHEMA = {
             "nullable": True,
             "description": "Owner team id.",
         },
-        "name": {"type": "string", "minLength": 2, "maxLength": 120, "example": "infra-email"},
+        "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 120,
+            "example": "infra-email",
+        },
         "channel_type": {
             "type": "string",
             "enum": list(CHANNEL_TYPE_VALUES),
@@ -61,26 +71,33 @@ CHANNEL_SCHEMA = {
         "config": {
             "type": "object",
             "description": (
-                "Channel-specific notification configuration. All channel types support "
-                "notify_on_severities as an optional channel-level severity filter. "
-                "Telegram requires bot_token and chat_id. Slack/Webhook/Discord/Teams "
-                "require webhook_url. Mattermost can use webhook_url, or mode=bot_api "
-                "with api_url, bot_token and channel_id for buttons and post updates. "
-                "Email sends to the assigned user's profile email and supports html_template. "
-                "Voice call channels require provider; provider_config is passed to the selected provider."
+                "Channel-specific notification configuration. Channels are "
+                "team-level external delivery targets attached to alert routes. "
+                "All channel types support notify_on_severities as an optional "
+                "channel-level severity filter. Telegram requires bot_token and "
+                "chat_id. Slack/Webhook/Discord/Teams require webhook_url. "
+                "Mattermost can use webhook_url, or mode=bot_api with api_url, "
+                "bot_token and channel_id for buttons and post updates. Email sends "
+                "to the assigned user's profile email and supports html_template. "
+                "Voice calls and browser push are configured through profile "
+                "notification rules, not channels."
             ),
             "properties": {
                 "notify_on_severities": SEVERITY_FILTER_SCHEMA,
             },
             "additionalProperties": True,
             "example": {
-                "html_template": "<h1>{event_type}: {title}</h1><p>{message}</p>",
+                "html_template": "# {event_type}: {title}\n\n{message}\n",
                 "notify_on_severities": ["critical", "high"],
             },
         },
-        "enabled": {"type": "boolean", "default": True},
+        "enabled": {
+            "type": "boolean",
+            "default": True,
+        },
     },
 }
+
 
 CHANNEL_CONFLICT_RESPONSE_SCHEMA = {
     "type": "object",
@@ -96,7 +113,11 @@ CHANNEL_CONFLICT_RESPONSE_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "field": {"type": "string", "example": "name"},
-                    "loc": {"type": "array", "items": {"type": "string"}, "example": ["name"]},
+                    "loc": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "example": ["name"],
+                    },
                     "message": {
                         "type": "string",
                         "example": "Channel name must be unique within a team",
@@ -109,6 +130,7 @@ CHANNEL_CONFLICT_RESPONSE_SCHEMA = {
     },
 }
 
+
 EMAIL_DEFAULT_TEMPLATE_SCHEMA = {
     "type": "object",
     "properties": {
@@ -120,67 +142,6 @@ EMAIL_DEFAULT_TEMPLATE_SCHEMA = {
     },
 }
 
-VOICE_CALL_CONFIG_SCHEMA = {
-    "type": "object",
-    "description": (
-        "Voice call channel configuration. The provider field selects a built-in or "
-        "custom voice provider module. provider_config is passed to the selected provider."
-    ),
-    "properties": {
-        "provider": {
-            "type": "string",
-            "description": "Voice provider module name.",
-            "example": "example_http",
-        },
-        "notify_on_severities": SEVERITY_FILTER_SCHEMA,
-        "callback_secret": {
-            "type": "string",
-            "nullable": True,
-            "description": "Optional per-channel callback secret. If omitted, the global voice.callback_secret setting is used.",
-            "example": "change-me-channel-secret",
-        },
-        "text_template": {
-            "type": "string",
-            "description": (
-                "Template for the spoken call text. Supported placeholders: "
-                "{alert_id}, {event_type}, {title}, {message}, {severity}, "
-                "{status}, {team}, {assignee}, {source}."
-            ),
-            "example": "IncidentRelay alert {alert_id}. {title}. Severity {severity}. {message}.",
-        },
-        "dtmf_actions": {
-            "type": "object",
-            "description": "Maps phone keypad digits to IncidentRelay actions.",
-            "additionalProperties": {"type": "string", "enum": ["acknowledge", "resolve"]},
-            "example": {"1": "acknowledge", "2": "resolve"},
-        },
-        "provider_config": {
-            "type": "object",
-            "description": "Provider-specific configuration. Values like ${VOICE_API_TOKEN} are resolved from environment variables.",
-            "additionalProperties": True,
-            "example": {"api_url": "https://voice.example.com/api", "api_token": "${VOICE_API_TOKEN}"},
-        },
-    },
-    "required": ["provider"],
-    "additionalProperties": True,
-}
-
-VOICE_PROVIDER_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "name": {"type": "string", "example": "stub"},
-        "module": {"type": "string", "example": "stub"},
-        "capabilities": {
-            "type": "object",
-            "properties": {
-                "tts": {"type": "boolean", "example": True},
-                "status_callback": {"type": "boolean", "example": True},
-                "dtmf_callback": {"type": "boolean", "example": True},
-                "status_polling": {"type": "boolean", "example": False},
-            },
-        },
-    },
-}
 
 CHANNEL_DELETE_RESPONSE_SCHEMA = {
     "type": "object",
@@ -198,8 +159,11 @@ def tags():
         {
             "name": "channels",
             "description": (
-                "Outbound notification channels. Channels are connected to alert routes "
-                "and are used to send initial notifications, reminders, escalations and resolve messages."
+                "Team-level outbound notification channels. Channels are connected "
+                "to alert routes and are used to send initial notifications, "
+                "reminders, escalations and resolve messages to external systems. "
+                "User-level browser push, email and voice call preferences are "
+                "configured with profile notification rules."
             ),
         }
     ]
@@ -212,12 +176,22 @@ def paths():
             "get": {
                 "tags": ["channels"],
                 "summary": "List supported channel types",
-                "description": "Returns notification channel plugins supported by the service.",
+                "description": (
+                    "Returns notification channel plugins supported by the service. "
+                    "The list contains route-attached channel types only; voice_call "
+                    "and browser_push are not channel types."
+                ),
                 "operationId": "listChannelTypes",
                 "responses": {
                     "200": response(
                         "Supported channel types.",
-                        {"type": "array", "items": {"type": "string", "enum": list(CHANNEL_TYPE_VALUES)}},
+                        {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": list(CHANNEL_TYPE_VALUES),
+                            },
+                        },
                     )
                 },
             }
@@ -226,9 +200,14 @@ def paths():
             "get": {
                 "tags": ["channels"],
                 "summary": "Get default email HTML template",
-                "description": "Returns the built-in email HTML template used when channel config does not define html_template.",
+                "description": (
+                    "Returns the built-in email HTML template used when channel config "
+                    "does not define html_template."
+                ),
                 "operationId": "getDefaultEmailTemplate",
-                "responses": {"200": response("Default email template.", EMAIL_DEFAULT_TEMPLATE_SCHEMA)},
+                "responses": {
+                    "200": response("Default email template.", EMAIL_DEFAULT_TEMPLATE_SCHEMA)
+                },
             }
         },
         "/api/channels": {
@@ -238,23 +217,37 @@ def paths():
                 "description": "Returns notification channels. Optional team_id filters channels by owner team.",
                 "operationId": "listChannels",
                 "parameters": [
-                    query_param("team_id", "Filter channels by team id.", {"type": "integer", "minimum": 1})
+                    query_param(
+                        "team_id",
+                        "Filter channels by team id.",
+                        {"type": "integer", "minimum": 1},
+                    )
                 ],
-                "responses": {"200": response("List of channels.", {"type": "array", "items": CHANNEL_SCHEMA})},
+                "responses": {
+                    "200": response(
+                        "List of channels.",
+                        {"type": "array", "items": CHANNEL_SCHEMA},
+                    )
+                },
             },
             "post": {
                 "tags": ["channels"],
                 "summary": "Create channel",
                 "description": (
-                    "Creates an outbound notification channel. Intake tokens belong to alert routes, "
-                    "not channels. Attach channels to routes to receive alert notifications."
+                    "Creates an outbound route channel. Intake tokens belong to alert "
+                    "routes, not channels. Attach channels to routes to receive alert "
+                    "notifications. Voice calls and browser push are configured in "
+                    "profile notification rules."
                 ),
                 "operationId": "createChannel",
                 "requestBody": json_body("Channel properties.", CHANNEL_SCHEMA),
                 "responses": {
                     "201": response("Channel created.", CHANNEL_SCHEMA),
                     "400": response("Validation error.", ERROR_SCHEMA),
-                    "409": response("Channel name already exists in this team.", CHANNEL_CONFLICT_RESPONSE_SCHEMA),
+                    "409": response(
+                        "Channel name already exists in this team.",
+                        CHANNEL_CONFLICT_RESPONSE_SCHEMA,
+                    ),
                 },
             },
         },
@@ -277,7 +270,10 @@ def paths():
                 "responses": {
                     "200": response("Channel updated.", CHANNEL_SCHEMA),
                     "400": response("Validation error.", ERROR_SCHEMA),
-                    "409": response("Channel name already exists in this team.", CHANNEL_CONFLICT_RESPONSE_SCHEMA),
+                    "409": response(
+                        "Channel name already exists in this team.",
+                        CHANNEL_CONFLICT_RESPONSE_SCHEMA,
+                    ),
                 },
             },
             "delete": {
@@ -318,24 +314,18 @@ def paths():
                 "tags": ["channels"],
                 "summary": "Send test notification",
                 "description": (
-                    "Sends a test message through the selected channel. Email tests are sent "
-                    "to the current user's profile email."
+                    "Sends a test message through the selected channel. Email tests "
+                    "are sent to the current user's profile email."
                 ),
                 "operationId": "testChannel",
                 "parameters": [path_param("channel_id", "Channel id.")],
                 "responses": {
                     "200": response("Test notification sent."),
-                    "400": response("Test failed. The response contains the transport error.", ERROR_SCHEMA),
+                    "400": response(
+                        "Test failed. The response contains the transport error.",
+                        ERROR_SCHEMA,
+                    ),
                 },
-            }
-        },
-        "/api/channels/voice-providers": {
-            "get": {
-                "tags": ["channels"],
-                "summary": "List voice call providers",
-                "description": "Returns built-in and custom voice call providers available on this instance.",
-                "operationId": "listVoiceCallProviders",
-                "responses": {"200": response("Available voice call providers.", {"type": "array", "items": VOICE_PROVIDER_SCHEMA})},
             }
         },
     }

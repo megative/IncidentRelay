@@ -6,6 +6,7 @@ from datetime import datetime
 from peewee import Case, JOIN, fn
 
 from app.modules.db.models import Alert, AlertEvent, AlertRoute, Rotation, Service, Team, User
+from app.modules.db.query_filters import apply_field_values_filter
 
 
 MAX_ALERTS_PAGE_SIZE = 100
@@ -105,6 +106,7 @@ def build_alerts_query(
     service_status=None,
     service_criticality=None,
     search=None,
+    service_ids=None,
 ):
     """
     Build the base alerts query with filters.
@@ -132,17 +134,19 @@ def build_alerts_query(
 
         query = query.where(Alert.team.in_(team_ids))
 
-    if status:
-        query = query.where(Alert.status == status)
-
     if source:
         query = query.where(Alert.source == source)
 
-    if severity:
-        query = query.where(Alert.severity == severity)
+    query = apply_field_values_filter(query, Alert.status, status)
+    query = apply_field_values_filter(query, Alert.severity, severity)
 
-    if service_id:
-        query = query.where(Alert.service == service_id)
+    service_filter_values = service_ids if service_ids is not None else service_id
+    query = apply_field_values_filter(
+        query,
+        Alert.service,
+        service_filter_values,
+        value_type=int,
+    )
 
     if service_slug:
         service_ids = (
@@ -302,6 +306,7 @@ def paginate_alerts(
     page_size=25,
     sort="activity",
     order="desc",
+    service_ids=None,
 ):
     """
     Return alerts with backend pagination, filtering and sorting.
@@ -318,6 +323,7 @@ def paginate_alerts(
         source=source,
         severity=severity,
         service_id=service_id,
+        service_ids=service_ids,
         service_slug=service_slug,
         service_status=service_status,
         service_criticality=service_criticality,

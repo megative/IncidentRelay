@@ -132,6 +132,31 @@ callback_secret = change-me
 
 Voice call notifications are sent to the assigned user's profile phone number.
 
+## Browser push section
+
+Browser push notifications are profile-level PWA/browser notifications. They are not configured as notification channels.
+
+```ini
+[browser_push]
+enabled = true
+vapid_public_key = CHANGE_ME_PUBLIC_KEY
+vapid_private_key = /etc/incidentrelay/vapid/private_key.pem
+vapid_subject = mailto:admin@example.com
+action_token_ttl_seconds = 900
+```
+
+| Option | Description |
+|---|---|
+| `enabled` | Enables or disables browser push globally |
+| `vapid_public_key` | Public VAPID key returned to the browser for `PushManager.subscribe()` |
+| `vapid_private_key` | Private VAPID key or PEM file path used by the server to send Web Push messages |
+| `vapid_subject` | Contact URI included in VAPID claims, usually `mailto:admin@example.com` |
+| `action_token_ttl_seconds` | Lifetime of one-time ACK/Resolve tokens embedded into push notifications |
+
+After changing browser push settings, restart the web service. Restart the scheduler too if it sends notifications in your installation.
+
+Read more: [Browser Push](../usage/browser-push.md).
+
 ## Scheduler settings
 
 The scheduler process checks reminders, escalations and periodic jobs.
@@ -139,9 +164,9 @@ The scheduler process checks reminders, escalations and periodic jobs.
 The scheduler wake-up interval is separate from rotation reminder intervals. Rotation reminder intervals are configured per rotation:
 
 ```text
-0       disables reminders for that rotation
->= 60   sends reminders at that interval in seconds
-1..59   invalid
+0 disables reminders for that rotation
+>= 60 sends reminders at that interval in seconds
+1..59 invalid
 ```
 
 Do not use a global reminder-after setting as a runtime fallback when rotations require an explicit interval.

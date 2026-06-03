@@ -1,0 +1,485 @@
+import logging
+from datetime import datetime, timedelta
+from types import SimpleNamespace
+
+from app.modules.db.models import (
+    Alert,
+    UserNotificationDelivery,
+    UserNotificationRule,
+)
+from app.notifiers.browser_push import service as browser_push
+from app.notifiers.email.notifier import EmailNotifier
+from app.notifiers.voice.notifier import VoiceCallNotifier
+from app.services.severity import normalize_severity, normalize_severity_list
+
+logger = logging.getLogger("oncall.notification_rules")
+
+
+NOTIFICATION_METHOD_BROWSER_PUSH = "browser_push"
+NOTIFICATION_METHOD_EMAIL = "email"
+NOTIFICATION_METHOD_VOICE_CALL = "voice_call"
+
+NOTIFICATION_RULE_METHODS = {
+    NOTIFICATION_METHOD_BROWSER_PUSH,
+    NOTIFICATION_METHOD_EMAIL,
+    NOTIFICATION_METHOD_VOICE_CALL,
+}
+
+DEFAULT_RULE_EVENT_TYPES = {
+    "notification",
+    "reminder",
+    "escalation",
+}
+
+DIRECT_NOTIFIERS = {
+    NOTIFICATION_METHOD_EMAIL: EmailNotifier(),
+    NOTIFICATION_METHOD_VOICE_CALL: VoiceCallNotifier(),
+}
+
+
+def serialize_rule(rule):
+    return {
+        "id": rule.id,
+        "position": rule.position,
+        "method": rule.method,
+        "delay_seconds": rule.delay_seconds,
+        "enabled": rule.enabled,
+        "severities": rule.severities or [],
+        "event_types": rule.event_types or [],
+        "created_at": rule.created_at.isoformat() if rule.created_at else None,
+        "updated_at": rule.updated_at.isoformat() if rule.updated_at else None,
+    }
+
+
+def list_user_rules(user):
+    rows = (
+        UserNotificationRule
+        .select()
+        .where(
+            (UserNotificationRule.user == user.id)
+            & (UserNotificationRule.deleted == False)
+        )
+        .order_by(UserNotificationRule.position.asc(), UserNotificationRule.id.asc())
+    )
+
+    return [serialize_rule(row) for row in rows]
+
+
+def create_user_rule(
+    user,
+    *,
+    method,
+    delay_seconds=0,
+    severities=None,
+    event_types=None,
+    enabled=True,
+):
+    validate_rule_payload(method, delay_seconds, severities, event_types)
+
+    max_position = (
+        UserNotificationRule
+        .select()
+        .where(
+            (UserNotificationRule.user == user.id)
+            & (UserNotificationRule.deleted == False)
+        )
+        .count()
+    )
+
+    return UserNotificationRule.create(
+        user=user.id,
+        position=max_position + 1,
+        method=method,
+        delay_seconds=delay_seconds or 0,
+        severities=severities or [],
+        event_types=event_types or [],
+        enabled=enabled,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+
+
+def update_user_rule(user, rule_id, payload):
+    rule = get_user_rule(user, rule_id)
+
+    method = payload.get("method", rule.method)
+    delay_seconds = payload.get("delay_seconds", rule.delay_seconds)
+    severities = payload.get("severities", rule.severities or [])
+    event_types = payload.get("event_types", rule.event_types or [])
+
+    validate_rule_payload(method, delay_seconds, severities, event_types)
+
+    rule.method = method
+    rule.delay_seconds = delay_seconds or 0
+    rule.severities = severities or []
+    rule.event_types = event_types or []
+    rule.enabled = bool(payload.get("enabled", rule.enabled))
+    rule.updated_at = datetime.utcnow()
+    rule.save()
+
+    return rule
+
+
+def delete_user_rule(user, rule_id):
+    rule = get_user_rule(user, rule_id)
+    rule.deleted = True
+    rule.deleted_at = datetime.utcnow()
+    rule.enabled = False
+    rule.updated_at = datetime.utcnow()
+    rule.save()
+
+    return rule
+
+
+def get_user_rule(user, rule_id):
+    rule = UserNotificationRule.get_or_none(
+        (UserNotificationRule.id == rule_id)
+        & (UserNotificationRule.user == user.id)
+        & (UserNotificationRule.deleted == False)
+    )
+
+    if not rule:
+        raise ValueError("notification rule was not found")
+
+    return rule
+
+
+def validate_rule_payload(method, delay_seconds, severities, event_types):
+    if method not in NOTIFICATION_RULE_METHODS:
+        raise ValueError("unsupported notification rule method")
+
+    if delay_seconds is None:
+        delay_seconds = 0
+
+    if int(delay_seconds) < 0:
+        raise ValueError("delay_seconds must be greater than or equal to 0")
+
+    if severities:
+        normalize_severity_list(severities)
+
+    if event_types:
+        invalid = set(event_types) - {
+            "notification",
+            "reminder",
+            "escalation",
+            "acknowledged",
+            "resolved",
+        }
+
+        if invalid:
+            raise ValueError(
+                "unsupported notification rule event type: "
+                + ", ".join(sorted(invalid))
+            )
+
+
+def has_custom_user_rules(user_id):
+    if not user_id:
+        return False
+
+    return (
+        UserNotificationRule
+        .select(UserNotificationRule.id)
+        .where(
+            (UserNotificationRule.user == user_id)
+            & (UserNotificationRule.enabled == True)
+            & (UserNotificationRule.deleted == False)
+        )
+        .exists()
+    )
+
+
+def list_matching_rules(alert, event_type):
+    user_id = getattr(alert, "assignee_id", None)
+
+    if not user_id:
+        return []
+
+    rows = (
+        UserNotificationRule
+        .select()
+        .where(
+            (UserNotificationRule.user == user_id)
+            & (UserNotificationRule.enabled == True)
+            & (UserNotificationRule.deleted == False)
+        )
+        .order_by(UserNotificationRule.position.asc(), UserNotificationRule.id.asc())
+    )
+
+    return [
+        rule
+        for rule in rows
+        if rule_matches_alert(rule, alert, event_type)
+    ]
+
+
+def rule_matches_alert(rule, alert, event_type):
+    rule_event_types = set(rule.event_types or [])
+
+    if rule_event_types:
+        if event_type not in rule_event_types:
+            return False
+    elif event_type not in DEFAULT_RULE_EVENT_TYPES:
+        return False
+
+    allowed_severities = set(normalize_severity_list(rule.severities or []))
+
+    if allowed_severities:
+        alert_severity = normalize_severity(getattr(alert, "severity", None))
+
+        if alert_severity not in allowed_severities:
+            return False
+
+    return True
+
+
+def has_deliverable_user_notification(alert, event_type="notification"):
+    user_id = getattr(alert, "assignee_id", None)
+
+    if not user_id:
+        return False
+
+    if has_custom_user_rules(user_id):
+        return bool(list_matching_rules(alert, event_type))
+
+    # Backward-compatible default:
+    # if user enabled browser push in Profile but did not create custom rules,
+    # send browser push immediately.
+    return browser_push.can_send_alert_push(alert)
+
+
+def enqueue_user_notifications(alert, event_type="notification"):
+    assignee = getattr(alert, "assignee", None)
+
+    if not assignee:
+        logger.info(
+            "user notification skipped: no assignee",
+            extra={
+                "extra": {
+                    "alert_id": getattr(alert, "id", None),
+                    "event_type": event_type,
+                }
+            },
+        )
+        return 0
+
+    now = datetime.utcnow()
+    sent_count = 0
+
+    rules = list_matching_rules(alert, event_type)
+
+    if not rules and not has_custom_user_rules(assignee.id):
+        # Keep current behavior: profile browser push works without explicit rules.
+        if not browser_push.can_send_alert_push(alert):
+            return 0
+
+        delivery = create_delivery(
+            alert=alert,
+            user=assignee,
+            rule=None,
+            method=NOTIFICATION_METHOD_BROWSER_PUSH,
+            event_type=event_type,
+            scheduled_at=now,
+        )
+
+        return send_delivery(delivery)
+
+    for rule in rules:
+        scheduled_at = now + timedelta(seconds=rule.delay_seconds or 0)
+
+        delivery = create_delivery(
+            alert=alert,
+            user=assignee,
+            rule=rule,
+            method=rule.method,
+            event_type=event_type,
+            scheduled_at=scheduled_at,
+        )
+
+        if rule.delay_seconds == 0:
+            sent_count += send_delivery(delivery)
+
+    return sent_count
+
+
+def create_delivery(alert, user, rule, method, event_type, scheduled_at):
+    return UserNotificationDelivery.create(
+        alert=alert.id,
+        user=user.id,
+        rule=rule.id if rule else None,
+        method=method,
+        event_type=event_type,
+        status="pending",
+        scheduled_at=scheduled_at,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+
+
+def process_due_user_notifications(limit=100):
+    """Send due delayed user notification deliveries."""
+    now = datetime.utcnow()
+
+    rows = list(
+        UserNotificationDelivery
+        .select()
+        .where(
+            (UserNotificationDelivery.status == "pending")
+            & (UserNotificationDelivery.scheduled_at <= now)
+        )
+        .order_by(
+            UserNotificationDelivery.scheduled_at.asc(),
+            UserNotificationDelivery.id.asc(),
+        )
+        .limit(limit)
+    )
+
+    sent = 0
+
+    for delivery in rows:
+        claimed = (
+            UserNotificationDelivery
+            .update(
+                status="processing",
+                updated_at=datetime.utcnow(),
+            )
+            .where(
+                (UserNotificationDelivery.id == delivery.id)
+                & (UserNotificationDelivery.status == "pending")
+                & (UserNotificationDelivery.scheduled_at <= now)
+            )
+            .execute()
+        )
+
+        if claimed != 1:
+            continue
+
+        delivery = UserNotificationDelivery.get_by_id(delivery.id)
+        sent += send_delivery(delivery)
+
+    return sent
+
+
+def send_delivery(delivery):
+    """Send one pending or claimed user notification delivery."""
+    if delivery.status not in {"pending", "processing"}:
+        return 0
+
+    alert = Alert.get_or_none(Alert.id == delivery.alert_id)
+
+    if not alert:
+        mark_delivery_skipped(delivery, "alert_not_found")
+        return 0
+
+    if delivery.event_type in {"notification", "reminder", "escalation"}:
+        if alert.status != "firing":
+            mark_delivery_skipped(delivery, "alert_not_firing")
+            return 0
+
+    try:
+        if delivery.method == NOTIFICATION_METHOD_BROWSER_PUSH:
+            sent = browser_push.send_alert_push_to_user(
+                delivery.user,
+                alert,
+                event_type=delivery.event_type,
+            )
+
+            if not sent:
+                mark_delivery_skipped(delivery, "no_active_push_subscriptions")
+                return 0
+
+            result = {
+                "provider": "browser_push",
+                "provider_status": "sent",
+                "provider_payload": {
+                    "sent": sent,
+                },
+            }
+
+        elif delivery.method in DIRECT_NOTIFIERS:
+            result = send_direct_notifier_delivery(delivery, alert)
+
+        else:
+            mark_delivery_failed(
+                delivery,
+                f"unsupported method: {delivery.method}",
+            )
+            return 0
+
+    except Exception as exc:
+        mark_delivery_failed(delivery, str(exc))
+        return 0
+
+    delivery.status = "sent"
+    delivery.sent_at = datetime.utcnow()
+    delivery.provider = result.get("provider") or delivery.method
+    delivery.external_message_id = result.get("external_message_id")
+    delivery.external_channel_id = result.get("external_channel_id")
+    delivery.provider_status = result.get("provider_status")
+    delivery.provider_payload = result.get("provider_payload")
+    delivery.last_error = None
+    delivery.updated_at = datetime.utcnow()
+    delivery.save()
+
+    return 1
+
+
+def send_direct_notifier_delivery(delivery, alert):
+    from app.services.notification_service import format_alert_message
+
+    notifier = DIRECT_NOTIFIERS[delivery.method]
+
+    channel = SimpleNamespace(
+        id=delivery.id,
+        name=f"Notification rule #{delivery.rule_id or 'default'}",
+        channel_type=delivery.method,
+        config=build_direct_channel_config(delivery),
+    )
+
+    text = format_alert_message(alert, delivery.event_type)
+
+    result = notifier.send(
+        channel,
+        alert,
+        text,
+        event_type=delivery.event_type,
+    ) or {}
+
+    return result
+
+
+def build_direct_channel_config(delivery):
+    config = {}
+
+    if delivery.method == NOTIFICATION_METHOD_VOICE_CALL:
+        config["callback_url"] = build_voice_rule_callback_url(delivery)
+
+    return config
+
+
+def build_voice_rule_callback_url(delivery):
+    from app.settings import Config
+
+    secret = getattr(Config, "VOICE_CALLBACK_SECRET", "")
+
+    if not secret:
+        return None
+
+    return (
+        f"{Config.PUBLIC_BASE_URL.rstrip()}"
+        f"/api/integrations/voice/rule-callback/{delivery.id}/{secret}"
+    )
+
+
+def mark_delivery_skipped(delivery, reason):
+    delivery.status = "skipped"
+    delivery.last_error = reason
+    delivery.updated_at = datetime.utcnow()
+    delivery.save()
+
+
+def mark_delivery_failed(delivery, error):
+    delivery.status = "failed"
+    delivery.last_error = str(error)
+    delivery.updated_at = datetime.utcnow()
+    delivery.save()

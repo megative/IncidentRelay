@@ -7,7 +7,6 @@ import app.modules.db.common as db_common
 from app.api.schemas.channels import ChannelCreateSchema, ChannelUpdateSchema
 from app.modules.db import channels_repo, teams_repo
 from app.notifiers.registry import get_notifier, list_notifier_types
-from app.notifiers.voice.loader import list_voice_providers
 from app.notifiers.email.email_templates import DEFAULT_EMAIL_HTML_TEMPLATE
 from app.services.audit import write_audit
 from app.services.rbac import get_allowed_team_ids, require_team_read, require_team_write
@@ -36,7 +35,7 @@ def channel_name_conflict_response(name):
 
 def build_test_assignee(channel):
     """Return a fake assignee for channel tests that require profile contacts."""
-    if channel.channel_type not in ("email", "voice_call"):
+    if channel.channel_type != "email":
         return None
 
     current_user = request.current_user
@@ -311,9 +310,3 @@ def test_channel(channel_id):
     )
 
     return jsonify({"status": "sent"})
-
-
-@channels_bp.route("/voice-providers", methods=["GET"])
-def list_voice_call_providers():
-    """Return available voice providers and their capabilities."""
-    return jsonify(list_voice_providers())

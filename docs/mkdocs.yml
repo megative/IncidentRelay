@@ -56,6 +56,7 @@ nav:
       - Silences: usage/silences.md
       - Calendar: usage/calendar.md
       - Profile and Personal API Tokens: usage/profile-and-tokens.md
+      - Browser Push Notifications: usage/browser-push.md
       - Rotation Overrides: usage/rotation-overrides.md
   - Voice Providers:
       - Overview: voice-providers/index.md

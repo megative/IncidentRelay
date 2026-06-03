@@ -20,6 +20,7 @@ from tests.factories import (
     create_team,
     create_user,
 )
+from app.modules.db import escalation_policies_repo
 
 
 def normalized_alert(**overrides):
@@ -297,3 +298,179 @@ def test_maybe_escalate_alert_assigns_next_rotation_user(monkeypatch, db):
     assert stored.escalation_level == 1
     assert stored.reminder_count == 0
     assert calls == ["escalation"]
+
+
+def test_policy_alert_assigns_user_when_first_enabled_rule_position_is_not_one(db):
+    group = create_group()
+    team = create_team(group)
+    route = create_route(team, source="test")
+
+    alice = create_user(group=group)
+    add_user_to_team(team, alice)
+
+    policy = escalation_policies_repo.create_policy(
+        team_id=team.id,
+        name="Default policy",
+        enabled=True,
+        repeat_count=0,
+    )
+
+    rule = escalation_policies_repo.create_rule(
+        policy_id=policy.id,
+        position=2,
+        delay_seconds=300,
+        target_type="user",
+        target_id=alice.id,
+        enabled=True,
+    )
+
+    route.escalation_policy = policy
+    route.save()
+
+    alert, created = upsert_alert(
+        {
+            "source": "test",
+            "dedup_key": "policy-user-position-2",
+            "title": "Policy user test",
+            "message": "test",
+            "severity": "critical",
+            "labels": {
+                "alertname": "PolicyUserTest",
+            },
+            "payload": {},
+            "status": "firing",
+        }
+    )
+
+    assert alert is not None
+    assert created is True
+    assert alert.escalation_policy_id == policy.id
+    assert alert.escalation_rule_id == rule.id
+    assert alert.rotation_id is None
+    assert alert.assignee_id == alice.id
+    assert alert.next_escalation_at is not None
+
+
+def test_policy_alert_assigns_rotation_when_first_enabled_rule_position_is_not_one(db):
+    group = create_group()
+    team = create_team(group)
+    route = create_route(team, source="test")
+
+    alice = create_user(group=group)
+    add_user_to_team(team, alice)
+
+    rotation = create_rotation(
+        team,
+        users=[alice],
+        duration_seconds=86400,
+    )
+
+    policy = escalation_policies_repo.create_policy(
+        team_id=team.id,
+        name="Default policy",
+        enabled=True,
+        repeat_count=0,
+    )
+
+    rule = escalation_policies_repo.create_rule(
+        policy_id=policy.id,
+        position=2,
+        delay_seconds=300,
+        target_type="rotation",
+        target_id=rotation.id,
+        enabled=True,
+    )
+
+    route.escalation_policy = policy
+    route.save()
+
+    alert, created = upsert_alert(
+        {
+            "source": "test",
+            "dedup_key": "policy-rotation-position-2",
+            "title": "Policy rotation test",
+            "message": "test",
+            "severity": "critical",
+            "labels": {
+                "alertname": "PolicyRotationTest",
+            },
+            "payload": {},
+            "status": "firing",
+        }
+    )
+
+    assert alert is not None
+    assert created is True
+    assert alert.escalation_policy_id == policy.id
+    assert alert.escalation_rule_id == rule.id
+    assert alert.rotation_id == rotation.id
+    assert alert.assignee_id == alice.id
+    assert alert.next_escalation_at is not None
+
+
+def test_policy_alert_assigns_rotation_when_first_rule_was_deleted_and_second_is_rotation(db):
+    group = create_group()
+    team = create_team(group)
+    route = create_route(team, source="test")
+
+    alice = create_user(group=group)
+    add_user_to_team(team, alice)
+
+    rotation = create_rotation(
+        team,
+        users=[alice],
+        duration_seconds=86400,
+    )
+
+    policy = escalation_policies_repo.create_policy(
+        team_id=team.id,
+        name="Default policy",
+        enabled=True,
+        repeat_count=0,
+    )
+
+    first_rule = escalation_policies_repo.create_rule(
+        policy_id=policy.id,
+        position=1,
+        delay_seconds=60,
+        target_type="rotation",
+        target_id=rotation.id,
+        enabled=True,
+    )
+
+    second_rule = escalation_policies_repo.create_rule(
+        policy_id=policy.id,
+        position=2,
+        delay_seconds=300,
+        target_type="rotation",
+        target_id=rotation.id,
+        enabled=True,
+    )
+
+    escalation_policies_repo.delete_rule(first_rule.id)
+
+    route.escalation_policy = policy
+    route.save()
+
+    alert, created = upsert_alert(
+        {
+            "source": "test",
+            "dedup_key": "policy-second-rule-rotation",
+            "title": "Policy rotation test",
+            "message": "test",
+            "severity": "critical",
+            "labels": {
+                "alertname": "PolicyRotationTest",
+            },
+            "payload": {},
+            "status": "firing",
+        }
+    )
+
+    assert alert is not None
+    assert created is True
+    assert alert.escalation_policy_id == policy.id
+    assert alert.escalation_rule_id == second_rule.id
+    assert alert.rotation_id == rotation.id
+    assert alert.assignee_id == alice.id
+    assert alert.next_escalation_at is not None

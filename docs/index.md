@@ -5,10 +5,11 @@ description: Documentation for IncidentRelay self-hosted on-call scheduling, ale
 
 # IncidentRelay Documentation
 
-IncidentRelay is a self-hosted on-call scheduling, alert routing and notification service. It keeps teams, rotations, routes, notification channels, acknowledgements, resolves, reminders and escalations inside your own infrastructure.
+IncidentRelay is a self-hosted on-call scheduling, alert routing and notification service. It keeps teams, rotations, routes, notification channels, browser push subscriptions, acknowledgements, resolves, reminders and escalations inside your own infrastructure.
 
 !!! warning "Beta status"
-    IncidentRelay is currently in **beta**. APIs, UI behavior, database schema, configuration options and packaging details may still change.
+    IncidentRelay is currently in **beta**.
+    APIs, UI behavior, database schema, configuration options and packaging details may still change.
 
 ## Alert flow
 
@@ -19,9 +20,12 @@ Monitoring system
   -> Route match
   -> Service
   -> Team and rotation
-  -> Notification channels
+  -> Assigned on-call user
+  -> Notification channels and profile browser push
   -> ACK / Resolve
 ```
+
+Browser push notifications are enabled by users in Profile and are delivered automatically to assigned users. They are not route channels.
 
 ## Installation paths
 
@@ -60,16 +64,19 @@ The old `ONCALL_CONFIG_FILE` name should not be used.
 
 Read more: [Configuration](getting-started/configuration.md).
 
+For browser/PWA notifications, configure `[browser_push]` and VAPID keys. Read more: [Browser Push Notifications](usage/browser-push.md).
+
 ## Core concepts
 
 | Concept | Description |
 |---|---|
 | Group | Access boundary and group-level administration scope |
-| User | Person who can log in, be on-call, receive notifications or use personal API tokens |
+| User | Person who can log in, be on-call, receive notifications, enable browser push or use personal API tokens |
 | Team | Operational unit inside a group |
 | Rotation | On-call schedule for a team |
 | Route | Alert routing rule with its own intake token |
 | Channel | Outgoing notification target such as Mattermost, Telegram, email, webhook or voice call |
+| Browser push | Profile-level browser/PWA notification delivery for assigned users |
 | Alert | IncidentRelay alert created from an incoming integration |
 | Silence | Rule that suppresses notifications for matching new alerts |
 | Override | Temporary replacement for a rotation member |
@@ -80,6 +87,7 @@ Read more:
 - [Teams, Rotations and Routes](concepts/teams-rotations-routes.md)
 - [Route Intake Tokens](concepts/route-intake-tokens.md)
 - [Channels](concepts/channels.md)
+- [Browser Push Notifications](usage/browser-push.md)
 - [Reminders and Escalations](concepts/reminders-and-escalations.md)
 
 ## RBAC summary
@@ -123,9 +131,9 @@ IncidentRelay has two integration layers.
 
 Incoming integrations use route intake tokens.
 
-### Notification channels
+### Notification delivery
 
-| Channel | Documentation |
+| Delivery method | Documentation |
 |---|---|
 | Common channel behavior | [Notification channels](integrations/channels.md) |
 | Mattermost | [Mattermost](integrations/mattermost.md) |
@@ -133,8 +141,9 @@ Incoming integrations use route intake tokens.
 | Email | [Email](integrations/email.md) |
 | Slack, Discord, Microsoft Teams, custom webhook | [Webhook-based channels](integrations/webhook-channels.md) |
 | Voice call | [Voice call](integrations/voice-call.md) |
+| Browser/PWA push | [Browser Push Notifications](usage/browser-push.md) |
 
-Notification channels do not have intake tokens. Routes receive alerts, then send notifications to attached channels.
+Notification channels do not have intake tokens. Routes receive alerts, then send notifications to attached channels. Browser push is profile-level and is sent to the assigned user's active browser devices.
 
 ## API and automation
 
@@ -154,6 +163,7 @@ Useful pages:
 
 - [API Overview](api/index.md)
 - [Profile and Personal API Tokens](usage/profile-and-tokens.md)
+- [Browser Push Notifications](usage/browser-push.md)
 - [Voice Call OpenAPI Notes](api/voice-call-openapi.md)
 
 ## First setup flow
@@ -161,25 +171,27 @@ Useful pages:
 ```text
 1. Install IncidentRelay
 2. Configure the service and public_base_url
-3. Run migrations
-4. Create the first global admin
-5. Create a group
-6. Create or add users to the group
-7. Assign group roles: viewer, editor, user_admin
-8. Create a team
-9. Add group users to the team
-10. Assign team roles: viewer, responder, manager
-11. Create a rotation
-12. Add rotation members
-13. Create a service
-14. Add service links and runbooks
-15. Create notification channels
-16. Create a route and attach channels
-17. Select a default service or configure service match rules
-18. Copy the route intake token
-19. Configure Alertmanager, Zabbix or webhook sender
-20. Send a test alert
-21. Acknowledge or resolve the alert
+3. Configure browser push VAPID keys if browser/PWA notifications are required
+4. Run migrations
+5. Create the first global admin
+6. Create a group
+7. Create or add users to the group
+8. Assign group roles: viewer, editor, user_admin
+9. Create a team
+10. Add group users to the team
+11. Assign team roles: viewer, responder, manager
+12. Create a rotation
+13. Add rotation members
+14. Create a service
+15. Add service links and runbooks
+16. Create notification channels
+17. Ask users to enable browser push in Profile if required
+18. Create a route and attach channels
+19. Select a default service or configure service match rules
+20. Copy the route intake token
+21. Configure Alertmanager, Zabbix or webhook sender
+22. Send a test alert
+23. Acknowledge or resolve the alert
 ```
 
 Read more: [First Login and Setup](getting-started/first-login.md).

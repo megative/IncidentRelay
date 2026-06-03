@@ -131,6 +131,11 @@ class Config:
     ALERT_GROUP_WINDOW_SECONDS = settings.get_int("alerts", "alert_group_window_seconds", 3600)
 
     SCHEDULER_LOCK_TTL_SECONDS = settings.get_int("scheduler", "lock_ttl_seconds", 120)
+    USER_NOTIFICATION_RULES_CHECK_INTERVAL_SECONDS = settings.get_int(
+        "scheduler",
+        "user_notification_rules_check_interval_seconds",
+        30,
+    )
 
     MATTERMOST_ACTION_SECRET = settings.get("mattermost", "action_secret", SECRET_KEY)
 
@@ -153,10 +158,40 @@ class Config:
 
     TELEGRAM_PROXY_URL = settings.get("telegram", "proxy_url", "")
 
-    ONCALL_SHIFT_EMAIL_CHECK_INTERVAL_SECONDS = settings.get(
+    ONCALL_SHIFT_EMAIL_CHECK_INTERVAL_SECONDS = settings.get_int(
         "oncall",
         "shift_email_check_interval_seconds", 60)
 
-    ONCALL_SHIFT_EMAIL_LOOKBACK_SECONDS = settings.get(
+    ONCALL_SHIFT_EMAIL_LOOKBACK_SECONDS = settings.get_int(
         "oncall",
         "shift_email_lookback_seconds", 300)
+
+    BROWSER_PUSH_ENABLED = settings.get_bool(
+        "browser_push",
+        "enabled",
+        False,
+    )
+
+    BROWSER_PUSH_VAPID_PUBLIC_KEY = settings.get(
+        "browser_push",
+        "vapid_public_key",
+        "",
+    )
+
+    BROWSER_PUSH_VAPID_PRIVATE_KEY = settings.get(
+        "browser_push",
+        "vapid_private_key",
+        "",
+    )
+
+    BROWSER_PUSH_VAPID_SUBJECT = settings.get(
+        "browser_push",
+        "vapid_subject",
+        "mailto:admin@example.com",
+    )
+
+    BROWSER_PUSH_ACTION_TOKEN_TTL_SECONDS = settings.get_int(
+        "browser_push",
+        "action_token_ttl_seconds",
+        900,
+    )

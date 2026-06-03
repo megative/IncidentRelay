@@ -113,9 +113,6 @@ function showChannelFields() {
         $('[data-channel-config="email"]').show();
         return;
     }
-    if (type === "voice_call") {
-        $('[data-channel-config="voice_call"]').show();
-    }
 }
 
 function updateWebhookLabel(type) {
@@ -572,9 +569,6 @@ function getChannelModeLabel(channel) {
     if (channel.channel_type === "mattermost") {
         return config.mode || (config.api_url ? "bot_api" : "webhook");
     }
-    if (channel.channel_type === "voice_call") {
-        return config.provider || "voice_call";
-    }
     if (["slack", "webhook", "discord", "teams"].includes(channel.channel_type)) {
         return "webhook";
     }
@@ -621,12 +615,17 @@ function getFilteredChannels() {
 
 function renderChannelsSummary(channels) {
     channels = Array.isArray(channels) ? channels : [];
-    const enabled = channels.filter(function (channel) { return !!channel.enabled; }).length;
-    const voice = channels.filter(function (channel) { return channel.channel_type === "voice_call"; }).length;
+    const enabled = channels.filter(function (channel) {
+        return !!channel.enabled;
+    }).length;
+    const webhooks = channels.filter(function (channel) {
+        return ["slack", "webhook", "discord", "teams"].includes(channel.channel_type);
+    }).length;
+
+    $("#channels-summary-webhooks").text(webhooks);
     $("#channels-summary-total").text(channels.length);
     $("#channels-summary-enabled").text(enabled);
     $("#channels-summary-disabled").text(channels.length - enabled);
-    $("#channels-summary-voice").text(voice);
 }
 
 function renderChannelsCounter(filteredChannels, allChannels) {
@@ -660,9 +659,6 @@ function getSafeChannelConfigSummary(channel) {
     const config = channel.config || {};
     if (channel.channel_type === "mattermost") {
         return getChannelModeLabel(channel);
-    }
-    if (channel.channel_type === "voice_call") {
-        return "Provider: " + (config.provider || "-") + "; severities: " + getChannelSeverityLabel(channel);
     }
     if (channel.channel_type === "email") {
         return "Assigned user profile email; " + (config.html_template ? "custom HTML template" : "default HTML template");

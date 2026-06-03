@@ -72,11 +72,6 @@ class ChannelBaseSchema(ApiModel):
             else:
                 config.pop("html_template", None)
 
-        if self.channel_type == "voice_call":
-            rules = config.get("notification_rules", [])
-            if not isinstance(rules, list):
-                raise ValueError("voice_call notification_rules must be a list")
-
         self.config = config
         return self
 
