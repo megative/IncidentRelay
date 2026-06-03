@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from app.modules.db.models import (
     Alert,
+    User,
     UserNotificationDelivery,
     UserNotificationRule,
 )
@@ -36,6 +37,22 @@ DIRECT_NOTIFIERS = {
     NOTIFICATION_METHOD_EMAIL: EmailNotifier(),
     NOTIFICATION_METHOD_VOICE_CALL: VoiceCallNotifier(),
 }
+
+SKIP_IF_NOT_FIRING_EVENT_TYPES = {
+    "notification",
+    "reminder",
+    "escalation",
+}
+
+
+def should_skip_delivery_for_alert_status(delivery):
+    """Return True when delayed delivery is no longer relevant."""
+    if delivery.event_type not in SKIP_IF_NOT_FIRING_EVENT_TYPES:
+        return False
+
+    alert = Alert.get_by_id(delivery.alert_id)
+
+    return alert.status != "firing"
 
 
 def serialize_rule(rule):
@@ -190,13 +207,14 @@ def has_custom_user_rules(user_id):
     )
 
 
-def list_matching_rules(alert, event_type):
+def list_matching_rules(alert, event_type="notification"):
+    """Return enabled rules matching alert severity and event type."""
     user_id = getattr(alert, "assignee_id", None)
 
     if not user_id:
         return []
 
-    rows = (
+    rules = (
         UserNotificationRule
         .select()
         .where(
@@ -209,7 +227,7 @@ def list_matching_rules(alert, event_type):
 
     return [
         rule
-        for rule in rows
+        for rule in rules
         if rule_matches_alert(rule, alert, event_type)
     ]
 
@@ -234,7 +252,7 @@ def rule_matches_alert(rule, alert, event_type):
     return True
 
 
-def has_deliverable_user_notification(alert):
+def has_deliverable_user_notification(alert, event_type="notification"):
     """Return True if alert assignee can receive at least one user-level notification."""
     user_id = getattr(alert, "assignee_id", None)
 
@@ -242,47 +260,51 @@ def has_deliverable_user_notification(alert):
         return False
 
     if not has_custom_user_rules(user_id):
-        return browser_push.has_active_user_subscriptions(user_id)
+        return browser_push.can_send_alert_push(alert)
 
-    return bool(list_matching_rules(alert))
+    return bool(list_matching_rules(alert, event_type=event_type))
 
 
 def enqueue_user_notifications(alert, event_type="notification"):
     """Create/send user-level notifications for alert assignee."""
     assignee = getattr(alert, "assignee", None)
+    assignee_id = getattr(alert, "assignee_id", None)
 
-    if not assignee:
-        logger.info(
-            "user notification skipped: no assignee",
-            extra={
-                "extra": {
-                    "alert_id": getattr(alert, "id", None),
-                    "event_type": event_type,
-                }
-            },
-        )
-
+    if not assignee_id:
         return 0
 
+    if not assignee:
+        try:
+            assignee = User.get_by_id(assignee_id)
+        except User.DoesNotExist:
+            return 0
+
+    now = datetime.utcnow()
+
     # Backward-compatible default:
-    # if the user has no custom notification rules, profile browser push
-    # behaves like it did before Notification Rules.
+    # no custom rules => profile browser push works immediately,
+    # but still creates UserNotificationDelivery for history/tests.
     if not has_custom_user_rules(assignee.id):
         if event_type not in DEFAULT_RULE_EVENT_TYPES:
             return 0
 
-        return send_default_browser_push(
-            alert,
-            assignee,
+        delivery = create_delivery(
+            alert=alert,
+            user=assignee,
+            rule=None,
+            method=NOTIFICATION_METHOD_BROWSER_PUSH,
             event_type=event_type,
+            scheduled_at=now,
         )
 
-    now = datetime.utcnow()
-    sent_count = 0
-    rules = list_matching_rules(alert, event_type)
+        return send_delivery(delivery)
 
-    for rule in rules:
-        scheduled_at = now + timedelta(seconds=rule.delay_seconds or 0)
+    sent_count = 0
+
+    for rule in list_matching_rules(alert, event_type=event_type):
+        scheduled_at = now + timedelta(
+            seconds=max(int(rule.delay_seconds or 0), 0)
+        )
 
         delivery = create_delivery(
             alert=alert,
@@ -293,8 +315,10 @@ def enqueue_user_notifications(alert, event_type="notification"):
             scheduled_at=scheduled_at,
         )
 
-        if rule.delay_seconds == 0:
-            sent_count += send_delivery(delivery)
+        if rule.delay_seconds and rule.delay_seconds > 0:
+            continue
+
+        sent_count += send_delivery(delivery)
 
     return sent_count
 
@@ -387,26 +411,22 @@ def create_delivery(alert, user, rule, method, event_type, scheduled_at):
 
 
 def process_due_user_notifications(limit=100):
-    """Send due delayed user notification deliveries."""
+    """Process due user notification deliveries and return sent count."""
     now = datetime.utcnow()
+    processed = 0
 
-    rows = list(
+    due_deliveries = (
         UserNotificationDelivery
         .select()
         .where(
             (UserNotificationDelivery.status == "pending")
             & (UserNotificationDelivery.scheduled_at <= now)
         )
-        .order_by(
-            UserNotificationDelivery.scheduled_at.asc(),
-            UserNotificationDelivery.id.asc(),
-        )
+        .order_by(UserNotificationDelivery.scheduled_at.asc())
         .limit(limit)
     )
 
-    sent = 0
-
-    for delivery in rows:
+    for due_delivery in due_deliveries:
         claimed = (
             UserNotificationDelivery
             .update(
@@ -414,26 +434,88 @@ def process_due_user_notifications(limit=100):
                 updated_at=datetime.utcnow(),
             )
             .where(
-                (UserNotificationDelivery.id == delivery.id)
+                (UserNotificationDelivery.id == due_delivery.id)
                 & (UserNotificationDelivery.status == "pending")
-                & (UserNotificationDelivery.scheduled_at <= now)
             )
             .execute()
         )
 
-        if claimed != 1:
+        if not claimed:
             continue
 
-        delivery = UserNotificationDelivery.get_by_id(delivery.id)
-        sent += send_delivery(delivery)
+        delivery = UserNotificationDelivery.get_by_id(due_delivery.id)
 
-    return sent
+        if should_skip_delivery_for_alert_status(delivery):
+            mark_delivery_skipped(
+                delivery,
+                "alert_not_firing",
+            )
+            continue
+
+        processed += send_delivery(delivery)
+
+    return processed
+
+
+def send_browser_push_delivery(delivery):
+    """Send browser push delivery and update delivery history."""
+    now = datetime.utcnow()
+
+    try:
+        sent = browser_push.send_alert_push_to_user(
+            delivery.user,
+            delivery.alert,
+            event_type=delivery.event_type,
+        )
+    except Exception as exc:
+        mark_delivery_failed(delivery, exc)
+
+        alerts_repo.create_alert_event(
+            delivery.alert.id,
+            f"{delivery.event_type}_browser_push_failed",
+            f"browser_push: {exc}",
+        )
+
+        return 0
+
+    if not sent:
+        mark_delivery_skipped(
+            delivery,
+            "no_active_push_subscriptions",
+        )
+
+        return 0
+
+    (
+        UserNotificationDelivery
+        .update(
+            status="sent",
+            sent_at=now,
+            provider="browser_push",
+            provider_status="sent",
+            provider_payload={
+                "sent": sent,
+            },
+            last_error=None,
+            updated_at=now,
+        )
+        .where(UserNotificationDelivery.id == delivery.id)
+        .execute()
+    )
+
+    alerts_repo.create_alert_event(
+        delivery.alert.id,
+        f"{delivery.event_type}_browser_push_sent",
+        f"Sent browser push to {sent} device(s)",
+    )
+
+    return 1
 
 
 def send_delivery(delivery):
-    """Send one pending or claimed user notification delivery."""
-    if delivery.status not in {"pending", "processing"}:
-        return 0
+    """Send pending user notification delivery."""
+    if delivery.method == NOTIFICATION_METHOD_BROWSER_PUSH:
+        return send_browser_push_delivery(delivery)
 
     alert = Alert.get_or_none(Alert.id == delivery.alert_id)
 
@@ -542,10 +624,20 @@ def build_voice_rule_callback_url(delivery):
 
 
 def mark_delivery_skipped(delivery, reason):
-    delivery.status = "skipped"
-    delivery.last_error = reason
-    delivery.updated_at = datetime.utcnow()
-    delivery.save()
+    """Mark user notification delivery as skipped."""
+    now = datetime.utcnow()
+
+    (
+        UserNotificationDelivery
+        .update(
+            status="skipped",
+            provider_status="skipped",
+            last_error=reason,
+            updated_at=now,
+        )
+        .where(UserNotificationDelivery.id == delivery.id)
+        .execute()
+    )
 
 
 def mark_delivery_failed(delivery, error):
