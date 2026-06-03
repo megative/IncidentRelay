@@ -1,7 +1,7 @@
 import logging
 import smtplib
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 
 from app import Config
@@ -28,7 +28,16 @@ def _team_display_name(event):
 
 
 def _event_dt(value):
-    return datetime.fromisoformat(value)
+    """Parse calendar event datetime and return naive UTC datetime."""
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+
+    if parsed.tzinfo is not None:
+        return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+
+    return parsed
 
 
 def _format_dt(value):

@@ -656,7 +656,19 @@ function editService(id) {
     });
 }
 
+function normalizeServiceStatusForEnabledState(status, enabled) {
+    status = status || "operational";
 
+    if (!enabled) {
+        return "disabled";
+    }
+
+    if (status === "disabled") {
+        return "operational";
+    }
+
+    return status;
+}
 function setServiceEnabled(service, enabled) {
     if (!canWriteObject(service)) {
         showAppError("You do not have permission to update this service.");
@@ -672,7 +684,7 @@ function setServiceEnabled(service, enabled) {
         environment: service.environment || "production",
         criticality: service.criticality || "medium",
         tier: service.tier || "tier_3",
-        status: enabled ? (service.status || "operational") : "disabled",
+        status: normalizeServiceStatusForEnabledState(service.status, enabled),
         status_source: service.status_source || "manual",
         status_message: service.status_message || null,
         default_rotation_id: service.default_rotation_id || null,

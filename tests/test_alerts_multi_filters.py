@@ -9,6 +9,7 @@ def _create_alert(team, route, service, title, status, severity, dedup_key):
         team=team,
         route=route,
         service=service,
+        group_key="multi-filter-b",
         dedup_key=dedup_key,
         title=title,
         message=title,

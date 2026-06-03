@@ -814,7 +814,7 @@ summary {
 .table-actions,
 .details-actions {
     gap: 6px;
-    padding-top: 10px;
+    /*padding-top: 10px;*/
 }
 
 .sr-only {

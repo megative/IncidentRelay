@@ -11,6 +11,7 @@ from app.notifiers.browser_push import service as browser_push
 from app.notifiers.email.notifier import EmailNotifier
 from app.notifiers.voice.notifier import VoiceCallNotifier
 from app.services.severity import normalize_severity, normalize_severity_list
+from app.modules.db import alerts_repo
 
 logger = logging.getLogger("oncall.notification_rules")
 
@@ -174,6 +175,7 @@ def validate_rule_payload(method, delay_seconds, severities, event_types):
 
 
 def has_custom_user_rules(user_id):
+    """Return True when user has at least one non-deleted notification rule."""
     if not user_id:
         return False
 
@@ -182,7 +184,6 @@ def has_custom_user_rules(user_id):
         .select(UserNotificationRule.id)
         .where(
             (UserNotificationRule.user == user_id)
-            & (UserNotificationRule.enabled == True)
             & (UserNotificationRule.deleted == False)
         )
         .exists()
@@ -233,22 +234,21 @@ def rule_matches_alert(rule, alert, event_type):
     return True
 
 
-def has_deliverable_user_notification(alert, event_type="notification"):
+def has_deliverable_user_notification(alert):
+    """Return True if alert assignee can receive at least one user-level notification."""
     user_id = getattr(alert, "assignee_id", None)
 
     if not user_id:
         return False
 
-    if has_custom_user_rules(user_id):
-        return bool(list_matching_rules(alert, event_type))
+    if not has_custom_user_rules(user_id):
+        return browser_push.has_active_user_subscriptions(user_id)
 
-    # Backward-compatible default:
-    # if user enabled browser push in Profile but did not create custom rules,
-    # send browser push immediately.
-    return browser_push.can_send_alert_push(alert)
+    return bool(list_matching_rules(alert))
 
 
 def enqueue_user_notifications(alert, event_type="notification"):
+    """Create/send user-level notifications for alert assignee."""
     assignee = getattr(alert, "assignee", None)
 
     if not assignee:
@@ -261,28 +261,25 @@ def enqueue_user_notifications(alert, event_type="notification"):
                 }
             },
         )
+
         return 0
+
+    # Backward-compatible default:
+    # if the user has no custom notification rules, profile browser push
+    # behaves like it did before Notification Rules.
+    if not has_custom_user_rules(assignee.id):
+        if event_type not in DEFAULT_RULE_EVENT_TYPES:
+            return 0
+
+        return send_default_browser_push(
+            alert,
+            assignee,
+            event_type=event_type,
+        )
 
     now = datetime.utcnow()
     sent_count = 0
-
     rules = list_matching_rules(alert, event_type)
-
-    if not rules and not has_custom_user_rules(assignee.id):
-        # Keep current behavior: profile browser push works without explicit rules.
-        if not browser_push.can_send_alert_push(alert):
-            return 0
-
-        delivery = create_delivery(
-            alert=alert,
-            user=assignee,
-            rule=None,
-            method=NOTIFICATION_METHOD_BROWSER_PUSH,
-            event_type=event_type,
-            scheduled_at=now,
-        )
-
-        return send_delivery(delivery)
 
     for rule in rules:
         scheduled_at = now + timedelta(seconds=rule.delay_seconds or 0)
@@ -300,6 +297,79 @@ def enqueue_user_notifications(alert, event_type="notification"):
             sent_count += send_delivery(delivery)
 
     return sent_count
+
+
+def send_default_browser_push(alert, user, event_type="notification"):
+    """
+    Send backward-compatible profile browser push.
+
+    This is the default behavior for users without custom notification rules.
+    It intentionally calls send_alert_push_to_user directly and does not run
+    can_send_alert_push() before it, because the sender already knows whether
+    there are active subscriptions.
+    """
+    try:
+        sent = browser_push.send_alert_push_to_user(
+            user,
+            alert,
+            event_type=event_type,
+        )
+    except Exception as exc:
+        alerts_repo.create_alert_event(
+            alert.id,
+            f"{event_type}_browser_push_failed",
+            f"browser_push: {exc}",
+        )
+
+        logger.warning(
+            "default browser push failed",
+            extra={
+                "extra": {
+                    "alert_id": getattr(alert, "id", None),
+                    "event_type": event_type,
+                    "assignee_id": getattr(user, "id", None),
+                    "error": str(exc),
+                }
+            },
+        )
+
+        return 0
+
+    if not sent:
+        logger.info(
+            "default browser push skipped",
+            extra={
+                "extra": {
+                    "alert_id": getattr(alert, "id", None),
+                    "event_type": event_type,
+                    "assignee_id": getattr(user, "id", None),
+                    "reason": "no_active_push_subscriptions",
+                }
+            },
+        )
+
+        return 0
+
+    alerts_repo.create_alert_event(
+        alert.id,
+        f"{event_type}_browser_push_sent",
+        f"Sent browser push to {sent} device(s)",
+    )
+
+    logger.info(
+        "default browser push sent",
+        extra={
+            "extra": {
+                "alert_id": getattr(alert, "id", None),
+                "event_type": event_type,
+                "assignee_id": getattr(user, "id", None),
+                "sent": sent,
+            }
+        },
+    )
+
+    # Count logical delivery, not number of devices.
+    return 1
 
 
 def create_delivery(alert, user, rule, method, event_type, scheduled_at):
