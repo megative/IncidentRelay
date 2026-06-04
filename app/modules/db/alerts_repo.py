@@ -142,17 +142,30 @@ def build_alert_groups_query(
 
         query = query.where(AlertGroup.team.in_(team_ids))
 
-    if status:
-        query = query.where(AlertGroup.status == status)
+    query = apply_field_values_filter(
+        query,
+        AlertGroup.status,
+        status,
+    )
 
-    if source:
-        query = query.where(AlertGroup.source == source)
+    query = apply_field_values_filter(
+        query,
+        AlertGroup.source,
+        source,
+    )
 
-    if severity:
-        query = query.where(AlertGroup.severity == severity)
+    query = apply_field_values_filter(
+        query,
+        AlertGroup.severity,
+        severity,
+    )
 
-    if service_id:
-        query = query.where(AlertGroup.service == service_id)
+    query = apply_field_values_filter(
+        query,
+        AlertGroup.service,
+        service_id,
+        value_type=int,
+    )
 
     if service_slug:
         service_ids = (
@@ -191,13 +204,16 @@ def build_alert_groups_query(
         search = str(search).strip()
 
         if search:
-            conditions = [
+            group_conditions = [
                 AlertGroup.title.contains(search),
                 AlertGroup.message.contains(search),
                 AlertGroup.source.contains(search),
                 AlertGroup.group_key.contains(search),
                 AlertGroup.severity.contains(search),
                 AlertGroup.status.contains(search),
+                AlertGroup.common_labels.contains(search),
+                AlertGroup.label_values.contains(search),
+                AlertGroup.payload_summary.contains(search),
                 Team.slug.contains(search),
                 Team.name.contains(search),
                 AlertRoute.name.contains(search),
@@ -206,10 +222,36 @@ def build_alert_groups_query(
                 User.display_name.contains(search),
             ]
 
-            if search.isdigit():
-                conditions.append(AlertGroup.id == int(search))
+            child_conditions = [
+                Alert.title.contains(search),
+                Alert.message.contains(search),
+                Alert.source.contains(search),
+                Alert.external_id.contains(search),
+                Alert.dedup_key.contains(search),
+                Alert.group_key.contains(search),
+                Alert.severity.contains(search),
+                Alert.status.contains(search),
+                Alert.labels.contains(search),
+                Alert.payload.contains(search),
+            ]
 
-            query = query.where(reduce(or_, conditions))
+            if search.isdigit():
+                search_id = int(search)
+                group_conditions.append(AlertGroup.id == search_id)
+                child_conditions.append(Alert.id == search_id)
+
+            child_group_ids = (
+                Alert
+                .select(Alert.group)
+                .where(
+                    (Alert.group.is_null(False))
+                    & reduce(or_, child_conditions)
+                )
+            )
+
+            group_conditions.append(AlertGroup.id.in_(child_group_ids))
+
+            query = query.where(reduce(or_, group_conditions))
 
     return query
 

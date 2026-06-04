@@ -911,6 +911,13 @@ def serialize_alert_group(
         "merged_into_id": group.merged_into.id if group.merged_into else None,
         "merged_at": serialize_utc_datetime(group.merged_at),
         "merge_reason": group.merge_reason,
+        "escalation_mode": "policy" if group.escalation_policy_id else "rotation",
+        "escalation_policy_id": group.escalation_policy_id,
+        "escalation_policy_name": group.escalation_policy.name if group.escalation_policy else None,
+        "escalation_rule_id": group.escalation_rule_id,
+        "escalation_rule_position": group.escalation_rule.position if group.escalation_rule else None,
+        "escalation_rule_target_type": group.escalation_rule.target_type if group.escalation_rule else None,
+        "team_escalation_enabled": group.team.escalation_enabled if group.team else None,
     }
 
     if include_payload:

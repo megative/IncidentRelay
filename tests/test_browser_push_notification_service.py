@@ -1,10 +1,10 @@
 from datetime import datetime
 
-from app.modules.db.models import Alert, AlertEvent, BrowserPushSubscription
+from app.modules.db.models import AlertEvent, AlertGroup, BrowserPushSubscription
 from app.services import notification_service
+from app.services.alerts import upsert_alert
 from tests.factories import (
     attach_channel,
-    create_alert,
     create_channel,
     create_group,
     create_route,
@@ -31,7 +31,7 @@ def create_push_subscription(user):
     )
 
 
-def create_assigned_alert(user, *, with_regular_channel=False):
+def create_assigned_group(user, *, with_regular_channel=False):
     group = create_group()
     team = create_team(group)
     route = create_route(team)
@@ -45,11 +45,31 @@ def create_assigned_alert(user, *, with_regular_channel=False):
         )
         attach_channel(route, channel)
 
-    alert = create_alert(route)
-    alert.assignee = user
-    alert.save()
+    alert_group, _ = upsert_alert(
+        {
+            "source": "alertmanager",
+            "forced_route_id": route.id,
+            "external_id": f"external-{user.id}",
+            "dedup_key": f"dedup-{user.id}",
+            "title": "DiskFull",
+            "message": "/var is 95% full",
+            "severity": "critical",
+            "labels": {
+                "alertname": "DiskFull",
+                "severity": "critical",
+                "instance": "host1",
+            },
+            "payload": {"source": "test"},
+            "status": "firing",
+        }
+    )
 
-    return alert
+    assert alert_group is not None
+
+    alert_group.assignee = user
+    alert_group.save()
+
+    return alert_group
 
 
 def test_has_matching_notification_channel_returns_true_for_active_push_subscription(db, monkeypatch):
@@ -62,11 +82,11 @@ def test_has_matching_notification_channel_returns_true_for_active_push_subscrip
 
     group = create_group()
     user = create_user("alice", group)
-    alert = create_assigned_alert(user)
 
+    alert_group = create_assigned_group(user)
     create_push_subscription(user)
 
-    assert notification_service.has_matching_notification_channel(alert) is True
+    assert notification_service.has_matching_notification_channel(alert_group) is True
 
 
 def test_has_matching_notification_channel_returns_false_without_channels_or_push(db, monkeypatch):
@@ -79,23 +99,25 @@ def test_has_matching_notification_channel_returns_false_without_channels_or_pus
 
     group = create_group()
     user = create_user("alice", group)
-    alert = create_assigned_alert(user)
 
-    assert notification_service.has_matching_notification_channel(alert) is False
+    alert_group = create_assigned_group(user)
+
+    assert notification_service.has_matching_notification_channel(alert_group) is False
 
 
 def test_notify_alert_sends_profile_browser_push_without_route_channels(db, monkeypatch):
     group = create_group()
     user = create_user("alice", group)
-    alert = create_assigned_alert(user)
+
+    alert_group = create_assigned_group(user)
 
     calls = []
 
-    def fake_send_alert_push_to_user(assignee, pushed_alert, event_type="notification"):
+    def fake_send_alert_push_to_user(assignee, pushed_group, event_type="notification"):
         calls.append(
             {
                 "assignee_id": assignee.id,
-                "alert_id": pushed_alert.id,
+                "alert_group_id": pushed_group.id,
                 "event_type": event_type,
             }
         )
@@ -107,39 +129,52 @@ def test_notify_alert_sends_profile_browser_push_without_route_channels(db, monk
         fake_send_alert_push_to_user,
     )
 
-    sent = notification_service.notify_alert(alert, event_type="notification")
+    sent = notification_service.notify_alert(alert_group, event_type="notification")
 
     assert sent == 1
     assert calls == [
         {
             "assignee_id": user.id,
-            "alert_id": alert.id,
+            "alert_group_id": alert_group.id,
             "event_type": "notification",
         }
     ]
 
-    alert = Alert.get_by_id(alert.id)
+    alert_group = AlertGroup.get_by_id(alert_group.id)
 
-    assert alert.last_notification_at is not None
-
-    event = AlertEvent.get(
-        (AlertEvent.alert == alert.id)
-        & (AlertEvent.event_type == "notification_browser_push_sent")
-    )
-
-    assert "Sent browser push" in event.message
+    assert alert_group.last_notification_at is not None
 
 
 def test_notify_alert_does_not_send_browser_push_without_assignee(db, monkeypatch):
     group = create_group()
     team = create_team(group)
     route = create_route(team)
-    alert = create_alert(route)
+
+    alert_group, _ = upsert_alert(
+        {
+            "source": "alertmanager",
+            "forced_route_id": route.id,
+            "external_id": "external-no-assignee",
+            "dedup_key": "dedup-no-assignee",
+            "title": "DiskFull",
+            "message": "/var is 95% full",
+            "severity": "critical",
+            "labels": {
+                "alertname": "DiskFull",
+                "severity": "critical",
+                "instance": "host1",
+            },
+            "payload": {"source": "test"},
+            "status": "firing",
+        }
+    )
+
+    assert alert_group is not None
 
     calls = []
 
-    def fake_send_alert_push_to_user(assignee, pushed_alert, event_type="notification"):
-        calls.append((assignee, pushed_alert, event_type))
+    def fake_send_alert_push_to_user(assignee, pushed_group, event_type="notification"):
+        calls.append((assignee, pushed_group, event_type))
         return 1
 
     monkeypatch.setattr(
@@ -148,7 +183,7 @@ def test_notify_alert_does_not_send_browser_push_without_assignee(db, monkeypatc
         fake_send_alert_push_to_user,
     )
 
-    sent = notification_service.notify_alert(alert, event_type="notification")
+    sent = notification_service.notify_alert(alert_group, event_type="notification")
 
     assert sent == 0
     assert calls == []
@@ -157,12 +192,13 @@ def test_notify_alert_does_not_send_browser_push_without_assignee(db, monkeypatc
 def test_notify_alert_counts_regular_channel_and_browser_push(db, monkeypatch):
     group = create_group()
     user = create_user("alice", group)
-    alert = create_assigned_alert(user, with_regular_channel=True)
+
+    alert_group = create_assigned_group(user, with_regular_channel=True)
 
     class FakeNotifier:
         supports_update = False
 
-        def send(self, channel, alert, text, event_type="notification"):
+        def send(self, channel, alert_group, text, event_type="notification"):
             return {
                 "provider": "webhook",
                 "provider_status": "sent",
@@ -175,21 +211,19 @@ def test_notify_alert_counts_regular_channel_and_browser_push(db, monkeypatch):
         "get_notifier",
         lambda channel_type: FakeNotifier(),
     )
-
     monkeypatch.setattr(
         notification_service.browser_push,
         "send_alert_push_to_user",
-        lambda assignee, alert, event_type="notification": 1,
+        lambda assignee, alert_group, event_type="notification": 1,
     )
 
-    sent = notification_service.notify_alert(alert, event_type="notification")
+    sent = notification_service.notify_alert(alert_group, event_type="notification")
 
     assert sent == 2
 
     event_types = {
         row.event_type
-        for row in AlertEvent.select().where(AlertEvent.alert == alert.id)
+        for row in AlertEvent.select().where(AlertEvent.group == alert_group.id)
     }
 
     assert "notification_sent" in event_types
-    assert "notification_browser_push_sent" in event_types

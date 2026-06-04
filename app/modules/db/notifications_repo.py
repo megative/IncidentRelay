@@ -27,7 +27,7 @@ def get_notification_by_external_id(channel_id, external_message_id):
 def save_notification(
     group_id,
     channel_id,
-    provider,
+    provider=None,
     external_message_id=None,
     external_channel_id=None,
     event_type=None,
@@ -35,12 +35,15 @@ def save_notification(
     provider_status=None,
     provider_payload=None,
 ):
-    """Create or update a group delivery record."""
+    """Create or update group-level delivery record."""
 
-    record = get_notification(group_id, channel_id)
+    record = get_notification(
+        group_id=group_id,
+        channel_id=channel_id,
+    )
 
     if not record:
-        record = AlertNotification.create(
+        return AlertNotification.create(
             group=group_id,
             channel=channel_id,
             provider=provider,
@@ -52,7 +55,6 @@ def save_notification(
             provider_payload=provider_payload,
             updated_at=datetime.utcnow(),
         )
-        return record
 
     record.provider = provider or record.provider
     record.external_message_id = external_message_id or record.external_message_id
@@ -114,8 +116,14 @@ def create_notification_event(
     )
 
 
-def mark_notification_error(group_id, channel_id, provider, event_type, error):
-    """Store the latest delivery error for a group/channel pair."""
+def mark_notification_error(
+    group_id,
+    channel_id,
+    provider=None,
+    event_type=None,
+    error=None,
+):
+    """Store latest group-level delivery error."""
 
     return save_notification(
         group_id=group_id,
@@ -127,10 +135,11 @@ def mark_notification_error(group_id, channel_id, provider, event_type, error):
 
 
 def list_notifications_for_group(group_id):
-    """Return delivery records for a group ordered by id."""
+    """Return delivery records for alert group."""
 
     return list(
-        AlertNotification.select()
+        AlertNotification
+        .select()
         .where(AlertNotification.group == group_id)
-        .order_by(AlertNotification.id.asc())
+        .order_by(AlertNotification.updated_at.desc(), AlertNotification.id.desc())
     )

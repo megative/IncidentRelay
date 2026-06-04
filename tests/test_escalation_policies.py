@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta
 
-
-from app.modules.db.models import AlertEvent, Alert
-from app.services.alerts import maybe_escalate_alert, upsert_alert, send_unacked_reminders
+from app.modules.db.models import AlertEvent, AlertGroup
+from app.services import alerts as alerts_service
+from app.services.alerts import maybe_escalate_alert, send_unacked_reminders, upsert_alert
+from app.settings import Config
 from tests.factories import (
     add_user_to_team,
     create_escalation_policy,
@@ -27,6 +28,7 @@ def normalized_alert(**overrides):
         "severity": "critical",
         "labels": {
             "alertname": "DiskFull",
+            "severity": "critical",
             "instance": "host1",
             "team": "sre",
         },
@@ -41,7 +43,9 @@ def test_admin_can_create_policy_and_rotation_rule(client, admin_headers, db):
     group = create_group(slug=unique("group"))
     team = create_team(group, slug=unique("team"))
     user = create_user("alice", group)
+
     add_user_to_team(team, user)
+
     rotation = create_rotation(team, users=[user])
 
     response = client.post(
@@ -92,8 +96,8 @@ def test_policy_rule_rejects_rotation_from_another_team(client, admin_headers, d
     group = create_group(slug=unique("group"))
     team = create_team(group, slug=unique("team"))
     other_team = create_team(group, slug=unique("other-team"))
-
     user = create_user("alice", group)
+
     add_user_to_team(other_team, user)
 
     rotation = create_rotation(other_team, users=[user])
@@ -118,10 +122,10 @@ def test_policy_rule_rejects_rotation_from_another_team(client, admin_headers, d
 def test_policy_rule_rejects_user_outside_team(client, admin_headers, db):
     group = create_group(slug=unique("group"))
     team = create_team(group, slug=unique("team"))
-
     other_group = create_group(slug=unique("other-group"))
     other_team = create_team(other_group, slug=unique("other-team"))
     outsider = create_user("outsider", other_group)
+
     add_user_to_team(other_team, outsider)
 
     policy = create_escalation_policy(team)
@@ -145,8 +149,8 @@ def test_policy_rule_rejects_user_outside_team(client, admin_headers, db):
 def test_upsert_alert_with_policy_uses_first_rule_target(monkeypatch, db):
     group = create_group(slug="infra")
     team = create_team(group, slug="sre")
-
     user = create_user("alice", group)
+
     add_user_to_team(team, user)
 
     rotation = create_rotation(team, users=[user])
@@ -163,27 +167,31 @@ def test_upsert_alert_with_policy_uses_first_rule_target(monkeypatch, db):
 
     calls = []
 
+    monkeypatch.setattr(Config, "ALERT_GROUP_WAIT_SECONDS", 0, raising=False)
     monkeypatch.setattr(
         "app.services.alerts.notify_alert",
-        lambda alert, event_type="notification": calls.append((alert.id, event_type)) or 1,
+        lambda alert_group, event_type="notification": calls.append((alert_group.id, event_type)) or 1,
     )
 
-    alert, created = upsert_alert(normalized_alert())
+    alert_group, created = upsert_alert(normalized_alert())
 
     assert created is True
-    assert alert.route.id == route.id
-    assert alert.escalation_policy.id == policy.id
-    assert alert.escalation_rule.id == rule.id
-    assert alert.rotation.id == rotation.id
-    assert alert.assignee.id == user.id
-    assert alert.next_escalation_at is not None
-    assert calls == [(alert.id, "notification")]
+    assert alert_group.route.id == route.id
+    assert alert_group.escalation_policy.id == policy.id
+    assert alert_group.escalation_rule.id == rule.id
+    assert alert_group.rotation.id == rotation.id
+    assert alert_group.assignee.id == user.id
+    assert alert_group.next_escalation_at is not None
+
+    result = alerts_service.process_due_alert_group_notifications()
+
+    assert result["sent"] == 1
+    assert calls == [(alert_group.id, "notification")]
 
 
 def test_policy_escalation_moves_alert_to_next_rule(monkeypatch, db):
     group = create_group(slug="infra")
     team = create_team(group, slug="sre")
-
     first_user = create_user("alice", group)
     second_user = create_user("bob", group)
 
@@ -213,44 +221,43 @@ def test_policy_escalation_moves_alert_to_next_rule(monkeypatch, db):
 
     monkeypatch.setattr(
         "app.services.alerts.has_matching_notification_channel",
-        lambda alert: True,
+        lambda alert_group: True,
     )
-
     monkeypatch.setattr(
         "app.services.alerts.notify_alert",
-        lambda alert, event_type="notification": 1,
+        lambda alert_group, event_type="notification": 1,
     )
 
-    alert, created = upsert_alert(normalized_alert())
+    alert_group, created = upsert_alert(normalized_alert())
 
     assert created is True
-    assert alert.escalation_rule.id == first_rule.id
-    assert alert.assignee.id == first_user.id
+    assert alert_group.escalation_rule.id == first_rule.id
+    assert alert_group.assignee.id == first_user.id
 
-    alert.next_escalation_at = datetime.utcnow() - timedelta(seconds=1)
-    alert.save()
+    alert_group.next_escalation_at = datetime.utcnow() - timedelta(seconds=1)
+    alert_group.save()
 
     calls = []
 
     monkeypatch.setattr(
         "app.services.alerts.notify_alert",
-        lambda alert, event_type="escalation": calls.append(event_type) or 1,
+        lambda alert_group, event_type="escalation": calls.append(event_type) or 1,
     )
 
-    assert maybe_escalate_alert(alert) is True
+    assert maybe_escalate_alert(alert_group) is True
 
-    alert = Alert.get_by_id(alert.id)
+    alert_group = AlertGroup.get_by_id(alert_group.id)
 
-    assert alert.escalation_rule.id == second_rule.id
-    assert alert.rotation.id == second_rotation.id
-    assert alert.assignee.id == second_user.id
-    assert alert.escalation_level == 1
-    assert alert.reminder_count == 0
-    assert alert.last_escalated_at is not None
+    assert alert_group.escalation_rule.id == second_rule.id
+    assert alert_group.rotation.id == second_rotation.id
+    assert alert_group.assignee.id == second_user.id
+    assert alert_group.escalation_level == 1
+    assert alert_group.reminder_count == 0
+    assert alert_group.last_escalated_at is not None
     assert calls == ["escalation"]
 
     assert AlertEvent.select().where(
-        (AlertEvent.alert == alert.id)
+        (AlertEvent.group == alert_group.id)
         & (AlertEvent.event_type == "escalated")
     ).exists()
 
@@ -258,6 +265,7 @@ def test_policy_escalation_moves_alert_to_next_rule(monkeypatch, db):
 def test_policy_alert_ignores_team_escalation_after_reminders(monkeypatch, db):
     group = create_group(slug="infra")
     team = create_team(group, slug="sre")
+
     team.escalation_enabled = True
     team.escalation_after_reminders = 1
     team.save()
@@ -290,28 +298,27 @@ def test_policy_alert_ignores_team_escalation_after_reminders(monkeypatch, db):
     create_route(team, escalation_policy=policy)
 
     monkeypatch.setattr("app.services.alerts.notify_alert", lambda *args, **kwargs: 1)
-    monkeypatch.setattr("app.services.alerts.has_matching_notification_channel", lambda alert: True)
+    monkeypatch.setattr("app.services.alerts.has_matching_notification_channel", lambda alert_group: True)
 
-    alert, created = upsert_alert(normalized_alert())
+    alert_group, created = upsert_alert(normalized_alert())
 
     assert created is True
 
-    alert.reminder_count = 10
-    alert.next_escalation_at = datetime.utcnow() + timedelta(minutes=30)
-    alert.save()
+    alert_group.reminder_count = 10
+    alert_group.next_escalation_at = datetime.utcnow() + timedelta(minutes=30)
+    alert_group.save()
 
-    assert maybe_escalate_alert(alert) is False
+    assert maybe_escalate_alert(alert_group) is False
 
-    alert = Alert.get_by_id(alert.id)
+    alert_group = AlertGroup.get_by_id(alert_group.id)
 
-    assert alert.escalation_rule.id == first_rule.id
-    assert alert.assignee.id == first_user.id
+    assert alert_group.escalation_rule.id == first_rule.id
+    assert alert_group.assignee.id == first_user.id
 
 
 def test_policy_escalation_runs_when_reminder_interval_is_disabled(monkeypatch, db):
     group = create_group(slug="infra")
     team = create_team(group, slug="sre")
-
     first_user = create_user("alice", group)
     second_user = create_user("bob", group)
 
@@ -343,28 +350,28 @@ def test_policy_escalation_runs_when_reminder_interval_is_disabled(monkeypatch, 
     create_route(team, escalation_policy=policy)
 
     monkeypatch.setattr("app.services.alerts.notify_alert", lambda *args, **kwargs: 1)
-    monkeypatch.setattr("app.services.alerts.has_matching_notification_channel", lambda alert: True)
+    monkeypatch.setattr("app.services.alerts.has_matching_notification_channel", lambda alert_group: True)
 
-    alert, created = upsert_alert(normalized_alert())
+    alert_group, created = upsert_alert(normalized_alert())
 
     assert created is True
 
-    alert.next_escalation_at = datetime.utcnow() - timedelta(seconds=1)
-    alert.save()
+    alert_group.next_escalation_at = datetime.utcnow() - timedelta(seconds=1)
+    alert_group.save()
 
     assert send_unacked_reminders() == 1
 
-    alert = Alert.get_by_id(alert.id)
+    alert_group = AlertGroup.get_by_id(alert_group.id)
 
-    assert alert.escalation_rule.id == second_rule.id
-    assert alert.assignee.id == second_user.id
+    assert alert_group.escalation_rule.id == second_rule.id
+    assert alert_group.assignee.id == second_user.id
 
 
 def test_alert_details_include_policy_state(client, admin_headers, monkeypatch, db):
     group = create_group(slug="infra")
     team = create_team(group, slug="sre")
-
     user = create_user("alice", group)
+
     add_user_to_team(team, user)
 
     rotation = create_rotation(team, users=[user])
@@ -382,15 +389,15 @@ def test_alert_details_include_policy_state(client, admin_headers, monkeypatch, 
     monkeypatch.setattr("app.services.alerts.notify_alert", lambda *args, **kwargs: 1)
     monkeypatch.setattr(
         "app.services.alerts.has_matching_notification_channel",
-        lambda alert: True,
+        lambda alert_group: True,
     )
 
-    alert, created = upsert_alert(normalized_alert())
+    alert_group, created = upsert_alert(normalized_alert())
 
     assert created is True
 
     response = client.get(
-        f"/api/alerts/{alert.id}",
+        f"/api/alerts/{alert_group.id}",
         headers=admin_headers,
     )
 
@@ -411,12 +418,11 @@ def test_alert_details_include_policy_state(client, admin_headers, monkeypatch, 
 def test_policy_exhausted_alert_does_not_send_more_reminders(monkeypatch, db):
     group = create_group(slug="infra")
     team = create_team(group, slug="sre")
-
     user = create_user("alice", group)
+
     add_user_to_team(team, user)
 
     rotation = create_rotation(team, users=[user])
-
     policy = create_escalation_policy(
         team,
         repeat_count=0,
@@ -435,21 +441,20 @@ def test_policy_exhausted_alert_does_not_send_more_reminders(monkeypatch, db):
 
     monkeypatch.setattr(
         "app.services.alerts.notify_alert",
-        lambda alert, event_type="notification": calls.append(event_type) or 1,
+        lambda alert_group, event_type="notification": calls.append(event_type) or 1,
     )
     monkeypatch.setattr(
         "app.services.alerts.has_matching_notification_channel",
-        lambda alert: True,
+        lambda alert_group: True,
     )
 
-    alert, created = upsert_alert(normalized_alert())
+    alert_group, created = upsert_alert(normalized_alert())
 
     assert created is True
-    assert alert.escalation_rule.id == rule.id
+    assert alert_group.escalation_rule.id == rule.id
 
-    # Simulate exhausted policy.
-    alert.next_escalation_at = None
-    alert.save()
+    alert_group.next_escalation_at = None
+    alert_group.save()
 
     calls.clear()
 

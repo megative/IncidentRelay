@@ -12,6 +12,27 @@ from app.services.serializers import (
 alerts_bp = Blueprint("alerts_api", __name__)
 
 
+def _get_query_values(name, cast=None):
+    values = request.args.getlist(name)
+
+    if not values:
+        value = request.args.get(name)
+        values = [value] if value else []
+
+    result = []
+
+    for value in values:
+        if value is None or value == "":
+            continue
+
+        try:
+            result.append(cast(value) if cast else value)
+        except (TypeError, ValueError):
+            continue
+
+    return result
+
+
 def _request_user():
     return getattr(request, "current_user", None)
 
@@ -34,10 +55,10 @@ def list_alerts():
     page = alerts_repo.paginate_alert_groups(
         team_id=team_id,
         team_ids=team_ids,
-        status=request.args.get("status"),
-        source=request.args.get("source"),
-        severity=request.args.get("severity"),
-        service_id=request.args.get("service_id", type=int),
+        status=_get_query_values("status"),
+        source=_get_query_values("source"),
+        severity=_get_query_values("severity"),
+        service_id=_get_query_values("service_id", int),
         service_slug=request.args.get("service_slug"),
         service_status=request.args.get("service_status"),
         service_criticality=request.args.get("service_criticality"),

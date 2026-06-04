@@ -14,6 +14,26 @@ EDITABLE_EVENTS = {"acknowledged", "resolved"}
 logger = logging.getLogger("oncall.notifications")
 
 
+def _ensure_alert_group(group):
+    if group.__class__.__name__ != "AlertGroup":
+        raise TypeError(
+            "notification_service expects AlertGroup, not Alert. "
+            "Use alert.group or alerts_repo.get_alert_group(...)."
+        )
+
+    return group
+
+
+def _group_log_id(group):
+    return getattr(group, "id", None)
+
+
+def _event_target_kwargs(group):
+    return {
+        "group_id": group.id,
+    }
+
+
 def alert_service_label(alert):
     """Return a human-readable affected service label."""
     service = getattr(alert, "service", None)
@@ -85,11 +105,12 @@ def format_alert_message(alert, event_type="notification"):
     return "\n".join(lines)
 
 
-def notification_log_extra(channel, alert, event_type, result=None, error=None, **extra_fields):
-    """Build a consistent structured log payload for notification events."""
+def notification_log_extra(channel, group, event_type, result=None, error=None, **extra_fields):
+    """Build a consistent structured log payload for group notification events."""
+
     result = result or {}
     data = {
-        "alert_id": getattr(alert, "id", None),
+        "alert_group_id": _group_log_id(group),
         "channel_id": getattr(channel, "id", None),
         "channel_name": getattr(channel, "name", None),
         "channel_type": getattr(channel, "channel_type", None),
@@ -116,12 +137,12 @@ def notification_log_extra(channel, alert, event_type, result=None, error=None, 
     return {"extra": data}
 
 
-def browser_push_log_extra(alert, event_type, sent=None, error=None, reason=None):
+def browser_push_log_extra(group, event_type, sent=None, error=None, reason=None):
     data = {
-        "alert_id": getattr(alert, "id", None),
+        "alert_group_id": _group_log_id(group),
         "event_type": event_type,
         "provider": "browser_push",
-        "assignee_id": getattr(alert, "assignee_id", None),
+        "assignee_id": getattr(group, "assignee_id", None),
     }
 
     if sent is not None:
@@ -136,16 +157,18 @@ def browser_push_log_extra(alert, event_type, sent=None, error=None, reason=None
     return {"extra": data}
 
 
-def send_profile_browser_push(alert, event_type="notification"):
-    """Send built-in browser push to alert assignee profile devices."""
+def send_profile_browser_push(group, event_type="notification"):
+    """Send built-in browser push to alert group assignee profile devices."""
 
-    assignee = getattr(alert, "assignee", None)
+    group = _ensure_alert_group(group)
+
+    assignee = getattr(group, "assignee", None)
 
     if not assignee:
         logger.info(
             "browser push skipped",
             extra=browser_push_log_extra(
-                alert,
+                group,
                 event_type,
                 reason="no_assignee",
             ),
@@ -155,19 +178,20 @@ def send_profile_browser_push(alert, event_type="notification"):
     try:
         sent = browser_push.send_alert_push_to_user(
             assignee,
-            alert,
+            group,
             event_type=event_type,
         )
     except Exception as exc:
         alerts_repo.create_alert_event(
-            group_id=alert.id,
+            group_id=group.id,
             event_type=f"{event_type}_browser_push_failed",
-            message="browser_push: {exc}",
+            message=f"browser_push: {exc}",
         )
+
         logger.warning(
             "browser push failed",
             extra=browser_push_log_extra(
-                alert,
+                group,
                 event_type,
                 error=exc,
             ),
@@ -178,7 +202,7 @@ def send_profile_browser_push(alert, event_type="notification"):
         logger.info(
             "browser push skipped",
             extra=browser_push_log_extra(
-                alert,
+                group,
                 event_type,
                 sent=0,
                 reason="no_active_push_subscriptions",
@@ -187,21 +211,20 @@ def send_profile_browser_push(alert, event_type="notification"):
         return 0
 
     alerts_repo.create_alert_event(
-        group_id=alert.id,
+        group_id=group.id,
         event_type=f"{event_type}_browser_push_sent",
-        message="Sent browser push to {sent} device(s)",
+        message=f"Sent browser push to {sent} device(s)",
     )
 
     logger.info(
         "browser push sent",
         extra=browser_push_log_extra(
-            alert,
+            group,
             event_type,
             sent=sent,
         ),
     )
 
-    # Return logical delivery count, not device count.
     return 1
 
 
@@ -260,13 +283,16 @@ def has_matching_notification_channel(alert):
     return notification_rules.has_deliverable_user_notification(alert)
 
 
-def notify_alert(alert, event_type="notification"):
-    """Send or update alert notifications for route channels and user notification rules."""
-    text = format_alert_message(alert, event_type)
+def notify_alert(group, event_type="notification"):
+    """Send or update alert group notifications for route channels and user rules."""
+
+    group = _ensure_alert_group(group)
+
+    text = format_alert_message(group, event_type)
     sent_count = 0
 
-    if alert.route:
-        for link in routes_repo.list_route_channels(alert.route.id):
+    if group.route:
+        for link in routes_repo.list_route_channels(group.route.id):
             channel = link.channel
 
             if not channel.enabled:
@@ -277,13 +303,16 @@ def notify_alert(alert, event_type="notification"):
             except RuntimeError as exc:
                 logger.exception(
                     "unsupported notification channel type",
-                    extra=notification_log_extra(channel, alert, event_type, error=exc),
+                    extra=notification_log_extra(channel, group, event_type, error=exc),
                 )
                 continue
 
-            delivery = notifications_repo.get_notification(alert.id, channel.id)
+            delivery = notifications_repo.get_notification(
+                group_id=group.id,
+                channel_id=channel.id,
+            )
 
-            if not channel_matches_alert_severity(channel, alert):
+            if not channel_matches_alert_severity(channel, group):
                 can_update_existing_message = (
                     event_type in EDITABLE_EVENTS
                     and delivery
@@ -295,10 +324,12 @@ def notify_alert(alert, event_type="notification"):
                         "notification skipped by channel severity filter",
                         extra=notification_log_extra(
                             channel,
-                            alert,
+                            group,
                             event_type,
-                            alert_severity=alert.severity,
-                            allowed_severities=sorted(get_channel_notify_on_severities(channel)),
+                            alert_severity=group.severity,
+                            allowed_severities=sorted(
+                                get_channel_notify_on_severities(channel)
+                            ),
                         ),
                     )
                     continue
@@ -307,14 +338,14 @@ def notify_alert(alert, event_type="notification"):
                 if event_type in EDITABLE_EVENTS and delivery and notifier.supports_update:
                     result = notifier.update(
                         channel,
-                        alert,
+                        group,
                         text,
                         delivery,
                         event_type=event_type,
                     ) or {}
 
                     notifications_repo.save_notification(
-                        group_id=alert.id,
+                        group_id=group.id,
                         channel_id=channel.id,
                         provider=result.get("provider") or channel.channel_type,
                         external_message_id=result.get("external_message_id"),
@@ -325,27 +356,37 @@ def notify_alert(alert, event_type="notification"):
                     )
 
                     alerts_repo.create_alert_event(
-                        group_id=alert.id,
+                        group_id=group.id,
                         event_type=f"{event_type}_message_updated",
                         message=f"Updated {channel.channel_type}:{channel.name}",
                     )
 
                     logger.info(
                         "notification message updated",
-                        extra=notification_log_extra(channel, alert, event_type, result=result),
+                        extra=notification_log_extra(
+                            channel,
+                            group,
+                            event_type,
+                            result=result,
+                        ),
                     )
 
                     sent_count += 1
                     continue
 
-                result = notifier.send(channel, alert, text, event_type=event_type) or {}
+                result = notifier.send(
+                    channel,
+                    group,
+                    text,
+                    event_type=event_type,
+                ) or {}
 
                 if result.get("skipped"):
                     logger.info(
                         "notification skipped",
                         extra=notification_log_extra(
                             channel,
-                            alert,
+                            group,
                             event_type,
                             result=result,
                             reason=result.get("skip_reason"),
@@ -354,7 +395,7 @@ def notify_alert(alert, event_type="notification"):
                     continue
 
                 notifications_repo.save_notification(
-                    group_id=alert.id,
+                    group_id=group.id,
                     channel_id=channel.id,
                     provider=result.get("provider") or channel.channel_type,
                     external_message_id=result.get("external_message_id"),
@@ -365,58 +406,73 @@ def notify_alert(alert, event_type="notification"):
                 )
 
                 alerts_repo.create_alert_event(
-                    group_id=alert.id,
+                    group_id=group.id,
                     event_type=f"{event_type}_sent",
-                    message="Sent to {channel.channel_type}:{channel.name}",
+                    message=f"Sent to {channel.channel_type}:{channel.name}",
                 )
 
                 logger.info(
                     "notification sent",
-                    extra=notification_log_extra(channel, alert, event_type, result=result),
+                    extra=notification_log_extra(
+                        channel,
+                        group,
+                        event_type,
+                        result=result,
+                    ),
                 )
 
                 sent_count += 1
+
             except Exception as exc:
                 notifications_repo.mark_notification_error(
-                    alert.id,
-                    channel.id,
-                    channel.channel_type,
-                    event_type,
-                    exc,
+                    group_id=group.id,
+                    channel_id=channel.id,
+                    provider=channel.channel_type,
+                    event_type=event_type,
+                    error=exc,
                 )
 
                 alerts_repo.create_alert_event(
-                    group_id=alert.id,
+                    group_id=group.id,
                     event_type=f"{event_type}_failed",
-                    message="{channel.channel_type}:{channel.name}: {exc}",
+                    message=f"{channel.channel_type}:{channel.name}: {exc}",
                 )
 
                 logger.warning(
                     "notification failed",
-                    extra=notification_log_extra(channel, alert, event_type, error=exc),
+                    extra=notification_log_extra(
+                        channel,
+                        group,
+                        event_type,
+                        error=exc,
+                    ),
                 )
 
     sent_count += notification_rules.enqueue_user_notifications(
-        alert,
+        group,
         event_type=event_type,
     )
 
     if sent_count:
-        alerts_repo.record_notification_time(alert, datetime.utcnow())
+        alerts_repo.record_group_notification_time(group, datetime.utcnow())
 
     return sent_count
 
 
-def update_alert_messages(alert, event_type):
-    """Update previously sent editable messages without creating new notifications."""
-    if not alert.route:
+def update_alert_messages(group, event_type):
+    """Update previously sent editable group messages without creating new notifications."""
+
+    group = _ensure_alert_group(group)
+
+    if not group.route:
         return 0
 
-    text = format_alert_message(alert, event_type)
+    text = format_alert_message(group, event_type)
     updated_count = 0
 
-    for link in routes_repo.list_route_channels(alert.route.id):
+    for link in routes_repo.list_route_channels(group.route.id):
         channel = link.channel
+
         if not channel.enabled:
             continue
 
@@ -425,21 +481,32 @@ def update_alert_messages(alert, event_type):
         except RuntimeError as exc:
             logger.exception(
                 "unsupported notification channel type",
-                extra=notification_log_extra(channel, alert, event_type, error=exc),
+                extra=notification_log_extra(channel, group, event_type, error=exc),
             )
             continue
 
         if not notifier.supports_update:
             continue
 
-        delivery = notifications_repo.get_notification(alert.id, channel.id)
+        delivery = notifications_repo.get_notification(
+            group_id=group.id,
+            channel_id=channel.id,
+        )
+
         if not delivery:
             continue
 
         try:
-            result = notifier.update(channel, alert, text, delivery, event_type=event_type) or {}
+            result = notifier.update(
+                channel,
+                group,
+                text,
+                delivery,
+                event_type=event_type,
+            ) or {}
+
             notifications_repo.save_notification(
-                group_id=alert.id,
+                group_id=group.id,
                 channel_id=channel.id,
                 provider=result.get("provider") or channel.channel_type,
                 external_message_id=result.get("external_message_id"),
@@ -448,32 +515,48 @@ def update_alert_messages(alert, event_type):
                 provider_status=result.get("provider_status"),
                 provider_payload=result.get("provider_payload"),
             )
+
             alerts_repo.create_alert_event(
-                group_id=alert.id,
+                group_id=group.id,
                 event_type=f"{event_type}_message_updated",
-                message="Updated {channel.channel_type}:{channel.name}",
+                message=f"Updated {channel.channel_type}:{channel.name}",
             )
+
             logger.info(
                 "notification message updated",
-                extra=notification_log_extra(channel, alert, event_type, result=result),
+                extra=notification_log_extra(
+                    channel,
+                    group,
+                    event_type,
+                    result=result,
+                ),
             )
+
             updated_count += 1
+
         except Exception as exc:
             notifications_repo.mark_notification_error(
-                alert.id,
-                channel.id,
-                channel.channel_type,
-                event_type,
-                exc,
+                group_id=group.id,
+                channel_id=channel.id,
+                provider=channel.channel_type,
+                event_type=event_type,
+                error=exc,
             )
+
             alerts_repo.create_alert_event(
-                group_id=alert.id,
+                group_id=group.id,
                 event_type=f"{event_type}_update_failed",
-                message="{channel.channel_type}:{channel.name}: {exc}",
+                message=f"{channel.channel_type}:{channel.name}: {exc}",
             )
+
             logger.warning(
                 "notification update failed",
-                extra=notification_log_extra(channel, alert, event_type, error=exc),
+                extra=notification_log_extra(
+                    channel,
+                    group,
+                    event_type,
+                    error=exc,
+                ),
             )
 
     return updated_count

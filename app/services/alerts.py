@@ -441,79 +441,95 @@ def resolve_alert(alert_id, user_id=None):
     return group
 
 
-def maybe_escalate_alert(alert):
-    """Escalate an alert according to route escalation mode."""
-    if alert.escalation_policy_id:
-        return maybe_escalate_alert_by_policy(alert)
+def maybe_escalate_alert(group):
+    """Escalate an alert group according to route escalation mode."""
 
-    if not alert.team or not alert.team.escalation_enabled:
+    if group.escalation_policy_id:
+        return maybe_escalate_alert_by_policy(group)
+
+    if not group.team or not group.team.escalation_enabled:
         return False
 
-    if not has_matching_notification_channel(alert):
+    if not has_matching_notification_channel(group):
         logger.debug(
-            "escalation skipped because no channel matches alert severity",
+            "escalation skipped because no channel matches alert group severity",
             extra={
                 "extra": {
-                    "alert_id": alert.id,
-                    "severity": alert.severity,
-                    "route_id": alert.route.id if alert.route else None,
+                    "alert_group_id": group.id,
+                    "severity": group.severity,
+                    "route_id": group.route.id if group.route else None,
                 }
             },
         )
         return False
 
-    if alert.reminder_count < alert.team.escalation_after_reminders:
+    if group.reminder_count < group.team.escalation_after_reminders:
         return False
 
-    next_user = get_next_rotation_user(alert.rotation, alert.assignee)
+    next_user = get_next_rotation_user(group.rotation, group.assignee)
 
-    if not next_user or (alert.assignee and next_user.id == alert.assignee.id):
-        return False
-
-    alerts_repo.escalate_alert(alert, next_user.id)
-    alerts_repo.create_alert_event(alert.id, "escalated", f"Escalated to {next_user.username}")
-    notify_alert(alert, event_type="escalation")
-
-    return True
-
-
-def maybe_escalate_alert_by_policy(alert):
-    """Escalate an alert according to its escalation policy."""
-    if not alert.escalation_policy_id:
+    if not next_user or (group.assignee and next_user.id == group.assignee.id):
         return False
 
     now = datetime.utcnow()
 
-    if not alert.next_escalation_at:
+    group.assignee = next_user.id
+    group.escalation_level = (group.escalation_level or 0) + 1
+    group.reminder_count = 0
+    group.last_escalated_at = now
+    group.updated_at = now
+    group.save()
+
+    alerts_repo.create_alert_event(
+        group_id=group.id,
+        event_type="escalated",
+        message=f"Escalated to {next_user.username}",
+    )
+
+    notify_alert(group, event_type="escalation")
+
+    return True
+
+
+def maybe_escalate_alert_by_policy(group):
+    """Escalate an alert group according to its escalation policy."""
+
+    if not group.escalation_policy_id:
         return False
 
-    if alert.next_escalation_at > now:
+    now = datetime.utcnow()
+
+    if not group.next_escalation_at:
         return False
 
-    if not has_matching_notification_channel(alert):
+    if group.next_escalation_at > now:
+        return False
+
+    if not has_matching_notification_channel(group):
         logger.debug(
-            "policy escalation skipped because no channel matches alert severity",
+            "policy escalation skipped because no channel matches alert group severity",
             extra={
                 "extra": {
-                    "alert_id": alert.id,
-                    "severity": alert.severity,
-                    "route_id": alert.route.id if alert.route else None,
-                    "escalation_policy_id": alert.escalation_policy_id,
+                    "alert_group_id": group.id,
+                    "severity": group.severity,
+                    "route_id": group.route.id if group.route else None,
+                    "escalation_policy_id": group.escalation_policy_id,
                 }
             },
         )
         return False
 
-    next_rule, repeat_count = escalation_policy_service.get_next_rule_for_alert(alert)
+    next_rule, repeat_count = escalation_policy_service.get_next_rule_for_alert(group)
 
     if not next_rule:
-        alert.next_escalation_at = None
-        alert.save()
+        group.next_escalation_at = None
+        group.updated_at = now
+        group.save()
 
         alerts_repo.create_alert_event(
-            alert.id,
-            "escalation_stopped",
-            "Escalation policy has no next rule",
+            group_id=group.id,
+            event_type="escalation_stopped",
+            message="Escalation policy has no next rule",
         )
 
         return False
@@ -521,143 +537,150 @@ def maybe_escalate_alert_by_policy(alert):
     next_user = escalation_policy_service.resolve_rule_user(next_rule)
 
     if next_rule.target_type == "rotation" and next_rule.target_rotation:
-        alert.rotation = next_rule.target_rotation
+        group.rotation = next_rule.target_rotation
     else:
-        alert.rotation = None
+        group.rotation = None
 
-    alert.assignee = next_user
-    alert.escalation_rule = next_rule
-    alert.escalation_level = (alert.escalation_level or 0) + 1
-    alert.escalation_repeat_count = repeat_count
-    alert.reminder_count = 0
-    alert.last_escalated_at = now
-    alert.next_escalation_at = escalation_policy_service.get_next_escalation_at(
+    group.assignee = next_user
+    group.escalation_rule = next_rule
+    group.escalation_level = (group.escalation_level or 0) + 1
+    group.escalation_repeat_count = repeat_count
+    group.reminder_count = 0
+    group.last_escalated_at = now
+    group.next_escalation_at = escalation_policy_service.get_next_escalation_at(
         next_rule,
         now,
     )
-    alert.save()
+    group.updated_at = now
+    group.save()
 
     target = next_user.username if next_user else "no assignee"
+
     alerts_repo.create_alert_event(
-        alert.id,
-        "escalated",
-        f"Escalated by policy rule #{next_rule.position} to {target}",
+        group_id=group.id,
+        event_type="escalated",
+        message=f"Escalated by policy rule #{next_rule.position} to {target}",
     )
 
-    notify_alert(alert, event_type="escalation")
+    notify_alert(group, event_type="escalation")
 
     return True
 
 
-def get_alert_reminder_interval(alert):
-    """Return the reminder interval for an alert."""
-    if alert.escalation_policy:
-        return escalation_policy_service.get_policy_reminder_interval(alert)
+def get_alert_reminder_interval(group):
+    """Return the reminder interval for an alert group."""
 
-    if not alert.rotation:
+    if group.escalation_policy:
+        return escalation_policy_service.get_policy_reminder_interval(group)
+
+    if not group.rotation:
         return 0
 
-    return alert.rotation.reminder_interval_seconds
+    return group.rotation.reminder_interval_seconds
 
 
-def should_send_reminder(alert, now):
+def should_send_reminder(group, now):
     """Check whether a reminder should be sent now."""
-    reminder_interval = get_alert_reminder_interval(alert)
+
+    reminder_interval = get_alert_reminder_interval(group)
 
     if reminder_interval == 0:
         return False
 
-    if not alert.last_notification_at:
+    if not group.last_notification_at:
         return True
 
-    return alert.last_notification_at <= now - timedelta(seconds=reminder_interval)
+    return group.last_notification_at <= now - timedelta(seconds=reminder_interval)
 
 
 def send_unacked_reminders():
-    """Send reminder notifications for unacknowledged alerts.
+    """Send reminder notifications for unacknowledged alert groups.
 
     A reminder is counted only when at least one notification was actually sent.
-    Alerts that do not match any enabled channel severity filter are skipped.
+    Groups that do not match any enabled channel severity filter are skipped.
     """
+
     now = datetime.utcnow()
     count = 0
 
-    for alert in alerts_repo.list_firing_alerts():
-        if alert.escalation_policy_id:
-            if maybe_escalate_alert(alert):
+    for group in alerts_repo.list_firing_alert_groups():
+        if group.escalation_policy_id:
+            if maybe_escalate_alert(group):
                 count += 1
                 continue
 
-            if not alert.next_escalation_at:
+            if not group.next_escalation_at:
                 logger.debug(
                     "reminder skipped because escalation policy is exhausted",
                     extra={
                         "extra": {
-                            "alert_id": alert.id,
-                            "route_id": alert.route.id if alert.route else None,
-                            "escalation_policy_id": alert.escalation_policy_id,
-                            "escalation_rule_id": alert.escalation_rule_id,
+                            "alert_group_id": group.id,
+                            "route_id": group.route.id if group.route else None,
+                            "escalation_policy_id": group.escalation_policy_id,
+                            "escalation_rule_id": group.escalation_rule_id,
                         }
                     },
                 )
                 continue
 
-        interval = get_alert_reminder_interval(alert)
+        interval = get_alert_reminder_interval(group)
 
         if interval == 0:
             logger.debug(
                 "reminder skipped because reminder interval is disabled",
                 extra={
                     "extra": {
-                        "alert_id": alert.id,
-                        "team_id": alert.team.id if alert.team else None,
-                        "rotation_id": alert.rotation.id if alert.rotation else None,
+                        "alert_group_id": group.id,
+                        "team_id": group.team.id if group.team else None,
+                        "rotation_id": group.rotation.id if group.rotation else None,
                     }
                 },
             )
             continue
 
-        if not has_matching_notification_channel(alert):
+        if not has_matching_notification_channel(group):
             logger.debug(
-                "reminder skipped because no channel matches alert severity",
+                "reminder skipped because no channel matches alert group severity",
                 extra={
                     "extra": {
-                        "alert_id": alert.id,
-                        "severity": alert.severity,
-                        "route_id": alert.route.id if alert.route else None,
+                        "alert_group_id": group.id,
+                        "severity": group.severity,
+                        "route_id": group.route.id if group.route else None,
                     }
                 },
             )
             continue
 
-        if not should_send_reminder(alert, now):
+        if not should_send_reminder(group, now):
             continue
 
-        if not alert.escalation_policy_id and maybe_escalate_alert(alert):
+        if not group.escalation_policy_id and maybe_escalate_alert(group):
             count += 1
             continue
 
-        sent_count = notify_alert(alert, event_type="reminder")
+        sent_count = notify_alert(group, event_type="reminder")
 
         if not sent_count:
             logger.info(
                 "reminder skipped because no notification was sent",
                 extra={
                     "extra": {
-                        "alert_id": alert.id,
-                        "severity": alert.severity,
-                        "route_id": alert.route.id if alert.route else None,
+                        "alert_group_id": group.id,
+                        "severity": group.severity,
+                        "route_id": group.route.id if group.route else None,
                     }
                 },
             )
             continue
 
-        alerts_repo.increment_reminder(alert, now)
+        alerts_repo.increment_group_reminder(group, now)
+
         alerts_repo.create_alert_event(
-            alert.id,
-            "reminder_sent",
-            f"Reminder count: {alert.reminder_count}",
+            group_id=group.id,
+            event_type="reminder_sent",
+            message=f"Reminder count: {group.reminder_count}",
         )
+
         count += 1
 
     return count
