@@ -155,6 +155,7 @@ class RotationLayerMemberAddSchema(ApiModel):
 
     user_id: int = Field(ge=1)
     position: int = Field(ge=0, le=1000)
+    starts_at: datetime | None = None
 
 
 class RotationLayerMemberUpdateSchema(ApiModel):

@@ -17,7 +17,9 @@ class RouteBaseSchema(ApiModel):
     rotation_id: int | None = Field(default=None, ge=1)
     channel_ids: List[int] = Field(default_factory=list)
     matchers: Dict[str, Any] = Field(default_factory=dict)
-    group_by: List[str] = Field(default_factory=list)
+    group_by: List[str] = Field(
+        default_factory=lambda: ["alertname", "severity"]
+    )
     enabled: bool = True
 
     escalation_mode: str = Field(

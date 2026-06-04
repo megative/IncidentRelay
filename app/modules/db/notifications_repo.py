@@ -3,11 +3,11 @@ from datetime import datetime
 from app.modules.db.models import AlertNotification, AlertNotificationEvent
 
 
-def get_notification(alert_id, channel_id):
-    """Return a delivery record for an alert/channel pair."""
+def get_notification(group_id, channel_id):
+    """Return a delivery record for an alert group/channel pair."""
 
     return AlertNotification.get_or_none(
-        (AlertNotification.alert == alert_id)
+        (AlertNotification.group == group_id)
         & (AlertNotification.channel == channel_id)
     )
 
@@ -25,7 +25,7 @@ def get_notification_by_external_id(channel_id, external_message_id):
 
 
 def save_notification(
-    alert_id,
+    group_id,
     channel_id,
     provider,
     external_message_id=None,
@@ -35,13 +35,13 @@ def save_notification(
     provider_status=None,
     provider_payload=None,
 ):
-    """Create or update a delivery record."""
+    """Create or update a group delivery record."""
 
-    record = get_notification(alert_id, channel_id)
+    record = get_notification(group_id, channel_id)
 
     if not record:
         record = AlertNotification.create(
-            alert=alert_id,
+            group=group_id,
             channel=channel_id,
             provider=provider,
             external_message_id=external_message_id,
@@ -114,11 +114,11 @@ def create_notification_event(
     )
 
 
-def mark_notification_error(alert_id, channel_id, provider, event_type, error):
-    """Store the latest delivery error for an alert/channel pair."""
+def mark_notification_error(group_id, channel_id, provider, event_type, error):
+    """Store the latest delivery error for a group/channel pair."""
 
     return save_notification(
-        alert_id=alert_id,
+        group_id=group_id,
         channel_id=channel_id,
         provider=provider,
         event_type=event_type,
@@ -126,11 +126,11 @@ def mark_notification_error(alert_id, channel_id, provider, event_type, error):
     )
 
 
-def list_notifications_for_alert(alert_id):
-    """Return delivery records for an alert ordered by id."""
+def list_notifications_for_group(group_id):
+    """Return delivery records for a group ordered by id."""
 
     return list(
         AlertNotification.select()
-        .where(AlertNotification.alert == alert_id)
+        .where(AlertNotification.group == group_id)
         .order_by(AlertNotification.id.asc())
     )

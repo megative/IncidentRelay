@@ -706,11 +706,37 @@ function renderLayerMembersEditor(layer) {
     const section = $("<section>").addClass("layer-editor-section");
 
     section.append($("<h4>").text("2. Who rotates?"));
+
     section.append(
         $("<div>")
             .addClass("layer-editor-section-subtitle")
-            .text("Users rotate in position order: 0, 1, 2 and so on.")
+            .text("Users rotate in position order. Removing a user only affects future shifts; past shifts stay visible.")
     );
+
+    const currentMembers = asArray(layerMembersCache[layer.id])
+        .filter(function (member) {
+            return member.active !== false && !member.ends_at;
+        })
+        .sort(function (a, b) {
+            return Number(a.position || 0) - Number(b.position || 0);
+        });
+
+    const activeUserIds = new Set(
+        currentMembers.map(function (member) {
+            return Number(member.user_id);
+        })
+    );
+
+    const availableUsers = asArray(rotationLayerEligibleUsersCache)
+        .filter(function (user) {
+            return !activeUserIds.has(Number(user.user_id));
+        })
+        .sort(function (a, b) {
+            const left = (a.display_name || a.username || "").toLowerCase();
+            const right = (b.display_name || b.username || "").toLowerCase();
+
+            return left.localeCompare(right);
+        });
 
     const addRow = $("<div>").addClass("layer-member-add-grid");
 
@@ -718,10 +744,14 @@ function renderLayerMembersEditor(layer) {
         .addClass("input")
         .attr("data-layer-member-user", layer.id);
 
-    if (!rotationLayerEligibleUsersCache.length) {
-        userSelect.append($("<option>").val("").text("No active team members"));
+    if (!availableUsers.length) {
+        userSelect.append(
+            $("<option>")
+                .val("")
+                .text(currentMembers.length ? "All active users are already in this layer" : "No active team members")
+        );
     } else {
-        rotationLayerEligibleUsersCache.forEach(function (user) {
+        availableUsers.forEach(function (user) {
             userSelect.append(
                 $("<option>")
                     .val(user.user_id)
@@ -752,9 +782,31 @@ function renderLayerMembersEditor(layer) {
     );
 
     addRow.append(
+        $("<div>")
+            .addClass("app-field")
+            .append(
+                $("<label>")
+                    .text("Starts at")
+                    .append(
+                        $("<small>")
+                            .addClass("muted")
+                            .text(" · " + (layer.timezone || "UTC"))
+                    )
+            )
+            .append(
+                $("<input>")
+                    .addClass("input")
+                    .attr("type", "datetime-local")
+                    .attr("data-layer-member-starts-at", layer.id)
+                    .val(datetimeLocalNowForTimezone(layer.timezone || "UTC"))
+            )
+    );
+
+    addRow.append(
         $("<button>")
             .attr("type", "button")
             .addClass("btn")
+            .prop("disabled", !availableUsers.length)
             .text("Add user")
             .on("click", function () {
                 addLayerMemberFromCard(layer.id);
@@ -764,23 +816,21 @@ function renderLayerMembersEditor(layer) {
     section.append(addRow);
 
     const list = $("<div>").addClass("layer-members-list");
-    const members = asArray(layerMembersCache[layer.id]).sort(function (a, b) {
-        return Number(a.position || 0) - Number(b.position || 0);
-    });
 
-    if (!members.length) {
+    if (!currentMembers.length) {
         list.append(
             $("<div>")
                 .addClass("layer-empty-box")
-                .text("No users in this layer yet.")
+                .text("No active users in this layer yet.")
         );
     } else {
-        members.forEach(function (member) {
+        currentMembers.forEach(function (member) {
             list.append(renderLayerMemberRow(layer.id, member));
         });
     }
 
     section.append(list);
+
     return section;
 }
 
@@ -791,7 +841,13 @@ function renderLayerMemberRow(layerId, member) {
         $("<div>")
             .addClass("layer-member-name")
             .append($("<strong>").text(member.display_name || member.username || ("user #" + member.user_id)))
-            .append($("<small>").text("User ID " + member.user_id + " · member #" + member.id))
+            .append(
+                $("<small>").text(
+                    "User ID " + member.user_id +
+                    " · member #" + member.id +
+                    (member.starts_at ? " · starts at " + formatDateTime(member.starts_at) : "")
+                )
+            )
     );
 
     row.append(
@@ -803,30 +859,13 @@ function renderLayerMemberRow(layerId, member) {
             .val(member.position || 0)
     );
 
-    row.append(
-        $("<label>")
-            .addClass("app-switch")
-            .append(
-                $("<input>")
-                    .attr("type", "checkbox")
-                    .attr("data-member-active", member.id)
-                    .prop("checked", member.active !== false)
-            )
-            .append($("<span>").addClass("app-switch-ui"))
-            .append(
-                $("<span>")
-                    .append($("<strong>").text("Active"))
-                    .append($("<small>").text("Can be selected"))
-            )
-    );
-
     const actions = $("<div>").addClass("table-actions");
 
     actions.append(
         $("<button>")
             .attr("type", "button")
             .addClass("btn btn-small")
-            .text("Save")
+            .text("Save position")
             .on("click", function () {
                 updateLayerMemberFromCard(layerId, member.id);
             })
@@ -1124,7 +1163,9 @@ function deleteRotationLayer(layerId) {
 }
 
 function nextLayerMemberPosition(layerId) {
-    const members = asArray(layerMembersCache[layerId]);
+    const members = asArray(layerMembersCache[layerId]).filter(function (member) {
+        return member.active !== false && !member.ends_at;
+    });
 
     if (!members.length) {
         return 0;
@@ -1136,17 +1177,19 @@ function nextLayerMemberPosition(layerId) {
 }
 
 function addLayerMemberFromCard(layerId) {
-    const userId = layerCard(layerId).find('[data-layer-member-user="' + layerId + '"]').val();
-    const position = layerCard(layerId).find('[data-layer-member-position="' + layerId + '"]').val();
+    const userId = $('[data-layer-member-user="' + layerId + '"]').val();
+    const position = $('[data-layer-member-position="' + layerId + '"]').val();
+    const startsAt = $('[data-layer-member-starts-at="' + layerId + '"]').val();
 
     if (!userId) {
-        showAppError("Select a user first.");
+        showAppError("Select a user to add.");
         return;
     }
 
     apiPost("/api/rotations/layers/" + layerId + "/members", {
         user_id: Number(userId),
-        position: Number(position || 0)
+        position: Number(position || 0),
+        starts_at: startsAt || null
     }, function () {
         loadOneLayerCardDetails(layerId, function () {
             renderRotationLayerCards();
@@ -1157,11 +1200,10 @@ function addLayerMemberFromCard(layerId) {
 
 function updateLayerMemberFromCard(layerId, memberId) {
     const position = $('[data-member-position="' + memberId + '"]').val();
-    const active = $('[data-member-active="' + memberId + '"]').is(":checked");
 
     apiPut("/api/rotations/layers/members/" + memberId, {
         position: Number(position || 0),
-        active: active
+        active: true
     }, function () {
         loadOneLayerCardDetails(layerId, function () {
             renderRotationLayerCards();
@@ -1172,9 +1214,9 @@ function updateLayerMemberFromCard(layerId, memberId) {
 
 function removeLayerMemberFromCard(layerId, memberId) {
     showAppConfirm({
-        title: "Remove this user from the layer?",
-        message: "Remove this user from the layer?",
-        confirmText: "Remove user from the layer",
+        title: "Remove this user from future shifts?",
+        message: "Past on-call shifts will stay visible. This user will no longer be assigned to future shifts in this layer.",
+        confirmText: "Remove from future shifts",
         confirmClass: "btn-danger"
     }).done(function () {
         apiDelete("/api/rotations/layers/members/" + memberId, function () {
@@ -2311,3 +2353,37 @@ $(document).on("keydown", function (event) {
         closeRotationOverridesModal();
     }
 });
+function datetimeLocalNowForTimezone(timezone) {
+    const date = new Date();
+
+    try {
+        const parts = new Intl.DateTimeFormat("en-CA", {
+            timeZone: timezone || "UTC",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+            hourCycle: "h23"
+        }).formatToParts(date);
+
+        const values = {};
+
+        parts.forEach(function (part) {
+            if (part.type !== "literal") {
+                values[part.type] = part.value;
+            }
+        });
+
+        return (
+            values.year + "-" +
+            values.month + "-" +
+            values.day + "T" +
+            values.hour + ":" +
+            values.minute
+        );
+    } catch (error) {
+        return date.toISOString().slice(0, 16);
+    }
+}

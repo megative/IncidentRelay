@@ -640,6 +640,112 @@ class AlertRouteChannel(BaseModel):
         )
 
 
+class AlertGroup(BaseModel):
+    """Logical incident/group containing one or more concrete alerts."""
+
+    id = AutoField()
+
+    team = ForeignKeyField(Team, null=True, backref="alert_groups", on_delete="SET NULL")
+    route = ForeignKeyField(AlertRoute, null=True, backref="alert_groups", on_delete="SET NULL")
+    service = ForeignKeyField(Service, null=True, backref="alert_groups", on_delete="SET NULL")
+    rotation = ForeignKeyField(Rotation, null=True, backref="alert_groups", on_delete="SET NULL")
+
+    escalation_policy = ForeignKeyField(
+        EscalationPolicy,
+        null=True,
+        backref="alert_groups",
+        on_delete="SET NULL",
+    )
+    escalation_rule = ForeignKeyField(
+        EscalationPolicyRule,
+        null=True,
+        backref="alert_groups",
+        on_delete="SET NULL",
+    )
+
+    next_escalation_at = DateTimeField(null=True, index=True)
+    last_escalated_at = DateTimeField(null=True)
+    escalation_repeat_count = IntegerField(default=0)
+    escalation_level = IntegerField(default=0)
+
+    assignee = ForeignKeyField(User, null=True, backref="assigned_alert_groups", on_delete="SET NULL")
+
+    source = CharField()
+    group_key_hash = CharField(index=True)
+    group_key = TextField()
+
+    title = CharField()
+    message = TextField(null=True)
+    severity = CharField(null=True)
+
+    common_labels = JSONTextField(null=True)
+    label_values = JSONTextField(null=True)
+    payload_summary = JSONTextField(null=True)
+
+    status = CharField(default="firing", index=True)
+    previous_status = CharField(null=True)
+
+    acknowledged_by = ForeignKeyField(
+        User,
+        null=True,
+        backref="acknowledged_alert_groups",
+        on_delete="SET NULL",
+    )
+    acknowledged_at = DateTimeField(null=True)
+
+    resolved_by = ForeignKeyField(
+        User,
+        null=True,
+        backref="resolved_alert_groups",
+        on_delete="SET NULL",
+    )
+    resolved_at = DateTimeField(null=True)
+
+    first_seen_at = DateTimeField(default=datetime.utcnow)
+    last_seen_at = DateTimeField(default=datetime.utcnow)
+    last_notification_at = DateTimeField(null=True)
+    notification_due_at = DateTimeField(null=True, index=True)
+    notification_pending = BooleanField(default=False, index=True)
+    notification_reason = CharField(null=True)
+
+    alert_count = IntegerField(default=0)
+    firing_count = IntegerField(default=0)
+    acknowledged_count = IntegerField(default=0)
+    resolved_count = IntegerField(default=0)
+    silenced_count = IntegerField(default=0)
+
+    reminder_count = IntegerField(default=0)
+    silenced = BooleanField(default=False)
+
+    merged_into = ForeignKeyField(
+        "self",
+        null=True,
+        backref="merged_groups",
+        on_delete="SET NULL",
+    )
+    merged_by = ForeignKeyField(
+        User,
+        null=True,
+        backref="merged_alert_groups",
+        on_delete="SET NULL",
+    )
+    merged_at = DateTimeField(null=True)
+    merge_reason = TextField(null=True)
+
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "alert_group"
+        indexes = (
+            (("team", "status"), False),
+            (("source", "group_key_hash", "status"), False),
+            (("route", "status"), False),
+            (("service", "status"), False),
+            (("merged_into",), False),
+        )
+
+
 class Alert(BaseModel):
     """Alert stored after normalization and routing."""
 
@@ -684,6 +790,12 @@ class Alert(BaseModel):
     silenced = BooleanField(default=False)
     resolved_at = DateTimeField(null=True)
     service = ForeignKeyField(Service, null=True, backref="alerts", on_delete="SET NULL")
+    group = ForeignKeyField(
+        AlertGroup,
+        null=True,
+        backref="alerts",
+        on_delete="SET NULL",
+    )
 
     class Meta:
         indexes = (
@@ -729,21 +841,40 @@ class ServiceStatusHistory(BaseModel):
 
 
 class AlertEvent(BaseModel):
-    """Alert history event."""
+    """Alert/group history event."""
 
     id = AutoField()
-    alert = ForeignKeyField(Alert, backref="events", on_delete="CASCADE")
+    group = ForeignKeyField(AlertGroup, null=True, backref="events", on_delete="CASCADE")
+    alert = ForeignKeyField(Alert, null=True, backref="events", on_delete="CASCADE")
     event_type = CharField()
     message = TextField(null=True)
     user = ForeignKeyField(User, null=True, backref="alert_events", on_delete="SET NULL")
     created_at = DateTimeField(default=datetime.utcnow)
 
 
+class AlertGroupMerge(BaseModel):
+    """Manual alert group merge history."""
+
+    id = AutoField()
+    source_group = ForeignKeyField(AlertGroup, backref="source_merges", on_delete="CASCADE")
+    target_group = ForeignKeyField(AlertGroup, backref="target_merges", on_delete="CASCADE")
+    merged_by = ForeignKeyField(User, null=True, backref="alert_group_merges", on_delete="SET NULL")
+    reason = TextField(null=True)
+    created_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "alert_group_merge"
+        indexes = (
+            (("source_group", "target_group"), False),
+        )
+
+
 class AlertNotification(BaseModel):
     """Delivery record for a notification sent to an external channel."""
 
     id = AutoField()
-    alert = ForeignKeyField(Alert, backref="notifications", on_delete="CASCADE")
+    group = ForeignKeyField(AlertGroup, null=True, backref="notifications", on_delete="CASCADE")
+    alert = ForeignKeyField(Alert, null=True, backref="notifications", on_delete="CASCADE")
     channel = ForeignKeyField(NotificationChannel, backref="notifications", on_delete="CASCADE")
     provider = CharField()
     external_message_id = CharField(null=True)
@@ -759,7 +890,7 @@ class AlertNotification(BaseModel):
 
     class Meta:
         indexes = (
-            (("alert", "channel"), True),
+            (("group", "channel"), True),
             (("channel", "external_message_id"), False),
         )
 
@@ -1027,7 +1158,7 @@ class RotationLayer(SoftDeleteModel):
 
 
 class RotationLayerMember(BaseModel):
-    """User position inside a rotation layer."""
+    """Versioned user membership inside a rotation layer."""
 
     id = AutoField()
     layer = ForeignKeyField(RotationLayer, backref="members", on_delete="CASCADE")
@@ -1035,11 +1166,18 @@ class RotationLayerMember(BaseModel):
     position = IntegerField()
     active = BooleanField(default=True)
 
+    # Period of this membership.
+    # Removing a user closes the period.
+    # Re-adding the same user creates a new row.
+    starts_at = DateTimeField(default=datetime.utcnow, index=True)
+    ends_at = DateTimeField(null=True, index=True)
+
     class Meta:
         table_name = "rotation_layer_member"
         indexes = (
-            (("layer", "position"), True),
-            (("layer", "user"), True),
+            (("layer", "position", "starts_at"), False),
+            (("layer", "user", "starts_at"), False),
+            (("layer", "starts_at", "ends_at"), False),
         )
 
 

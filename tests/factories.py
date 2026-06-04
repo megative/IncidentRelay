@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
+from zoneinfo import ZoneInfo
 
 from app.login import hash_password
 from app.modules.db import rotations_repo
@@ -83,6 +84,18 @@ def add_user_to_team(team: Team, user: User, role: str = "manager") -> TeamUser:
     return TeamUser.create(team=team, user=user, role=role, active=True)
 
 
+def local_naive_to_utc_naive(value: datetime, timezone_name: str | None = "UTC") -> datetime:
+    if value.tzinfo is not None:
+        return value.astimezone(dt_timezone.utc).replace(tzinfo=None)
+
+    try:
+        zone = ZoneInfo(timezone_name or "UTC")
+    except Exception:
+        zone = ZoneInfo("UTC")
+
+    return value.replace(tzinfo=zone).astimezone(dt_timezone.utc).replace(tzinfo=None)
+
+
 def create_rotation(
     team: Team,
     name: str | None = None,
@@ -90,6 +103,8 @@ def create_rotation(
     *,
     start_at: datetime | None = None,
     duration_seconds: int = 86400,
+    timezone: str = "UTC",
+    handoff_time: str = "09:00",
 ) -> Rotation:
     rotation = rotations_repo.create_rotation(
         team_id=team.id,
@@ -101,19 +116,25 @@ def create_rotation(
         rotation_type="daily",
         interval_value=1,
         interval_unit="days",
-        handoff_time="09:00",
+        handoff_time=handoff_time,
+        timezone=timezone,
         handoff_weekday=None,
-        timezone="UTC",
         enabled=True,
     )
 
     layer = rotations_repo.get_or_create_default_layer(rotation.id)
+
+    member_starts_at = local_naive_to_utc_naive(
+        layer.start_at or rotation.start_at,
+        layer.timezone or rotation.timezone or timezone,
+    )
 
     for index, user in enumerate(users or []):
         rotations_repo.add_rotation_layer_member(
             layer_id=layer.id,
             user_id=user.id,
             position=index,
+            starts_at=member_starts_at,
         )
 
     return rotation

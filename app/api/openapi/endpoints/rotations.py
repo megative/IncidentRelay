@@ -179,7 +179,81 @@ ROTATION_LAYER_MEMBER_SCHEMA = {
         "username": {"type": "string", "readOnly": True},
         "display_name": {"type": "string", "nullable": True, "readOnly": True},
         "position": {"type": "integer", "minimum": 0},
-        "active": {"type": "boolean", "default": True},
+        "active": {
+            "type": "boolean",
+            "description": "True while this membership period is open.",
+            "default": True,
+        },
+        "starts_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": True,
+            "description": (
+                "Membership period start. In API requests this value is interpreted "
+                "as local time in the layer timezone when no timezone offset is provided."
+            ),
+            "example": "2026-06-10T09:00:00",
+        },
+        "ends_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": True,
+            "readOnly": True,
+            "description": "Membership period end. Null means the member is still open.",
+        },
+    },
+}
+
+
+ROTATION_LAYER_MEMBER_ADD_SCHEMA = {
+    "type": "object",
+    "required": ["user_id", "position"],
+    "properties": {
+        "user_id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "User id to add to the layer.",
+        },
+        "position": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Position in the layer rotation order.",
+        },
+        "starts_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": True,
+            "description": (
+                "When this user starts participating in this layer. "
+                "If omitted, the user starts from the current time. "
+                "Naive datetimes are interpreted in the layer timezone."
+            ),
+            "example": "2026-06-10T09:00:00",
+        },
+    },
+}
+
+
+ROTATION_LAYER_MEMBER_UPDATE_SCHEMA = {
+    "type": "object",
+    "required": ["position", "active"],
+    "properties": {
+        "position": {
+            "type": "integer",
+            "minimum": 0,
+            "description": (
+                "New position. Changing position closes the old membership period "
+                "and creates a new one."
+            ),
+        },
+        "active": {
+            "type": "boolean",
+            "default": True,
+            "description": (
+                "Use false to close this membership period. "
+                "Re-adding the user should be done with POST and creates a new period."
+            ),
+        },
     },
 }
 
@@ -189,15 +263,6 @@ ROTATION_LAYER_MEMBER_CREATE_SCHEMA = {
     "properties": {
         "user_id": {"type": "integer", "minimum": 1},
         "position": {"type": "integer", "minimum": 0},
-    },
-}
-
-ROTATION_LAYER_MEMBER_UPDATE_SCHEMA = {
-    "type": "object",
-    "required": ["position", "active"],
-    "properties": {
-        "position": {"type": "integer", "minimum": 0},
-        "active": {"type": "boolean", "default": True},
     },
 }
 
@@ -420,36 +485,46 @@ def paths():
             "get": {
                 "tags": ["rotations"],
                 "summary": "List rotation layer members",
-                "description": "Returns ordered members for one layer.",
+                "description": (
+                    "Returns open membership periods for a rotation layer. "
+                    "Members with starts_at in the future are returned because they are already "
+                    "configured, but they do not participate in on-call calculation until starts_at."
+                ),
                 "operationId": "listRotationLayerMembers",
                 "parameters": [path_param("layer_id", "Rotation layer id.")],
                 "responses": {
                     "200": response(
-                        "List of layer members.",
-                        {"type": "array", "items": ROTATION_LAYER_MEMBER_SCHEMA},
+                        "List of open layer member periods.",
+                        {
+                            "type": "array",
+                            "items": ROTATION_LAYER_MEMBER_SCHEMA,
+                        },
                     ),
                     "403": response("Access denied."),
-                    "404": response("Layer not found."),
+                    "404": response("Rotation layer not found."),
                 },
             },
             "post": {
                 "tags": ["rotations"],
                 "summary": "Add rotation layer member",
                 "description": (
-                    "Adds or reactivates a user in a layer. "
-                    "The user must be an active member of the rotation team."
+                    "Adds a user to a rotation layer as a new membership period. "
+                    "If starts_at is omitted, the user starts from the current time. "
+                    "If starts_at is provided without timezone offset, it is interpreted "
+                    "in the layer timezone. Re-adding a previously removed user creates "
+                    "a new membership period and does not rewrite historical shifts."
                 ),
                 "operationId": "addRotationLayerMember",
                 "parameters": [path_param("layer_id", "Rotation layer id.")],
                 "requestBody": json_body(
                     "Layer member properties.",
-                    ROTATION_LAYER_MEMBER_CREATE_SCHEMA,
+                    ROTATION_LAYER_MEMBER_ADD_SCHEMA,
                 ),
                 "responses": {
                     "201": response("Layer member added.", ROTATION_LAYER_MEMBER_SCHEMA),
-                    "400": response("Validation error."),
+                    "400": response("Validation error or position conflict."),
                     "403": response("Access denied."),
-                    "404": response("Layer not found."),
+                    "404": response("Rotation layer not found."),
                 },
             },
         },
@@ -458,7 +533,11 @@ def paths():
             "put": {
                 "tags": ["rotations"],
                 "summary": "Update rotation layer member",
-                "description": "Updates layer member position and active flag.",
+                "description": (
+                    "Updates a layer member period. Changing the position does not rewrite "
+                    "history: the old period is closed and a new period is created. "
+                    "Use active=false to remove a user from future shifts."
+                ),
                 "operationId": "updateRotationLayerMember",
                 "parameters": [path_param("member_id", "Rotation layer member id.")],
                 "requestBody": json_body(
@@ -466,21 +545,28 @@ def paths():
                     ROTATION_LAYER_MEMBER_UPDATE_SCHEMA,
                 ),
                 "responses": {
-                    "200": response("Layer member updated.", ROTATION_LAYER_MEMBER_SCHEMA),
-                    "400": response("Validation error."),
+                    "200": response(
+                        "Layer member updated.",
+                        ROTATION_LAYER_MEMBER_SCHEMA,
+                    ),
+                    "400": response("Validation error or position conflict."),
                     "403": response("Access denied."),
-                    "404": response("Layer member not found."),
+                    "404": response("Rotation layer member not found."),
                 },
             },
             "delete": {
                 "tags": ["rotations"],
-                "summary": "Remove rotation layer member",
-                "description": "Permanently removes user from this layer.",
+                "summary": "Remove rotation layer member from future shifts",
+                "description": (
+                    "Closes the membership period instead of deleting it. "
+                    "Past on-call shifts remain visible in the calendar. "
+                    "To add the same user again, use POST /api/rotations/layers/{layer_id}/members."
+                ),
                 "operationId": "removeRotationLayerMember",
                 "parameters": [path_param("member_id", "Rotation layer member id.")],
                 "responses": {
                     "200": response(
-                        "Layer member removed.",
+                        "Layer member removed from future shifts.",
                         {
                             "type": "object",
                             "properties": {
@@ -490,7 +576,7 @@ def paths():
                         },
                     ),
                     "403": response("Access denied."),
-                    "404": response("Layer member not found."),
+                    "404": response("Rotation layer member not found."),
                 },
             },
         },

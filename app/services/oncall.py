@@ -98,6 +98,8 @@ def get_scheduled_oncall_user_for_layer(layer, now=None):
     members = rotations_repo.list_rotation_layer_members(
         layer.id,
         active_only=True,
+        at=now,
+        include_inactive_users=False,
     )
     if not members:
         return None
@@ -188,6 +190,8 @@ def get_next_rotation_user(rotation, current_user=None, now=None):
     members = rotations_repo.list_rotation_layer_members(
         layer.id,
         active_only=True,
+        at=now,
+        include_inactive_users=False,
     )
 
     if not members:

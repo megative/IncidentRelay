@@ -1,7 +1,5 @@
 def path_param(name, description):
-    """
-    Build an integer path parameter.
-    """
+    """Build an integer path parameter."""
 
     return {
         "name": name,
@@ -13,9 +11,7 @@ def path_param(name, description):
 
 
 def query_param(name, description, schema=None, required=False):
-    """
-    Build a query parameter.
-    """
+    """Build a query parameter."""
 
     return {
         "name": name,
@@ -26,33 +22,50 @@ def query_param(name, description, schema=None, required=False):
     }
 
 
+def query_array_param(name, description, items_schema=None):
+    """Build a repeated query parameter.
+
+    Example:
+        ?status=firing&status=acknowledged
+    """
+
+    return {
+        "name": name,
+        "in": "query",
+        "required": False,
+        "description": description,
+        "style": "form",
+        "explode": True,
+        "schema": {
+            "type": "array",
+            "items": items_schema or {"type": "string"},
+        },
+    }
+
+
 def json_body(description, schema, required=True):
-    """
-    Build a JSON request body.
-    """
+    """Build a JSON request body."""
 
     return {
         "required": required,
         "description": description,
         "content": {
             "application/json": {
-                "schema": schema
+                "schema": schema,
             }
         },
     }
 
 
 def response(description, schema=None):
-    """
-    Build a JSON response.
-    """
+    """Build a JSON response."""
 
     item = {"description": description}
 
     if schema:
         item["content"] = {
             "application/json": {
-                "schema": schema
+                "schema": schema,
             }
         }
 
@@ -61,6 +74,7 @@ def response(description, schema=None):
 
 def date_time_property(description, nullable=False):
     """Build an OpenAPI date-time property."""
+
     schema = {
         "type": "string",
         "format": "date-time",
@@ -75,6 +89,7 @@ def date_time_property(description, nullable=False):
 
 def user_short_schema():
     """Build a compact user schema."""
+
     return {
         "type": "object",
         "nullable": True,
@@ -90,24 +105,17 @@ def user_short_schema():
     }
 
 
-def alert_schema(include_payload=False, include_details=False):
-    """Build an alert response schema."""
+def alert_child_schema(include_payload=False):
+    """Build a child alert response schema."""
+
     properties = {
+        "type": {"type": "string", "enum": ["alert"]},
         "id": {"type": "integer"},
+        "group_id": {"type": "integer", "nullable": True},
         "team_id": {"type": "integer", "nullable": True},
-        "team_slug": {"type": "string", "nullable": True},
-        "team_name": {"type": "string", "nullable": True},
         "route_id": {"type": "integer", "nullable": True},
-        "route_name": {"type": "string", "nullable": True},
-        "route_source": {"type": "string", "nullable": True},
+        "service_id": {"type": "integer", "nullable": True},
         "rotation_id": {"type": "integer", "nullable": True},
-        "rotation_name": {"type": "string", "nullable": True},
-        "rotation_reminder_interval_seconds": {
-            "type": "integer",
-            "nullable": True,
-            "minimum": 0,
-            "description": "Reminder interval in seconds. 0 disables reminders. Otherwise, use 1 minute or more."
-        },
         "source": {"type": "string"},
         "external_id": {"type": "string", "nullable": True},
         "dedup_key": {"type": "string"},
@@ -123,15 +131,16 @@ def alert_schema(include_payload=False, include_details=False):
         "assignee": {"type": "string", "nullable": True},
         "assignee_id": {"type": "integer", "nullable": True},
         "assignee_details": user_short_schema(),
-        "acknowledged_by": {"type": "string", "nullable": True},
-        "acknowledged_by_details": user_short_schema(),
-        "acknowledged_at": date_time_property("Alert acknowledgement timestamp in UTC.", nullable=True),
-        "first_seen_at": date_time_property("First time this alert occurrence was seen in UTC."),
-        "last_seen_at": date_time_property("Last time this alert occurrence was seen in UTC."),
-        "resolved_at": date_time_property("Time when this alert was resolved in UTC.", nullable=True),
-        "last_notification_at": date_time_property("Last notification timestamp in UTC.", nullable=True),
-        "reminder_count": {"type": "integer"},
-        "escalation_level": {"type": "integer"},
+        "first_seen_at": date_time_property(
+            "First time this child alert was seen in UTC.",
+        ),
+        "last_seen_at": date_time_property(
+            "Last time this child alert was seen in UTC.",
+        ),
+        "resolved_at": date_time_property(
+            "Time when this child alert was resolved in UTC.",
+            nullable=True,
+        ),
     }
 
     if include_payload:
@@ -141,14 +150,165 @@ def alert_schema(include_payload=False, include_details=False):
             "additionalProperties": True,
         }
 
+    return {
+        "type": "object",
+        "properties": properties,
+    }
+
+
+def alert_event_schema():
+    """Build alert event response schema."""
+
+    return {
+        "type": "object",
+        "properties": {
+            "id": {"type": "integer"},
+            "alert_id": {"type": "integer", "nullable": True},
+            "group_id": {"type": "integer", "nullable": True},
+            "event_type": {"type": "string"},
+            "message": {"type": "string", "nullable": True},
+            "user_id": {"type": "integer", "nullable": True},
+            "created_at": date_time_property("Event timestamp in UTC."),
+        },
+        "additionalProperties": True,
+    }
+
+
+def alert_notification_schema():
+    """Build alert notification response schema."""
+
+    return {
+        "type": "object",
+        "properties": {
+            "id": {"type": "integer"},
+            "alert_id": {"type": "integer", "nullable": True},
+            "group_id": {"type": "integer", "nullable": True},
+            "channel_id": {"type": "integer", "nullable": True},
+            "provider": {"type": "string", "nullable": True},
+            "status": {"type": "string", "nullable": True},
+            "event_type": {"type": "string", "nullable": True},
+            "external_message_id": {"type": "string", "nullable": True},
+            "last_error": {"type": "string", "nullable": True},
+            "created_at": date_time_property("Notification record creation timestamp in UTC.", nullable=True),
+            "updated_at": date_time_property("Notification record update timestamp in UTC.", nullable=True),
+        },
+        "additionalProperties": True,
+    }
+
+
+def alert_group_schema(include_details=False):
+    """Build an alert group response schema.
+
+    /api/alerts keeps the historical URL, but items are alert groups.
+    """
+
+    properties = {
+        "type": {"type": "string", "enum": ["alert_group"]},
+        "id": {"type": "integer"},
+        "team_id": {"type": "integer", "nullable": True},
+        "team_slug": {"type": "string", "nullable": True},
+        "team_name": {"type": "string", "nullable": True},
+        "route_id": {"type": "integer", "nullable": True},
+        "route_name": {"type": "string", "nullable": True},
+        "route_source": {"type": "string", "nullable": True},
+        "service_id": {"type": "integer", "nullable": True},
+        "service_slug": {"type": "string", "nullable": True},
+        "service_name": {"type": "string", "nullable": True},
+        "rotation_id": {"type": "integer", "nullable": True},
+        "rotation_name": {"type": "string", "nullable": True},
+        "rotation_reminder_interval_seconds": {
+            "type": "integer",
+            "nullable": True,
+            "minimum": 0,
+            "description": "Reminder interval in seconds. 0 disables reminders.",
+        },
+        "source": {"type": "string"},
+        "group_key": {"type": "string"},
+        "title": {"type": "string"},
+        "message": {"type": "string", "nullable": True},
+        "severity": {"type": "string", "nullable": True},
+        "status": {
+            "type": "string",
+            "enum": ["firing", "acknowledged", "resolved", "silenced", "merged"],
+        },
+        "previous_status": {"type": "string", "nullable": True},
+        "silenced": {"type": "boolean"},
+        "common_labels": {
+            "type": "object",
+            "nullable": True,
+            "additionalProperties": True,
+            "description": "Labels common to all child alerts in this group.",
+        },
+        "label_values": {
+            "type": "object",
+            "nullable": True,
+            "additionalProperties": True,
+            "description": "Collected label values across child alerts.",
+        },
+        "payload_summary": {
+            "type": "object",
+            "nullable": True,
+            "additionalProperties": True,
+        },
+        "alert_count": {"type": "integer"},
+        "firing_count": {"type": "integer"},
+        "acknowledged_count": {"type": "integer"},
+        "resolved_count": {"type": "integer"},
+        "silenced_count": {"type": "integer"},
+        "assignee": {"type": "string", "nullable": True},
+        "assignee_id": {"type": "integer", "nullable": True},
+        "assignee_details": user_short_schema(),
+        "acknowledged_by": {"type": "string", "nullable": True},
+        "acknowledged_by_details": user_short_schema(),
+        "acknowledged_at": date_time_property(
+            "Alert group acknowledgement timestamp in UTC.",
+            nullable=True,
+        ),
+        "resolved_by": {"type": "string", "nullable": True},
+        "resolved_at": date_time_property(
+            "Time when this alert group was resolved in UTC.",
+            nullable=True,
+        ),
+        "first_seen_at": date_time_property(
+            "First time any child alert in this group was seen in UTC.",
+        ),
+        "last_seen_at": date_time_property(
+            "Last time any child alert in this group was seen in UTC.",
+        ),
+        "last_notification_at": date_time_property(
+            "Last notification timestamp in UTC.",
+            nullable=True,
+        ),
+        "notification_due_at": date_time_property(
+            "Pending notification due timestamp in UTC.",
+            nullable=True,
+        ),
+        "notification_pending": {"type": "boolean"},
+        "notification_reason": {"type": "string", "nullable": True},
+        "reminder_count": {"type": "integer"},
+        "escalation_level": {"type": "integer"},
+        "merged_into_id": {"type": "integer", "nullable": True},
+        "merged_at": date_time_property(
+            "Timestamp when this group was merged into another group.",
+            nullable=True,
+        ),
+        "merge_reason": {"type": "string", "nullable": True},
+        "created_at": date_time_property("Group creation timestamp in UTC."),
+        "updated_at": date_time_property("Group update timestamp in UTC."),
+    }
+
     if include_details:
+        properties["alerts"] = {
+            "type": "array",
+            "items": alert_child_schema(include_payload=True),
+        }
         properties["events"] = {
             "type": "array",
-            "items": {"type": "object", "additionalProperties": True},
+            "items": alert_event_schema(),
         }
         properties["notifications"] = {
             "type": "array",
-            "items": {"type": "object", "additionalProperties": True},
+            "items": alert_notification_schema(),
         }
 
     return {
@@ -158,13 +318,14 @@ def alert_schema(include_payload=False, include_details=False):
 
 
 def alert_list_schema():
-    """Build list alerts response schema."""
+    """Build list alert groups response schema."""
+
     return {
         "type": "object",
         "properties": {
             "items": {
                 "type": "array",
-                "items": alert_schema(),
+                "items": alert_group_schema(),
             },
             "pagination": {
                 "type": "object",
@@ -182,43 +343,109 @@ def alert_list_schema():
     }
 
 
+def alert_group_merge_request_schema():
+    """Build alert group merge request schema."""
+
+    return {
+        "type": "object",
+        "required": ["target_group_id", "source_group_ids"],
+        "properties": {
+            "target_group_id": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Target alert group id. This group remains visible after merge.",
+            },
+            "source_group_ids": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"type": "integer", "minimum": 1},
+                "description": "Source group ids. Their child alerts are moved into the target group.",
+            },
+            "reason": {
+                "type": "string",
+                "nullable": True,
+                "description": "Optional human-readable merge reason.",
+            },
+        },
+    }
+
+
 def tags():
-    """
-    Return OpenAPI tags.
-    """
+    """Return OpenAPI tags."""
 
     return [
         {
             "name": "alerts",
             "description": (
-                "Alert lifecycle endpoints. Alerts can be listed, inspected, acknowledged, resolved and audited "
-                "through event history."
+                "Alert group lifecycle endpoints. /api/alerts returns incident-level "
+                "alert groups. Each group contains one or more child alerts."
             ),
         }
     ]
 
 
+def bearer_security():
+    """Return bearer auth security requirement."""
+
+    return [{"bearerAuth": []}]
+
+
 def paths():
-    """
-    Return OpenAPI paths for alert endpoints.
-    """
+    """Return OpenAPI paths for alert group endpoints."""
+
+    status_schema = {
+        "type": "string",
+        "enum": ["firing", "acknowledged", "resolved", "silenced", "merged"],
+    }
+
+    severity_schema = {"type": "string"}
 
     return {
         "/api/alerts": {
             "get": {
                 "tags": ["alerts"],
-                "summary": "List alerts",
+                "summary": "List alert groups",
                 "description": (
-                    "Returns alerts with optional filtering and sorting. "
-                    "Supports filtering by team, status, source and severity. "
-                    "Use sort/order to control table column ordering."
+                    "Returns alert groups with optional filtering and sorting. "
+                    "The URL is kept as /api/alerts for compatibility, but each item is an alert group. "
+                    "Use repeated query parameters for multi-value filters, for example "
+                    "?status=firing&status=acknowledged."
                 ),
-                "operationId": "listAlerts",
+                "operationId": "listAlertGroups",
+                "security": bearer_security(),
                 "parameters": [
-                    query_param("team_id", "Filter alerts by team id.", {"type": "integer", "minimum": 1}),
-                    query_param("status", "Filter by status: firing, acknowledged, resolved or silenced."),
-                    query_param("source", "Filter by source: alertmanager, zabbix or webhook."),
-                    query_param("severity", "Filter by severity label or payload value."),
+                    query_param(
+                        "team_id",
+                        "Filter alert groups by team id.",
+                        {"type": "integer", "minimum": 1},
+                    ),
+                    query_array_param(
+                        "status",
+                        "Filter by one or more group statuses.",
+                        status_schema,
+                    ),
+                    query_array_param(
+                        "severity",
+                        "Filter by one or more severities.",
+                        severity_schema,
+                    ),
+                    query_array_param(
+                        "service_id",
+                        "Filter by one or more service ids.",
+                        {"type": "integer", "minimum": 1},
+                    ),
+                    query_param(
+                        "source",
+                        "Filter by source: alertmanager, zabbix or webhook.",
+                    ),
+                    query_param("service_slug", "Filter by service slug."),
+                    query_param("service_status", "Filter by service status."),
+                    query_param("service_criticality", "Filter by service criticality."),
+                    query_param(
+                        "include_merged",
+                        "Set to 1 to include groups marked as merged.",
+                        {"type": "string", "enum": ["0", "1"], "default": "0"},
+                    ),
                     query_param(
                         "sort",
                         "Sort field.",
@@ -248,8 +475,10 @@ def paths():
                             "default": "desc",
                         },
                     ),
-                    query_param("search",
-                                "Search by id, title, team, assignee, source, route, rotation or dedup fields."),
+                    query_param(
+                        "search",
+                        "Search by id, title, team, assignee, source, route, rotation or group fields.",
+                    ),
                     query_param(
                         "page",
                         "Page number.",
@@ -258,120 +487,164 @@ def paths():
                     query_param(
                         "page_size",
                         "Rows per page. Maximum value is 100.",
-                        {"type": "integer", "minimum": 1, "maximum": 100, "default": 25},
-                    ),
-                    query_param(
-                        "sort",
-                        "Sort field.",
                         {
-                            "type": "string",
-                            "enum": [
-                                "id",
-                                "status",
-                                "title",
-                                "severity",
-                                "team",
-                                "assignee",
-                                "created",
-                                "last_seen",
-                                "activity",
-                                "reminders",
-                            ],
-                            "default": "activity",
-                        },
-                    ),
-                    query_param(
-                        "order",
-                        "Sort order.",
-                        {
-                            "type": "string",
-                            "enum": ["asc", "desc"],
-                            "default": "desc",
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100,
+                            "default": 25,
                         },
                     ),
                 ],
-                "responses": {"200": response("List of alerts.", alert_list_schema()),},
+                "responses": {
+                    "200": response("List of alert groups.", alert_list_schema()),
+                    "401": response("Authentication required."),
+                    "403": response("Access denied."),
+                },
+            }
+        },
+        "/api/alerts/merge": {
+            "post": {
+                "tags": ["alerts"],
+                "summary": "Merge alert groups",
+                "description": (
+                    "Moves child alerts from source groups into the target group. "
+                    "Source groups are marked as merged. The response is the recalculated target group."
+                ),
+                "operationId": "mergeAlertGroups",
+                "security": bearer_security(),
+                "requestBody": json_body(
+                    "Merge target and source alert groups.",
+                    alert_group_merge_request_schema(),
+                ),
+                "responses": {
+                    "200": response("Merged target alert group.", alert_group_schema(include_details=True)),
+                    "400": response("Invalid merge request."),
+                    "401": response("Authentication required."),
+                    "403": response("Access denied."),
+                    "404": response("Alert group not found."),
+                },
             }
         },
         "/api/alerts/{alert_id}": {
             "get": {
                 "tags": ["alerts"],
-                "summary": "Get alert",
-                "description": "Returns a single alert with labels, payload, route, team, assignee and status details.",
-                "operationId": "getAlert",
-                "parameters": [path_param("alert_id", "Alert id.")],
+                "summary": "Get alert group",
+                "description": (
+                    "Returns a single alert group with child alerts, group-level events and "
+                    "notification delivery records. The path parameter is named alert_id for "
+                    "backwards compatibility, but it is an alert group id."
+                ),
+                "operationId": "getAlertGroup",
+                "security": bearer_security(),
+                "parameters": [
+                    path_param("alert_id", "Alert group id."),
+                ],
                 "responses": {
                     "200": response(
-                        "Alert details.",
-                        alert_schema(include_payload=True, include_details=True),
+                        "Alert group details.",
+                        alert_group_schema(include_details=True),
                     ),
-                    "404": response("Alert not found."),
+                    "401": response("Authentication required."),
+                    "403": response("Access denied."),
+                    "404": response("Alert group not found."),
                 },
             }
         },
         "/api/alerts/{alert_id}/ack": {
             "post": {
                 "tags": ["alerts"],
-                "summary": "Acknowledge alert",
+                "summary": "Acknowledge alert group",
                 "description": (
-                    "Marks an alert as acknowledged. Once acknowledged, reminder notifications stop for this alert. "
-                    "Optionally pass user_id to record who acknowledged it."
+                    "Marks an alert group as acknowledged. Child alerts are not individually "
+                    "acknowledged. If a new child alert arrives later, the group is reopened as firing."
                 ),
-                "operationId": "acknowledgeAlert",
-                "parameters": [path_param("alert_id", "Alert id.")],
+                "operationId": "acknowledgeAlertGroup",
+                "security": bearer_security(),
+                "parameters": [
+                    path_param("alert_id", "Alert group id."),
+                ],
                 "requestBody": json_body(
                     "Optional acknowledge user.",
                     {
                         "type": "object",
                         "properties": {
-                            "user_id": {"type": "integer", "minimum": 1, "nullable": True},
+                            "user_id": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "nullable": True,
+                            },
                         },
                     },
                     required=False,
                 ),
                 "responses": {
-                    "200": response("Alert acknowledged.", alert_schema()),
-                    "404": response("Alert not found."),
+                    "200": response("Alert group acknowledged.", alert_group_schema()),
+                    "401": response("Authentication required."),
+                    "403": response("Access denied."),
+                    "404": response("Alert group not found."),
                 },
             }
         },
         "/api/alerts/{alert_id}/resolve": {
             "post": {
                 "tags": ["alerts"],
-                "summary": "Resolve alert",
+                "summary": "Resolve alert group",
                 "description": (
-                    "Marks an alert as resolved and sends a resolved notification to the route channels. "
-                    "Optionally pass user_id to record who resolved it."
+                    "Marks an alert group as resolved and resolves all child alerts in the group. "
+                    "If the group was already notified, a resolved notification is sent."
                 ),
-                "operationId": "resolveAlert",
-                "parameters": [path_param("alert_id", "Alert id.")],
+                "operationId": "resolveAlertGroup",
+                "security": bearer_security(),
+                "parameters": [
+                    path_param("alert_id", "Alert group id."),
+                ],
                 "requestBody": json_body(
                     "Optional resolve user.",
                     {
                         "type": "object",
                         "properties": {
-                            "user_id": {"type": "integer", "minimum": 1, "nullable": True},
+                            "user_id": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "nullable": True,
+                            },
                         },
                     },
                     required=False,
                 ),
                 "responses": {
-                    "200": response("Alert resolved.", alert_schema()),
-                    "404": response("Alert not found."),
+                    "200": response("Alert group resolved.", alert_group_schema()),
+                    "401": response("Authentication required."),
+                    "403": response("Access denied."),
+                    "404": response("Alert group not found."),
                 },
             }
         },
         "/api/alerts/{alert_id}/events": {
             "get": {
                 "tags": ["alerts"],
-                "summary": "List alert events",
+                "summary": "List alert group events",
                 "description": (
-                    "Returns alert history events. This is the main debug endpoint for notifications. "
-                    "Failed notifications are stored as notification_failed, reminder_failed or escalation_failed events."
+                    "Returns group-level events and child-alert events for an alert group. "
+                    "This is the main debug endpoint for notifications, reminders, escalations and merge history."
                 ),
-                "operationId": "listAlertEvents",
-                "parameters": [path_param("alert_id", "Alert id.")],
-                "responses": {"200": response("Alert event history.")},
+                "operationId": "listAlertGroupEvents",
+                "security": bearer_security(),
+                "parameters": [
+                    path_param("alert_id", "Alert group id."),
+                ],
+                "responses": {
+                    "200": response(
+                        "Alert group event history.",
+                        {
+                            "type": "array",
+                            "items": alert_event_schema(),
+                        },
+                    ),
+                    "401": response("Authentication required."),
+                    "403": response("Access denied."),
+                    "404": response("Alert group not found."),
+                },
             }
         },
     }

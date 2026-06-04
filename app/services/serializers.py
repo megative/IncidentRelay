@@ -435,6 +435,7 @@ def serialize_alert(
 
     data = {
         "id": alert.id,
+        "type": "alert",
         "team_id": team.id if team else None,
         "team_slug": team.slug if team else None,
         "team_name": team.name if team else None,
@@ -631,6 +632,8 @@ def serialize_rotation_layer_member(member):
         "display_name": member.user.display_name,
         "position": member.position,
         "active": member.active,
+        "starts_at": serialize_utc_datetime(member.starts_at),
+        "ends_at": serialize_utc_datetime(member.ends_at),
     }
 
 
@@ -821,3 +824,110 @@ def serialize_service_dependency(dependency, current_user=None):
     }
 
     return attach_team_permissions(data, service.team_id, current_user)
+
+
+def serialize_alert_group(
+    group,
+    include_payload=False,
+    include_details=False,
+    alerts=None,
+    events=None,
+    notifications=None,
+    current_user=None,
+):
+    """Serialize an alert group as the primary incident object."""
+
+    team = group.team if getattr(group, "team_id", None) else None
+    route = group.route if getattr(group, "route_id", None) else None
+    rotation = group.rotation if getattr(group, "rotation_id", None) else None
+    service = group.service if getattr(group, "service_id", None) else None
+
+    data = {
+        "id": group.id,
+        "type": "alert_group",
+
+        "team_id": team.id if team else None,
+        "team_slug": team.slug if team else None,
+        "team_name": team.name if team else None,
+
+        "route_id": route.id if route else None,
+        "route_name": route.name if route else None,
+        "route_source": route.source if route else None,
+
+        "service_id": service.id if service else None,
+        "service_slug": service.slug if service else None,
+        "service_name": service.name if service else None,
+
+        "rotation_id": rotation.id if rotation else None,
+        "rotation_name": rotation.name if rotation else None,
+
+        "source": group.source,
+        "group_key": group.group_key,
+        "group_key_hash": group.group_key_hash,
+
+        "title": group.title,
+        "message": group.message,
+        "severity": group.severity,
+        "status": group.status,
+        "previous_status": group.previous_status,
+        "silenced": bool(group.silenced),
+
+        "common_labels": group.common_labels or {},
+        "label_values": group.label_values or {},
+        "labels": group.common_labels or {},
+        "labels_count": len(group.common_labels or {}),
+
+        "alert_count": group.alert_count,
+        "firing_count": group.firing_count,
+        "acknowledged_count": group.acknowledged_count,
+        "resolved_count": group.resolved_count,
+        "silenced_count": group.silenced_count,
+
+        "assignee": group.assignee.username if group.assignee else None,
+        "assignee_id": group.assignee.id if group.assignee else None,
+        "assignee_details": serialize_user_short(group.assignee),
+
+        "acknowledged_by": (
+            group.acknowledged_by.username if group.acknowledged_by else None
+        ),
+        "acknowledged_by_details": serialize_user_short(group.acknowledged_by),
+        "acknowledged_at": serialize_utc_datetime(group.acknowledged_at),
+
+        "resolved_by": group.resolved_by.username if group.resolved_by else None,
+        "resolved_by_details": serialize_user_short(group.resolved_by),
+        "resolved_at": serialize_utc_datetime(group.resolved_at),
+
+        "first_seen_at": serialize_utc_datetime(group.first_seen_at),
+        "last_seen_at": serialize_utc_datetime(group.last_seen_at),
+        "last_notification_at": serialize_utc_datetime(group.last_notification_at),
+
+        "reminder_count": group.reminder_count,
+
+        "escalation_level": group.escalation_level,
+        "next_escalation_at": serialize_utc_datetime(group.next_escalation_at),
+        "last_escalated_at": serialize_utc_datetime(group.last_escalated_at),
+        "escalation_repeat_count": group.escalation_repeat_count,
+
+        "merged_into_id": group.merged_into.id if group.merged_into else None,
+        "merged_at": serialize_utc_datetime(group.merged_at),
+        "merge_reason": group.merge_reason,
+    }
+
+    if include_payload:
+        data["payload_summary"] = group.payload_summary
+
+    if include_details:
+        data["alerts"] = [
+            serialize_alert(alert, current_user=current_user)
+            for alert in alerts or []
+        ]
+        data["events"] = [
+            serialize_alert_event(event)
+            for event in events or []
+        ]
+        data["notifications"] = [
+            serialize_alert_notification(notification)
+            for notification in notifications or []
+        ]
+
+    return attach_team_permissions(data, team.id if team else None, current_user)

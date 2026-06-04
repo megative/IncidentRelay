@@ -1,186 +1,276 @@
----
-title: Alerts
-description: Working with alerts in IncidentRelay
----
+# Alerts and alert groups
 
-# Alerts
+IncidentRelay stores every incoming monitoring signal as an **alert** and shows operators an **alert group** in the Alerts page.
 
-Open:
+An alert group is the incident-level object. It is the object that users acknowledge, resolve, notify, remind, escalate, and merge.
 
-```text
-Alerts
-```
+A child alert is the concrete signal inside the group. For example, three `DiskFull` alerts from three hosts can be shown as one alert group with three child alerts.
 
-The Alerts page shows incoming alerts after they are normalized, routed, attached to a service when possible, and stored.
+## Main terms
 
-## What you can see
+| Term | Meaning |
+| --- | --- |
+| Alert group | Incident-level object shown on the Alerts page. |
+| Child alert | Concrete incoming signal inside an alert group. |
+| `dedup_key` | Identifies one concrete alert and is used to update the same child alert. |
+| `group_key` | Identifies which child alerts belong to the same alert group. |
+| `group_by` | Route setting that controls which fields are used to build `group_key`. |
+| Merge | Manual operation that moves child alerts from one group into another group. |
 
-You can view:
+## Deduplication vs grouping
 
-- status;
-- severity;
-- assignee;
-- team;
-- service;
-- route;
-- rotation;
-- source;
-- labels and payload details;
-- routing errors;
-- notification events;
-- ACK/Resolve state.
+Deduplication and grouping solve different problems.
 
-When displaying service or team names, IncidentRelay should use this order:
+`dedup_key` updates the same concrete alert. If the same alert is received again with the same `dedup_key`, IncidentRelay updates the existing child alert instead of creating a new child alert.
 
-```text
-name -> slug -> "-"
-```
+`group_key` joins several related child alerts into one alert group. If two alerts have different `dedup_key` values but the same `group_key`, they become different child alerts inside the same alert group.
 
-## Alert statuses
-
-```text
-firing
-acknowledged
-resolved
-silenced
-```
-
-| Status | Meaning |
-|---|---|
-| `firing` | Active alert that still needs attention |
-| `acknowledged` | Someone accepted responsibility for the alert |
-| `resolved` | Alert is closed |
-| `silenced` | New alert matched an active silence and notifications were suppressed |
-
-## Service context
-
-If an alert is attached to a service, the alert view and notifications can show service context:
-
-- service name;
-- service links;
-- matching runbooks;
-- dependencies or impact information.
-
-Service links are stable URLs for the whole service. Common examples:
-
-- dashboard;
-- metrics;
-- logs;
-- traces;
-- repository;
-- documentation;
-- status page.
-
-Runbooks can be generic or alert-specific:
-
-```text
-empty matchers -> show for all alerts of the service
-matchers set   -> show only for matching alerts
-```
-
-Example generic runbook:
+Example:
 
 ```json
 {
-  "title": "RabbitMQ troubleshooting",
-  "url": "https://docs.example.com/runbooks/rabbitmq",
-  "matchers": {}
+  "labels": {
+    "alertname": "DiskFull",
+    "severity": "critical",
+    "instance": "host1"
+  },
+  "fingerprint": "disk-full-host1-var"
 }
 ```
 
-Example alert-specific runbook:
+and:
 
 ```json
 {
-  "title": "RabbitMQ cluster partition",
-  "url": "https://docs.example.com/runbooks/rabbitmq/cluster-partition",
-  "severity": "critical",
-  "matchers": {
-    "labels": {
-      "alertname": "RabbitMQClusterPartition"
+  "labels": {
+    "alertname": "DiskFull",
+    "severity": "critical",
+    "instance": "host2"
+  },
+  "fingerprint": "disk-full-host2-var"
+}
+```
+
+With route `group_by = ["alertname", "severity"]`, both alerts are placed into the same group because they share `alertname=DiskFull` and `severity=critical`.
+
+With route `group_by = ["alertname", "severity", "instance"]`, they are placed into different groups because `instance` differs.
+
+## Default grouping
+
+If a route does not define `group_by`, IncidentRelay uses the default grouping:
+
+```text
+alertname
+severity
+```
+
+The group key is also scoped by source, team, route, and service. This prevents unrelated routes or services from accidentally merging into the same group even when labels look similar.
+
+## Configuring route `group_by`
+
+Route `group_by` accepts a list of field names.
+
+Recommended examples:
+
+```json
+["alertname", "severity"]
+```
+
+Group by alert name and severity. This is useful for host fan-out alerts where many hosts report the same problem.
+
+```json
+["alertname", "severity", "instance"]
+```
+
+Group by alert name, severity, and instance. This keeps each host in a separate group.
+
+```json
+["alertname", "severity", "mountpoint"]
+```
+
+Group disk alerts by mountpoint while still allowing several instances to be combined if that is expected by the team.
+
+Supported field forms:
+
+| Form | Example | Meaning |
+| --- | --- | --- |
+| Plain label name | `alertname` | Reads from labels first, then annotations, then top-level alert data. |
+| Explicit label path | `labels.instance` | Reads from alert labels. |
+| Explicit annotation path | `annotations.summary` | Reads from alert annotations. |
+| Explicit payload path | `payload.trigger.id` | Reads from normalized payload. |
+| Built-in scope | `source`, `team`, `route`, `service` | Uses routed IncidentRelay metadata. |
+
+## Alert group lifecycle
+
+### Firing
+
+A new group starts as `firing` when at least one child alert is firing.
+
+If another child alert is added to the same group, counters are recalculated and the group remains `firing`.
+
+### Acknowledged
+
+Acknowledging an alert group marks the group as `acknowledged`.
+
+Child alerts are not individually acknowledged. This is intentional: the operator acknowledges the incident-level group, not every raw monitoring signal.
+
+If a new child alert arrives in an acknowledged group, IncidentRelay reopens the group as `firing`. This makes new signal visible again and prevents important new data from being hidden behind an old acknowledgement.
+
+### Resolved
+
+Resolving an alert group resolves all child alerts in the group.
+
+When incoming resolved payloads are received for existing child alerts, the group is resolved only when all child alerts are resolved.
+
+An orphan resolved payload does not create a new group.
+
+### Merged
+
+A merged source group is marked as `merged` and points to the target group. Child alerts from the source group are moved into the target group.
+
+Merged groups are hidden from the normal alert list unless the API/UI explicitly asks to include them.
+
+## Group notifications
+
+Alert groups support delayed and batched notifications.
+
+The first firing notification can be delayed by `ALERT_GROUP_WAIT_SECONDS`. This gives IncidentRelay time to collect several child alerts into one group before notifying users.
+
+Updates after the first notification are rate-limited by `ALERT_GROUP_INTERVAL_SECONDS`.
+
+If a group resolves before the first notification is sent, IncidentRelay clears the pending firing notification and does not send noisy stale notifications.
+
+If a group was already notified and then resolves, IncidentRelay sends the resolved notification immediately.
+
+Relevant settings:
+
+```ini
+[alerts]
+alert_group_wait_seconds = 30
+alert_group_interval_seconds = 300
+alert_group_notification_check_interval_seconds = 10
+alert_group_notification_batch_size = 100
+```
+
+## Manual merge
+
+Manual merge is useful when two groups were created separately but actually describe one incident.
+
+The UI can merge selected alert groups. The target is the group that remains visible. Child alerts from other groups are moved into the target group.
+
+API example:
+
+```bash
+curl -X POST https://incidentrelay.example.com/api/alerts/merge \
+  -H "Authorization: Bearer TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_group_id": 101,
+    "source_group_ids": [102, 103],
+    "reason": "Same customer-facing incident"
+  }'
+```
+
+Response is the target alert group with recalculated counters.
+
+## API compatibility
+
+The Alerts API path remains:
+
+```text
+/api/alerts
+```
+
+For compatibility with the existing UI and clients, response items are still returned from `/api/alerts`, but each item is now an alert group.
+
+The `id` field in `/api/alerts` responses is the alert group id.
+
+Details are available at:
+
+```text
+GET /api/alerts/{alert_id}
+```
+
+The path parameter name is kept as `alert_id` for compatibility, but it should be treated as an alert group id.
+
+## API examples
+
+### List groups
+
+```bash
+curl -H "Authorization: Bearer TOKEN" \
+  "https://incidentrelay.example.com/api/alerts?status=firing&severity=critical"
+```
+
+### Get group details
+
+```bash
+curl -H "Authorization: Bearer TOKEN" \
+  "https://incidentrelay.example.com/api/alerts/101"
+```
+
+The detail response contains:
+
+```json
+{
+  "type": "alert_group",
+  "id": 101,
+  "status": "firing",
+  "alert_count": 2,
+  "firing_count": 2,
+  "alerts": [
+    {
+      "type": "alert",
+      "id": 501,
+      "status": "firing",
+      "dedup_key": "disk-full-host1-var"
+    },
+    {
+      "type": "alert",
+      "id": 502,
+      "status": "firing",
+      "dedup_key": "disk-full-host2-var"
     }
-  }
+  ]
 }
 ```
 
-## Acknowledge
+### Acknowledge group
 
-Acknowledge marks the alert as seen and accepted.
-
-It stops normal repeated reminder flow for that alert.
-
-Required permission:
-
-```text
-Team responder, Team manager, or global admin
+```bash
+curl -X POST https://incidentrelay.example.com/api/alerts/101/ack \
+  -H "Authorization: Bearer TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}'
 ```
 
-## Resolve
+### Resolve group
 
-Resolve marks the alert as closed.
-
-Required permission:
-
-```text
-Team responder, Team manager, or global admin
+```bash
+curl -X POST https://incidentrelay.example.com/api/alerts/101/resolve \
+  -H "Authorization: Bearer TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}'
 ```
 
-Resolved events from Alertmanager, Zabbix or generic webhooks should use the same fingerprint, event ID or grouping data as the original firing event.
+## Troubleshooting
 
-## Notifications
+### Alerts are not grouped
 
-When a new firing alert is created:
+Check the route `group_by` value. If `instance`, `pod`, `container`, or another high-cardinality label is included, IncidentRelay may create one group per host or per pod.
 
-1. IncidentRelay finds a matching route.
-2. It checks silences.
-3. It attaches the alert to a default route service or to a service selected by service match rules.
-4. It assigns the current on-call user from the route rotation, service default rotation, or escalation policy according to configured routing logic.
-5. It sends notifications to route channels allowed by severity filters.
+### Unrelated alerts are grouped
 
-If a channel says `notification sent`, IncidentRelay handed the message to the external provider without an exception. It does not guarantee final delivery in a mailbox, chat, phone or webhook receiver.
+Add more fields to route `group_by`, such as `instance`, `mountpoint`, `service`, or another label that separates incidents for the team.
 
-Notifications may include service context:
+### The group was acknowledged but became firing again
 
-```text
-Service: RabbitMQ Cloud
+A new child alert arrived in the acknowledged group. IncidentRelay reopens acknowledged groups when new child alerts arrive so the new signal is visible.
 
-Links:
-- Grafana: https://grafana.example.com/d/rabbitmq-cloud
-- Logs: https://logs.example.com/rabbitmq-cloud
+### A resolved notification was not sent
 
-Runbooks:
-- RabbitMQ cluster partition (critical): https://docs.example.com/runbooks/rabbitmq/cluster-partition
-```
+If the group resolved before the first delayed notification was sent, IncidentRelay intentionally skips both firing and resolved notifications to avoid noise.
 
-## Reminders
+### A group disappeared after merge
 
-Reminders are controlled by the alert rotation.
-
-```text
-rotation.reminder_interval_seconds = 0   reminders disabled
-rotation.reminder_interval_seconds >= 60 reminders enabled
-```
-
-## Routing errors
-
-If no route matches, or the referenced team is missing/inactive, the alert can be stored with routing error information.
-
-Check alert details and logs for:
-
-```text
-routing_error
-route_id
-team_id
-team_slug
-```
-
-## Alert has no service
-
-If an alert is created but service is empty, check:
-
-1. The route has a default service.
-2. A service match rule exists.
-3. The service match rule is enabled.
-4. The service match rule is scoped to the correct route, or has no route scope.
-5. The matcher fields match actual alert labels, annotations or payload fields.
-6. The service and owning team are enabled.
+The source group was marked as `merged`. Open the target group to see moved child alerts.

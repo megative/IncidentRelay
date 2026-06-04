@@ -18,6 +18,13 @@ from app.modules.db.models import (
 )
 
 
+def _rotation_member_period_filter(model, at):
+    return (
+        ((model.starts_at.is_null(True)) | (model.starts_at <= at))
+        & ((model.ends_at.is_null(True)) | (model.ends_at > at))
+    )
+
+
 def list_rotations(
     team_id=None,
     team_ids=None,
@@ -584,42 +591,141 @@ def soft_delete_rotation_layer(layer_id):
     return layer
 
 
-def list_rotation_layer_members(layer_id, active_only=False):
-    """Return members of a rotation layer."""
-    query = RotationLayerMember.select().where(RotationLayerMember.layer == layer_id)
+def _rotation_layer_member_effective_at(model, at):
+    return (
+        ((model.starts_at.is_null(True)) | (model.starts_at <= at))
+        & ((model.ends_at.is_null(True)) | (model.ends_at > at))
+    )
+
+
+def list_rotation_layer_members(
+    layer_id,
+    active_only=False,
+    at=None,
+    include_inactive_users=False,
+):
+    """Return current/effective members of a rotation layer."""
+
+    query = RotationLayerMember.select().where(
+        RotationLayerMember.layer == layer_id
+    )
+
+    if at is not None:
+        query = query.where(
+            _rotation_layer_member_effective_at(RotationLayerMember, at)
+        )
 
     if active_only:
+        query = query.where(RotationLayerMember.active == True)
+        if at is None:
+            query = query.where(RotationLayerMember.ends_at.is_null(True))
+
+    if not include_inactive_users:
         query = (
             query
             .join(User)
             .where(
-                (RotationLayerMember.active == True)
-                & (User.active == True)
+                (User.active == True)
                 & (User.deleted == False)
             )
         )
 
-    return list(query.order_by(RotationLayerMember.position.asc(), RotationLayerMember.id.asc()))
-
-
-def add_rotation_layer_member(layer_id, user_id, position):
-    """Add or reactivate a user inside a rotation layer."""
-
-    member, created = RotationLayerMember.get_or_create(
-        layer=layer_id,
-        user=user_id,
-        defaults={
-            "position": position,
-            "active": True,
-        },
+    return list(
+        query.order_by(
+            RotationLayerMember.position.asc(),
+            RotationLayerMember.id.asc(),
+        )
     )
 
-    if not created:
-        member.position = position
-        member.active = True
-        member.save()
 
-    return member
+def list_rotation_layer_member_periods(
+    layer_id,
+    start_at=None,
+    end_at=None,
+    include_inactive_users=True,
+):
+    """Return membership periods overlapping the requested range."""
+
+    query = RotationLayerMember.select().where(
+        RotationLayerMember.layer == layer_id
+    )
+
+    if start_at is not None:
+        query = query.where(
+            (RotationLayerMember.ends_at.is_null(True))
+            | (RotationLayerMember.ends_at > start_at)
+        )
+
+    if end_at is not None:
+        query = query.where(
+            (RotationLayerMember.starts_at.is_null(True))
+            | (RotationLayerMember.starts_at < end_at)
+        )
+
+    if not include_inactive_users:
+        query = (
+            query
+            .join(User)
+            .where(
+                (User.active == True)
+                & (User.deleted == False)
+            )
+        )
+
+    return list(
+        query.order_by(
+            RotationLayerMember.position.asc(),
+            RotationLayerMember.id.asc(),
+        )
+    )
+
+
+def add_rotation_layer_member(layer_id, user_id, position, starts_at=None):
+    """Add user to layer as a new membership period."""
+
+    starts_at = starts_at or datetime.utcnow()
+
+    with database_proxy.atomic():
+        (
+            RotationLayerMember
+            .update(
+                active=False,
+                ends_at=starts_at,
+            )
+            .where(
+                (RotationLayerMember.layer == layer_id)
+                & (RotationLayerMember.user == user_id)
+                & (RotationLayerMember.ends_at.is_null(True))
+            )
+            .execute()
+        )
+
+        position_conflict = (
+            RotationLayerMember
+            .select()
+            .where(
+                (RotationLayerMember.layer == layer_id)
+                & (RotationLayerMember.position == position)
+                & (RotationLayerMember.active == True)
+                & _rotation_layer_member_effective_at(
+                    RotationLayerMember,
+                    starts_at,
+                )
+            )
+            .first()
+        )
+
+        if position_conflict:
+            raise ValueError("rotation layer position is already occupied")
+
+        return RotationLayerMember.create(
+            layer=layer_id,
+            user=user_id,
+            position=position,
+            active=True,
+            starts_at=starts_at,
+            ends_at=None,
+        )
 
 
 def get_rotation_layer_member(member_id):
@@ -629,19 +735,46 @@ def get_rotation_layer_member(member_id):
 
 
 def update_rotation_layer_member(member_id, position, active=True):
-    """Update layer member position/active flag."""
+    """Update layer member without rewriting historical schedule."""
 
     member = get_rotation_layer_member(member_id)
-    member.position = position
-    member.active = active
-    member.save()
+    now = datetime.utcnow()
+
+    if not active:
+        member.active = False
+        if member.ends_at is None:
+            member.ends_at = now
+        member.save()
+        return member
+
+    if member.ends_at is not None or not member.active:
+        return add_rotation_layer_member(
+            layer_id=member.layer.id,
+            user_id=member.user.id,
+            position=position,
+            starts_at=now,
+        )
+
+    if position != member.position:
+        member.active = False
+        member.ends_at = now
+        member.save()
+
+        return add_rotation_layer_member(
+            layer_id=member.layer.id,
+            user_id=member.user.id,
+            position=position,
+            starts_at=now,
+        )
+
     return member
 
 
 def delete_rotation_layer_member(member_id):
-    """Delete a member from a rotation layer."""
+    """Close member period instead of deleting it."""
 
     member = get_rotation_layer_member(member_id)
+
     data = {
         "id": member.id,
         "layer_id": member.layer.id,
@@ -649,7 +782,12 @@ def delete_rotation_layer_member(member_id):
         "team_id": member.layer.rotation.team.id,
         "user_id": member.user.id,
     }
-    member.delete_instance()
+
+    member.active = False
+    if member.ends_at is None:
+        member.ends_at = datetime.utcnow()
+    member.save()
+
     return data
 
 

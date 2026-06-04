@@ -73,15 +73,56 @@ def build_rotation_calendar(rotation, start_at, end_at):
     return collapse_calendar_candidates(candidates, start_at, end_at)
 
 
+def is_layer_member_effective_at(member, at):
+    starts_at = as_utc_naive(member.starts_at) if member.starts_at else None
+    ends_at = as_utc_naive(member.ends_at) if member.ends_at else None
+
+    if starts_at is not None and starts_at > at:
+        return False
+
+    if ends_at is not None and ends_at <= at:
+        return False
+
+    return True
+
+
+def get_effective_layer_members_at(members, at):
+    return [
+        member
+        for member in members
+        if is_layer_member_effective_at(member, at)
+    ]
+
+
+def get_next_layer_member_boundary(members, at, fallback):
+    """Return next membership period boundary after current cursor."""
+
+    boundary = fallback
+
+    for member in members:
+        for value in (member.starts_at, member.ends_at):
+            if not value:
+                continue
+
+            value = as_utc_naive(value)
+
+            if at < value < boundary:
+                boundary = value
+
+    return boundary
+
+
 def build_layer_candidate_events(rotation, layer, start_at, end_at):
     """Build candidate events for one layer."""
 
     if not layer.enabled or layer.deleted:
         return []
 
-    members = rotations_repo.list_rotation_layer_members(
+    members = rotations_repo.list_rotation_layer_member_periods(
         layer.id,
-        active_only=True,
+        start_at=start_at,
+        end_at=end_at,
+        include_inactive_users=True,
     )
 
     if not members:
@@ -128,10 +169,19 @@ def build_layer_candidate_events(rotation, layer, start_at, end_at):
                 layer_start_at=layer_start_at,
             )
 
-            segment_end = min(next_boundary, window_end)
+            next_member_boundary = get_next_layer_member_boundary(
+                members=members,
+                at=cursor,
+                fallback=window_end,
+            )
+
+            segment_end = min(next_boundary, next_member_boundary, window_end)
 
             if segment_end <= cursor:
-                segment_end = min(cursor + timedelta(seconds=duration_seconds), window_end)
+                segment_end = min(
+                    cursor + timedelta(seconds=duration_seconds),
+                    window_end,
+                )
 
             if user and segment_end > cursor:
                 events.append(
@@ -149,7 +199,11 @@ def build_layer_candidate_events(rotation, layer, start_at, end_at):
                             "layer_id": layer.id,
                             "layer_name": layer.name,
                             "layer_priority": layer.priority,
-                            "timezone": timezone_name,
+                            "timezone": effective_layer_value(
+                                layer,
+                                "timezone",
+                                rotation.timezone,
+                            ) or "UTC",
                             "user_id": user.id,
                             "username": user.username,
                             "display_name": user.display_name,
@@ -412,16 +466,18 @@ def merge_windows(windows):
 def get_layer_user_at(layer, members, at, duration_seconds, layer_start_at):
     """Return scheduled user for a layer at a given UTC time."""
 
-    if not members:
+    effective_members = get_effective_layer_members_at(members, at)
+
+    if not effective_members:
         return None
 
     elapsed = int((at - layer_start_at).total_seconds())
 
     if elapsed < 0:
-        return members[0].user
+        return effective_members[0].user
 
     slot = elapsed // duration_seconds
-    return members[slot % len(members)].user
+    return effective_members[slot % len(effective_members)].user
 
 
 def get_next_layer_boundary(at, duration_seconds, layer_start_at):

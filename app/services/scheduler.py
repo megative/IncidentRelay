@@ -6,7 +6,10 @@ from apscheduler.schedulers.base import SchedulerAlreadyRunningError, SchedulerN
 
 from app.db import database_proxy as db
 from app.settings import Config
-from app.services.alerts import send_unacked_reminders
+from app.services.alerts import (
+    process_due_alert_group_notifications,
+    send_unacked_reminders,
+)
 from app.services.db_lock import acquire_db_lock, release_db_lock
 from app.services.oncall_shift_notifications import (
     send_due_oncall_shift_email_notifications,
@@ -150,6 +153,75 @@ def user_notification_rules_job():
             db.close()
 
 
+def alert_group_notification_job():
+    """Send due alert group notifications under a database lock.
+
+    The scheduler runs outside Flask request hooks, so it opens and closes
+    a database connection explicitly for the APScheduler worker thread.
+    """
+
+    if db.is_closed():
+        db.connect(reuse_if_open=True)
+
+    owner = None
+
+    try:
+        owner = acquire_db_lock("alert_group_notification_job")
+
+        if not owner:
+            logger.debug("alert group notification job skipped because lock is busy")
+            return {
+                "processed": 0,
+                "sent": 0,
+                "skipped": 0,
+                "failed": 0,
+            }
+
+        logger.info("alert group notification job started")
+
+        result = process_due_alert_group_notifications(
+            limit=int(
+                getattr(
+                    Config,
+                    "ALERT_GROUP_NOTIFICATION_BATCH_SIZE",
+                    100,
+                )
+            )
+        )
+
+        logger.info(
+            "alert group notification job finished",
+            extra={
+                "extra": {
+                    "event_type": "scheduler",
+                    "processed": result.get("processed", 0),
+                    "sent": result.get("sent", 0),
+                    "skipped": result.get("skipped", 0),
+                    "failed": result.get("failed", 0),
+                }
+            },
+        )
+
+        return result
+
+    except Exception:
+        logger.exception("alert group notification job failed")
+
+        return {
+            "processed": 0,
+            "sent": 0,
+            "skipped": 0,
+            "failed": 1,
+        }
+
+    finally:
+        if owner:
+            release_db_lock("alert_group_notification_job", owner)
+
+        if not db.is_closed():
+            db.close()
+
+
 def start_scheduler():
     """
     Start the background scheduler.
@@ -206,6 +278,23 @@ def start_scheduler():
         coalesce=True,
         next_run_time=datetime.utcnow(),
         id="user_notification_rules_job",
+        replace_existing=True,
+    )
+
+    _scheduler.add_job(
+        alert_group_notification_job,
+        "interval",
+        seconds=int(
+            getattr(
+                Config,
+                "ALERT_GROUP_NOTIFICATION_CHECK_INTERVAL_SECONDS",
+                10,
+            )
+        ),
+        max_instances=1,
+        coalesce=True,
+        next_run_time=datetime.utcnow(),
+        id="alert_group_notification_job",
         replace_existing=True,
     )
 

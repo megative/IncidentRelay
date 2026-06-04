@@ -498,7 +498,6 @@ function disableChannel(channel) {
     }, function () {
         apiPost("/api/channels/" + channel.id + "/disable", {}, function () {
             refreshChannels();
-            showAppSuccess("Channel disabled.");
         });
     });
 }
@@ -511,7 +510,6 @@ function enableChannel(channel) {
 
     apiPost("/api/channels/" + channel.id + "/enable", {}, function () {
         refreshChannels();
-        showAppSuccess("Channel enabled.");
     });
 }
 
@@ -534,7 +532,6 @@ function deleteChannel(channel) {
                 renderChannelDetailsEmpty();
             }
             refreshChannels();
-            showAppSuccess("Channel deleted.");
         });
     });
 }

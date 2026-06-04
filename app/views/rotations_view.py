@@ -37,6 +37,40 @@ def _rotation_timezone(rotation):
         return ZoneInfo("UTC")
 
 
+def _layer_timezone(layer):
+    """Return ZoneInfo for layer timezone."""
+
+    timezone_name = (
+        getattr(layer, "timezone", None)
+        or getattr(layer.rotation, "timezone", None)
+        or "UTC"
+    )
+
+    try:
+        return ZoneInfo(timezone_name)
+    except Exception:
+        return ZoneInfo("UTC")
+
+
+def _layer_local_to_utc_naive(value, layer):
+    """
+    Convert datetime from layer timezone to UTC naive.
+
+    datetime-local from browser comes without tzinfo, so we treat it as
+    local time in layer.timezone.
+    """
+
+    if value is None:
+        return None
+
+    zone = _layer_timezone(layer)
+
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=zone)
+
+    return value.astimezone(dt_timezone.utc).replace(tzinfo=None)
+
+
 def _rotation_local_to_utc_naive(value, rotation):
     """
     Convert datetime from rotation timezone to UTC naive.
@@ -623,7 +657,12 @@ def list_rotation_layer_members(layer_id):
 
     return jsonify([
         serialize_rotation_layer_member(member)
-        for member in rotations_repo.list_rotation_layer_members(layer_id)
+        for member in rotations_repo.list_rotation_layer_members(
+            layer_id,
+            active_only=True,
+            at=None,
+            include_inactive_users=False,
+        )
     ])
 
 
@@ -643,18 +682,27 @@ def add_rotation_layer_member(layer_id):
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
 
-    member = rotations_repo.add_rotation_layer_member(
-        layer_id=layer_id,
-        user_id=payload.user_id,
-        position=payload.position,
-    )
+    starts_at = _layer_local_to_utc_naive(payload.starts_at, layer)
+
+    try:
+        member = rotations_repo.add_rotation_layer_member(
+            layer_id=layer_id,
+            user_id=payload.user_id,
+            position=payload.position,
+            starts_at=starts_at,
+        )
+    except ValueError as exc:
+        return jsonify({
+            "error": "rotation_layer_member_conflict",
+            "message": str(exc),
+        }), 400
 
     write_audit(
         "rotation.layer.member.add",
         object_type="rotation",
         object_id=layer.rotation.id,
         team_id=layer.rotation.team.id,
-        data=payload.model_dump(),
+        data=payload.model_dump(mode="json"),
     )
 
     return jsonify(serialize_rotation_layer_member(member)), 201
@@ -671,11 +719,14 @@ def update_rotation_layer_member(member_id):
     if error:
         return error
 
-    member = rotations_repo.update_rotation_layer_member(
-        member_id=member_id,
-        position=payload.position,
-        active=payload.active,
-    )
+    try:
+        member = rotations_repo.update_rotation_layer_member(
+            member_id=member_id,
+            position=payload.position,
+            active=payload.active,
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
     write_audit(
         "rotation.layer.member.update",

@@ -125,18 +125,15 @@ def test_moscow_midnight_rotation_is_not_shifted_to_03(db):
         users=[alice],
         start_at=datetime(2026, 6, 1, 0, 0, 0),
         duration_seconds=86400,
+        timezone="Europe/Moscow",
+        handoff_time="00:00",
     )
 
-    rotation.timezone = "Europe/Moscow"
-    rotation.handoff_time = "00:00"
-    rotation.save()
-
     layer = rotations_repo.get_or_create_default_layer(rotation.id)
-    layer.timezone = "Europe/Moscow"
-    layer.handoff_time = "00:00"
-    layer.start_at = datetime(2026, 6, 1, 0, 0, 0)
-    layer.duration_seconds = 86400
-    layer.save()
+    assert layer.timezone == "Europe/Moscow"
+    assert layer.handoff_time == "00:00"
+    assert layer.start_at == datetime(2026, 6, 1, 0, 0, 0)
+    assert layer.duration_seconds == 86400
 
     # 2026-06-01 00:00 Europe/Moscow == 2026-05-31 21:00 UTC.
     # Calendar service internally works with UTC-naive ranges.

@@ -4,8 +4,10 @@ from app.modules.db import alerts_repo, notifications_repo
 from app.services.alerts import acknowledge_alert, resolve_alert
 from app.services.audit import write_audit
 from app.services.rbac import get_allowed_team_ids, require_team_read, require_team_respond
-from app.services.serializers import serialize_alert, serialize_alert_event
-from app.api.request_filters import get_multi_query_int_values, get_multi_query_values
+from app.services.serializers import (
+    serialize_alert_group,
+    serialize_alert_event,
+)
 
 alerts_bp = Blueprint("alerts_api", __name__)
 
@@ -16,42 +18,26 @@ def _request_user():
 
 @alerts_bp.route("", methods=["GET"])
 def list_alerts():
-    """Return alerts with backend pagination, filters and sorting."""
+    """Return alert groups with backend pagination, filters and sorting."""
+
     team_id = request.args.get("team_id", type=int)
 
     if team_id:
         error = require_team_read(team_id)
         if error:
             return error
+
         team_ids = None
     else:
         team_ids = get_allowed_team_ids()
 
-    statuses = get_multi_query_values(
-        request.args,
-        "status",
-        aliases=["statuses"],
-    )
-
-    severities = get_multi_query_values(
-        request.args,
-        "severity",
-        aliases=["severities"],
-    )
-
-    service_ids = get_multi_query_int_values(
-        request.args,
-        "service_id",
-        aliases=["service_ids"],
-    )
-
-    page = alerts_repo.paginate_alerts(
+    page = alerts_repo.paginate_alert_groups(
         team_id=team_id,
         team_ids=team_ids,
-        status=statuses,
+        status=request.args.get("status"),
         source=request.args.get("source"),
-        severity=severities,
-        service_ids=service_ids,
+        severity=request.args.get("severity"),
+        service_id=request.args.get("service_id", type=int),
         service_slug=request.args.get("service_slug"),
         service_status=request.args.get("service_status"),
         service_criticality=request.args.get("service_criticality"),
@@ -60,117 +46,205 @@ def list_alerts():
         page_size=request.args.get("page_size", 25, type=int),
         sort=request.args.get("sort", "activity"),
         order=request.args.get("order", "desc"),
+        include_merged=request.args.get("include_merged") == "1",
     )
 
-    user = _request_user()
-
-    return jsonify(
-        {
-            "items": [
-                serialize_alert(alert, current_user=user)
-                for alert in page["items"]
-            ],
-            "pagination": page["pagination"],
-            "summary": page["summary"],
-            "sort": page["sort"],
-        }
-    )
+    return jsonify({
+        "items": [
+            serialize_alert_group(
+                group,
+                current_user=getattr(request, "current_user", None),
+            )
+            for group in page["items"]
+        ],
+        "pagination": page["pagination"],
+        "summary": page["summary"],
+        "sort": page["sort"],
+    })
 
 
 @alerts_bp.route("/<int:alert_id>", methods=["GET"])
 def get_alert(alert_id):
-    """Return a single alert with payload, events and notification delivery records."""
-    alert = alerts_repo.get_alert(alert_id)
+    """Return a single alert group with child alerts, events and delivery records."""
 
-    if alert.team_id:
-        error = require_team_read(alert.team_id)
+    group = alerts_repo.get_alert_group(alert_id)
+
+    if group.team_id:
+        error = require_team_read(group.team_id)
         if error:
             return error
 
-    events = alerts_repo.list_alert_events(alert_id)
-    notifications = notifications_repo.list_notifications_for_alert(alert_id)
+    alerts = alerts_repo.list_alerts_for_group(group.id)
+    events = alerts_repo.list_group_events(group.id)
+    notifications = notifications_repo.list_notifications_for_group(group.id)
 
     return jsonify(
-        serialize_alert(
-            alert,
+        serialize_alert_group(
+            group,
             include_payload=True,
             include_details=True,
+            alerts=alerts,
             events=events,
             notifications=notifications,
-            current_user=_request_user(),
+            current_user=getattr(request, "current_user", None),
         )
     )
 
 
 @alerts_bp.route("/<int:alert_id>/ack", methods=["POST"])
 def ack_alert(alert_id):
-    """Acknowledge an alert."""
-    alert_before = alerts_repo.get_alert(alert_id)
+    """Acknowledge an alert group."""
 
-    if alert_before.team_id:
-        error = require_team_respond(alert_before.team_id)
+    group_before = alerts_repo.get_alert_group(alert_id)
+
+    if group_before.team_id:
+        error = require_team_respond(group_before.team_id)
         if error:
             return error
 
     data = request.json or {}
-    user = _request_user()
-    user_id = data.get("user_id") or getattr(user, "id", None)
+    user_id = data.get("user_id") or getattr(
+        getattr(request, "current_user", None),
+        "id",
+        None,
+    )
 
-    alert = acknowledge_alert(alert_id, user_id=user_id)
+    group = acknowledge_alert(alert_id, user_id=user_id)
 
     write_audit(
-        "alert.ack",
-        object_type="alert",
-        object_id=alert.id,
-        team_id=alert.team.id if alert.team else None,
+        "alert_group.ack",
+        object_type="alert_group",
+        object_id=group.id,
+        team_id=group.team.id if group.team else None,
         user_id=user_id,
         data=data,
     )
 
-    return jsonify(serialize_alert(alert, current_user=user))
+    return jsonify(
+        serialize_alert_group(
+            group,
+            current_user=getattr(request, "current_user", None),
+        )
+    )
 
 
 @alerts_bp.route("/<int:alert_id>/resolve", methods=["POST"])
 def resolve_alert_view(alert_id):
-    """Resolve an alert."""
-    alert_before = alerts_repo.get_alert(alert_id)
+    """Resolve an alert group."""
 
-    if alert_before.team_id:
-        error = require_team_respond(alert_before.team_id)
+    group_before = alerts_repo.get_alert_group(alert_id)
+
+    if group_before.team_id:
+        error = require_team_respond(group_before.team_id)
         if error:
             return error
 
     data = request.json or {}
-    user = _request_user()
-    user_id = data.get("user_id") or getattr(user, "id", None)
+    user_id = data.get("user_id") or getattr(
+        getattr(request, "current_user", None),
+        "id",
+        None,
+    )
 
-    alert = resolve_alert(alert_id, user_id=user_id)
+    group = resolve_alert(alert_id, user_id=user_id)
 
     write_audit(
-        "alert.resolve",
-        object_type="alert",
-        object_id=alert.id,
-        team_id=alert.team.id if alert.team else None,
+        "alert_group.resolve",
+        object_type="alert_group",
+        object_id=group.id,
+        team_id=group.team.id if group.team else None,
         user_id=user_id,
         data=data,
     )
 
-    return jsonify(serialize_alert(alert, current_user=user))
+    return jsonify(
+        serialize_alert_group(
+            group,
+            current_user=getattr(request, "current_user", None),
+        )
+    )
 
 
 @alerts_bp.route("/<int:alert_id>/events", methods=["GET"])
 def list_alert_events(alert_id):
-    """Return alert events."""
-    alert = alerts_repo.get_alert(alert_id)
+    """Return alert group events."""
 
-    if alert.team_id:
-        error = require_team_read(alert.team_id)
+    group = alerts_repo.get_alert_group(alert_id)
+
+    if group.team_id:
+        error = require_team_read(group.team_id)
         if error:
             return error
 
+    return jsonify([
+        serialize_alert_event(event)
+        for event in alerts_repo.list_group_events(group.id)
+    ])
+
+
+@alerts_bp.route("/merge", methods=["POST"])
+def merge_alert_groups_view():
+    """Merge selected alert groups into one group."""
+
+    data = request.json or {}
+
+    target_group_id = data.get("target_group_id")
+    source_group_ids = data.get("source_group_ids") or []
+    reason = data.get("reason")
+
+    if not target_group_id:
+        return jsonify({
+            "error": "validation_error",
+            "message": "target_group_id is required",
+        }), 400
+
+    if not source_group_ids:
+        return jsonify({
+            "error": "validation_error",
+            "message": "source_group_ids is required",
+        }), 400
+
+    target = alerts_repo.get_alert_group(target_group_id)
+
+    if target.team_id:
+        error = require_team_respond(target.team_id)
+        if error:
+            return error
+
+    for source_id in source_group_ids:
+        source = alerts_repo.get_alert_group(source_id)
+
+        if source.team_id:
+            error = require_team_respond(source.team_id)
+            if error:
+                return error
+
+    user = getattr(request, "current_user", None)
+    user_id = getattr(user, "id", None)
+
+    group = alerts_repo.merge_alert_groups(
+        target_group_id=target_group_id,
+        source_group_ids=source_group_ids,
+        user_id=user_id,
+        reason=reason,
+    )
+
+    write_audit(
+        "alert_group.merge",
+        object_type="alert_group",
+        object_id=group.id,
+        team_id=group.team.id if group.team else None,
+        user_id=user_id,
+        data={
+            "target_group_id": target_group_id,
+            "source_group_ids": source_group_ids,
+            "reason": reason,
+        },
+    )
+
     return jsonify(
-        [
-            serialize_alert_event(event)
-            for event in alerts_repo.list_alert_events(alert_id)
-        ]
+        serialize_alert_group(
+            group,
+            current_user=user,
+        )
     )

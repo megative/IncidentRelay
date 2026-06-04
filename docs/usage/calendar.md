@@ -1,6 +1,6 @@
 ---
 title: Calendar
-description: On-call calendar view and final schedule rendering
+description: On-call calendar view
 ---
 
 # Calendar
@@ -11,123 +11,86 @@ Open:
 Calendar
 ```
 
-The calendar shows the final on-call schedule for rotations.
+The calendar shows on-call duty calculated from rotations, rotation layers, layer member periods, restrictions and overrides.
 
-A rotation is displayed as its own calendar. If one team has several rotations, those rotations are not mixed together.
+## Views
 
-Example:
+The first calendar view helps users understand the current schedule across visible teams.
 
-```text
-Team: Cloud
-  Rotation: Cloud primary
-  Rotation: Cloud secondary
-```
+Typical usage:
 
-The calendar renders them as separate schedules:
+- see all available teams for the current week;
+- open one team schedule;
+- switch to month view for a specific team;
+- verify rotation handoff times;
+- verify layer restrictions;
+- verify member start dates;
+- verify overrides.
 
-```text
-Cloud primary
-[calendar grid]
+## What the calendar uses
 
-Cloud secondary
-[calendar grid]
-```
+The calendar takes into account:
 
-## What the calendar takes into account
-
-The calendar uses the final schedule calculation:
-
-- rotation layers;
-- layer members;
+- enabled rotations;
+- enabled rotation layers;
+- layer member periods;
 - member order;
-- layer priority;
-- layer restrictions;
-- layer timezone;
+- member `starts_at`;
+- member `ends_at`;
+- rotation type;
+- rotation interval and duration;
 - handoff time;
-- rotation duration;
+- timezone;
+- layer restrictions;
 - overrides.
 
-Order of precedence:
+## Historical schedule behavior
 
-```text
-override > highest-priority active layer > no assignment
-```
+IncidentRelay keeps historical layer membership periods.
 
-## Timeline view
+When a user is removed from a layer, the current membership period is closed with `ends_at`.
 
-Calendar cells use a timeline layout. Each on-call segment is placed inside the day according to its real duration.
+Past shifts are still shown.
 
-Example:
+Future shifts are calculated without that user.
 
-```text
-00:00      06:00      12:00      18:00      24:00
-|----------|----------|----------|----------|
-[ Ivan        ][ Petr ][ Anna                 ]
-```
-
-Only the on-call user is displayed inside the bar. Exact start/end time remains available in the hover title and details panel.
-
-## Month view
-
-Month view shows a compact timeline inside each day cell.
-
-Use month view for team or rotation-level planning.
-
-## Week view
-
-Week view shows wider timeline rows and is useful for checking shift boundaries, night coverage and weekend coverage.
-
-## Layers in the calendar
-
-The calendar displays the winning final layer for every time segment.
-
-For example:
-
-```text
-Business hours layer: Monday-Friday 09:00-18:00
-Night layer:          Monday-Friday 18:00-09:00
-Weekend layer:        Saturday-Sunday 00:00-00:00
-```
-
-The calendar will split the day into separate bars when the final on-call user changes.
-
-## Overrides in the calendar
-
-Overrides replace the calculated layer result for their time window.
+When the same user is added again, IncidentRelay creates a new membership period.
 
 Example:
 
 ```text
-09:00-12:00 Ivan from Business hours layer
-12:00-14:00 Anna from override
-14:00-18:00 Ivan from Business hours layer
+2026-06-01 09:00  Ivan added
+2026-06-05 12:00  Ivan removed
+2026-06-10 09:00  Ivan added again
 ```
 
-## Opening a specific rotation calendar
-
-When you open a team that has several rotations, choose the required rotation from the rotation selector. Only one rotation calendar is shown at a time.
-
-The URL can include a rotation id:
+Calendar behavior:
 
 ```text
-/calendar?team_id=1&rotation_id=3
+before 2026-06-05 12:00     Ivan may appear
+2026-06-05 to 2026-06-10    Ivan does not appear
+after 2026-06-10 09:00      Ivan may appear again
 ```
 
-## No active layer
+## Future member starts
 
-If no layer is active for a period, the calendar shows no on-call assignment for that period.
+A layer member can have `starts_at` in the future.
 
-Common causes:
+The member appears in the layer configuration immediately, but the calendar does not use that user until `starts_at`.
 
-- layer is disabled;
-- layer has no members;
-- restrictions do not cover the selected time;
-- timezone or handoff time is not configured as expected.
+This is useful when a new engineer should join the rotation next week or after onboarding.
 
-## Best practices
+## Troubleshooting
 
-- Keep layer names clear: `Business hours`, `Nights`, `Weekend`, `Secondary`.
-- Use restrictions instead of creating many separate rotations for the same duty line.
-- Use separate rotations when they represent separate calendars, for example primary and secondary.
-- Check the calendar after changing layer priority or restrictions.
-- Use overrides for temporary changes, not for permanent schedule design.
+If the calendar looks wrong, check:
+
+1. The rotation is enabled.
+2. The layer is enabled.
+3. The layer has open member periods.
+4. Member positions are correct.
+5. Member `starts_at` is not in the future.
+6. Member `ends_at` is not already reached.
+7. Handoff time and timezone are correct.
+8. Layer restrictions match the expected time window.
+9. Overrides do not replace the expected user.
+10. The user has access to the team through group and team membership.

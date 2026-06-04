@@ -195,3 +195,6 @@ class Config:
         "action_token_ttl_seconds",
         900,
     )
+
+    ALERT_GROUP_WAIT_SECONDS = settings.get_int("alert_group_wait_seconds", "30")
+    ALERT_GROUP_INTERVAL_SECONDS = settings.get_int("alert_group_interval_seconds", "300")

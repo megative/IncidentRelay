@@ -9,6 +9,7 @@ let alertsSortState = createTableSortState("activity", "desc");
 let alertsServiceFilterApplying = false;
 let alertsServiceFilterLoaded = false;
 let alertsServiceFilterTeamKey = null;
+let selectedAlertGroupIds = new Set();
 let alertsPagination = {
     page: 1,
     page_size: 25,
@@ -56,7 +57,108 @@ const alertsSortColumns = {
         defaultDirection: "desc",
     },
 };
+function isAlertGroup(alert) {
+    return alert && alert.type === "alert_group";
+}
 
+function alertGroupCountLabel(alert) {
+    const total = Number(alert.alert_count || 0);
+    const firing = Number(alert.firing_count || 0);
+    const resolved = Number(alert.resolved_count || 0);
+    const silenced = Number(alert.silenced_count || 0);
+
+    if (!isAlertGroup(alert)) {
+        return "";
+    }
+
+    const parts = [];
+
+    parts.push(total + " total");
+
+    if (firing) {
+        parts.push(firing + " firing");
+    }
+
+    if (resolved) {
+        parts.push(resolved + " resolved");
+    }
+
+    if (silenced) {
+        parts.push(silenced + " silenced");
+    }
+
+    return parts.join(" / ");
+}
+
+function alertGroupTargetIdFromSelection() {
+    const selected = alertsCache
+        .filter(function (item) {
+            return selectedAlertGroupIds.has(Number(item.id));
+        })
+        .sort(function (left, right) {
+            const leftDate = new Date(left.first_seen_at || left.created_at || 0).getTime();
+            const rightDate = new Date(right.first_seen_at || right.created_at || 0).getTime();
+
+            if (leftDate !== rightDate) {
+                return leftDate - rightDate;
+            }
+
+            return Number(left.id || 0) - Number(right.id || 0);
+        });
+
+    return selected.length ? Number(selected[0].id) : null;
+}
+function ensureAlertsBulkActionsBar() {
+    let bar = $("#alerts-bulk-actions");
+
+    if (bar.length) {
+        return bar;
+    }
+
+    bar = $("<div>")
+        .attr("id", "alerts-bulk-actions")
+        .addClass("alerts-bulk-actions")
+        .hide()
+        .append(
+            $("<span>")
+                .attr("id", "alerts-bulk-selected-count")
+                .addClass("alerts-bulk-selected-count")
+                .text("0 selected")
+        )
+        .append(
+            $("<button>")
+                .attr("type", "button")
+                .attr("id", "alerts-merge-selected")
+                .addClass("btn btn-small")
+                .text("Merge selected")
+        )
+        .append(
+            $("<button>")
+                .attr("type", "button")
+                .attr("id", "alerts-clear-selection")
+                .addClass("btn btn-secondary btn-small")
+                .text("Clear")
+        );
+
+    $("#alerts-table-view").before(bar);
+
+    return bar;
+}
+
+function renderAlertsBulkActions() {
+    const bar = ensureAlertsBulkActionsBar();
+    const count = selectedAlertGroupIds.size;
+
+    bar.toggle(count > 0);
+    bar.find("#alerts-bulk-selected-count").text(count + " selected");
+    bar.find("#alerts-merge-selected").prop("disabled", count < 2);
+}
+
+function clearAlertGroupSelection() {
+    selectedAlertGroupIds.clear();
+    renderAlertsTable(alertsCache);
+    renderAlertsBulkActions();
+}
 function initAlertsTableSorting() {
     bindSortableTableHeaders(
         "#alerts-table-view",
@@ -344,6 +446,7 @@ function renderAlertsPage() {
     renderAlertsTable(alertsCache);
     renderAlertsPagination(alertsPagination);
     syncAlertDetailsFromUrl();
+    renderAlertsBulkActions();
 }
 
 function renderAlertsPagination(pagination) {
@@ -480,35 +583,83 @@ function renderAlertsTable(alerts) {
 function renderAlertPageRow(alert) {
     const row = $("<tr>").addClass("alerts-row alerts-row-" + normalizeAlertValue(alert.status));
 
-    row.append(
-        $("<td>").append(
-            $("<div>")
-                .addClass("status-cell")
-                .append($("<span>").addClass("status-dot dot-" + normalizeAlertValue(alert.status)))
-                .append(makeAlertBadge(statusLabel(alert.status), statusBadgeClass(alert.status)))
-        )
-    );
-    row.append(
-        $("<td>").append(
-            $("<a>")
-                .attr("href", buildAlertDetailsUrl(alert.id))
-                .attr("title", "View alert details")
-                .addClass("alerts-id-link")
-                .text("#" + alert.id)
+    const canRespond = canRespondObject(alert);
+    const isMerged = normalizeAlertValue(alert.status) === "merged";
+    const selectable = isAlertGroup(alert) && canRespond && !isMerged;
+
+    const idCell = $("<td>");
+
+    const idContent = $("<span>").addClass("alerts-id-content");
+
+    if (selectable) {
+        idContent.append(
+            $("<input>")
+                .attr("type", "checkbox")
+                .addClass("alerts-group-select")
+                .attr("data-alert-group-id", alert.id)
+                .prop("checked", selectedAlertGroupIds.has(Number(alert.id)))
                 .on("click", function (event) {
-                    event.preventDefault();
-                    openAlertDetailsPage(alert.id);
+                    event.stopPropagation();
                 })
-        )
+                .on("change", function () {
+                    const id = Number($(this).attr("data-alert-group-id"));
+
+                    if ($(this).is(":checked")) {
+                        selectedAlertGroupIds.add(id);
+                    } else {
+                        selectedAlertGroupIds.delete(id);
+                    }
+
+                    renderAlertsBulkActions();
+                })
+        );
+    }
+
+    idContent.append(
+        $("<a>")
+            .attr("href", buildAlertDetailsUrl(alert.id))
+            .attr("title", "View alert group details")
+            .addClass("alerts-id-link")
+            .text("#" + alert.id)
+            .on("click", function (event) {
+                event.preventDefault();
+                openAlertDetailsPage(alert.id);
+            })
     );
+
+    idCell.append(idContent);
+    row.append(idCell);
+
+    row.append(
+        $("<td>")
+            .append(
+                $("<div>")
+                    .addClass("status-cell")
+                    .append($("<span>").addClass("status-dot dot-" + normalizeAlertValue(alert.status)))
+                    .append(makeAlertBadge(statusLabel(alert.status), statusBadgeClass(alert.status)))
+            )
+    );
+
     row.append(
         $("<td>")
             .addClass("alert-title-cell")
             .append($("<div>").addClass("table-title").text(alert.title || "-"))
             .append($("<div>").addClass("table-subtitle").text(buildAlertSubtitle(alert)))
+            .append(
+                $("<div>")
+                    .addClass("table-subtitle")
+                    .text(alertGroupCountLabel(alert))
+                    .toggle(isAlertGroup(alert))
+            )
             .append($("<div>").addClass("table-age").text("Age: " + alertDuration(alert)))
     );
-    row.append($("<td>").append(makeAlertBadge(severityLabel(alert.severity), severityBadgeClass(alert.severity))));
+
+    row.append(
+        $("<td>").append(
+            makeAlertBadge(severityLabel(alert.severity), severityBadgeClass(alert.severity))
+        )
+    );
+
     row.append(
         $("<td>")
             .append($("<div>").addClass("alerts-team").text(alert.team_slug || "-"))
@@ -519,6 +670,7 @@ function renderAlertPageRow(alert) {
                     .text(alert.service_id ? "Service: " + alertServiceLabel(alert) : "No service")
             )
     );
+
     row.append($("<td>").text(alert.assignee || "-"));
     row.append($("<td>").text(formatDateTimeMinutes(alertCreatedValue(alert))));
     row.append($("<td>").text(formatDateTimeMinutes(alert.last_seen_at)));
@@ -527,7 +679,6 @@ function renderAlertPageRow(alert) {
 
     const actionsCell = $("<td>").addClass("actions-cell");
     const actions = $("<div>").addClass("table-actions");
-    const canRespond = canRespondObject(alert);
 
     if (canRespond && normalizeAlertValue(alert.status) === "firing") {
         actions.append(
@@ -540,6 +691,7 @@ function renderAlertPageRow(alert) {
                 })
         );
     }
+
     if (canRespond && normalizeAlertValue(alert.status) !== "resolved") {
         actions.append(
             $("<button>")
@@ -554,22 +706,28 @@ function renderAlertPageRow(alert) {
 
     actionsCell.append(actions);
     row.append(actionsCell);
+
     return row;
 }
 
 function buildAlertSubtitle(alert) {
     const parts = [];
+
+    if (isAlertGroup(alert)) {
+        parts.push("Group");
+    }
+
     if (alert.source) {
         parts.push(alert.source);
     }
-    if (alert.external_id) {
-        parts.push(alert.external_id);
-    }
+
     if (alert.group_key) {
         parts.push(alert.group_key);
     }
+
     return parts.length ? parts.join(" · ") : "Routed alert";
 }
+
 function alertServiceLabel(alert) {
     if (!alert.service_id) {
         return "No service";
@@ -717,9 +875,15 @@ function showAlertDetails(alertId) {
         renderAlertServiceContext(alert, modal);
         renderAlertDetailsSummary(alert, modal);
 
-        modal.find("#alert-details-labels").text(JSON.stringify(alert.labels || {}, null, 2));
-        modal.find("#alert-details-payload").text(JSON.stringify(alert.payload || {}, null, 2));
+        modal.find("#alert-details-labels").text(
+            JSON.stringify(alert.common_labels || alert.labels || {}, null, 2)
+        );
 
+        modal.find("#alert-details-payload").text(
+            JSON.stringify(alert.payload_summary || alert.payload || {}, null, 2)
+        );
+
+        renderAlertGroupChildren(alert.alerts || [], modal);
         renderEvents(alert.events || [], modal);
         renderNotifications(alert.notifications || [], modal);
 
@@ -1164,7 +1328,61 @@ function renderAlertDetailsSummary(alert, modal) {
             : "-"
     ));
 }
+function ensureAlertGroupChildrenSection(modal) {
+    return modal.find("#alert-group-children-section");
+}
 
+
+function renderAlertGroupChildren(alerts, modal) {
+    const section = ensureAlertGroupChildrenSection(modal);
+    const target = modal.find("#alert-group-children");
+
+    alerts = asArray(alerts);
+
+    target.empty();
+    section.prop("hidden", !alerts.length);
+
+    if (!alerts.length) {
+        return;
+    }
+
+    alerts.forEach(function (alert) {
+        const labels = alert.labels || {};
+        const subtitle = [
+            alert.status || null,
+            alert.severity || null,
+            labels.instance ? "instance=" + labels.instance : null,
+            alert.dedup_key ? "dedup=" + alert.dedup_key : null,
+        ].filter(Boolean).join(" · ");
+
+        target.append(
+            $("<div>")
+                .addClass("alert-child-item")
+                .append(
+                    $("<div>")
+                        .addClass("alert-child-header")
+                        .append(
+                            $("<strong>").text("#" + alert.id + " " + (alert.title || "Alert"))
+                        )
+                        .append(
+                            $("<span>")
+                                .addClass("alert-child-status")
+                                .append(makeAlertBadge(statusLabel(alert.status), statusBadgeClass(alert.status)))
+                        )
+                )
+                .append(
+                    $("<div>")
+                        .addClass("table-subtitle")
+                        .text(subtitle || "-")
+                )
+                .append(
+                    $("<pre>")
+                        .addClass("alert-child-labels")
+                        .text(JSON.stringify(labels, null, 2))
+                )
+        );
+    });
+}
 function renderEvents(events, modal) {
     const target = modal.find("#alert-details-events");
     target.empty();
@@ -1412,14 +1630,14 @@ $(document)
         writeAlertsQueryParams();
         loadAlerts();
     });
-$(document).on("click", "#alerts-next-page", function () {
-    if (!alertsPagination.has_next) {
-        return;
-    }
-    alertsCurrentPage += 1;
-    writeAlertsQueryParams();
-    loadAlerts();
-});
+// $(document).on("click", "#alerts-next-page", function () {
+//     if (!alertsPagination.has_next) {
+//         return;
+//     }
+//     alertsCurrentPage += 1;
+//     writeAlertsQueryParams();
+//     loadAlerts();
+// });
 $(document).on("change", "#alerts-auto-refresh", function () {
     setAlertsAutoRefresh($(this).is(":checked"));
 });
@@ -1547,3 +1765,55 @@ window.addEventListener("popstate", function () {
     loadAlerts();
 });
 initTableMultiSelects(document);
+$(document).on("click", "#alerts-clear-selection", function () {
+    clearAlertGroupSelection();
+});
+
+$(document).on("click", "#alerts-merge-selected", function () {
+    mergeSelectedAlertGroups();
+});
+function mergeSelectedAlertGroups() {
+    const ids = Array.from(selectedAlertGroupIds).map(Number).filter(Boolean);
+
+    if (ids.length < 2) {
+        showAppError("Select at least two alert groups to merge.");
+        return;
+    }
+
+    const targetId = alertGroupTargetIdFromSelection();
+
+    if (!targetId) {
+        showAppError("Could not choose merge target.");
+        return;
+    }
+
+    const sourceIds = ids.filter(function (id) {
+        return id !== targetId;
+    });
+
+    const target = alertsCache.find(function (item) {
+        return Number(item.id) === Number(targetId);
+    });
+
+    const message = [
+        "Selected groups will be merged into group #" + targetId + ".",
+        target && target.title ? "Target: " + target.title : null,
+        "Child alerts from other groups will be moved into the target group.",
+    ].filter(Boolean).join("\n\n");
+
+    showAppConfirm({
+        title: "Merge selected alert groups?",
+        message: message,
+        confirmText: "Merge groups",
+        confirmClass: "btn-warning"
+    }).done(function () {
+        apiPost("/api/alerts/merge", {
+            target_group_id: targetId,
+            source_group_ids: sourceIds,
+            reason: "Merged from alerts UI"
+        }, function () {
+            selectedAlertGroupIds.clear();
+            loadAlerts();
+        });
+    });
+}
