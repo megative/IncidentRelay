@@ -44,6 +44,42 @@ petr
 sergey
 ```
 
+### Alternative: sync admins from a Slack usergroup
+
+Instead of creating users manually, you can import them from a Slack usergroup with the `sync-slack-admins` management command.
+
+The command requires a bot token with the following scopes: `usergroups:read`, `users:read`, `users:read.email`.
+
+Run once to provision all members of the group as admins:
+
+```bash
+python manage.py sync-slack-admins --usergroup admins
+```
+
+Or pass the token explicitly:
+
+```bash
+python manage.py sync-slack-admins \
+  --slack-token xoxb-... \
+  --usergroup admins
+```
+
+The `--usergroup` argument accepts a Slack usergroup handle (`admins`, `@admins`) or a raw group ID (`S0123ABCDE`).
+
+For newly created users a random password is generated and printed in the JSON output. To set a fixed password instead:
+
+```bash
+python manage.py sync-slack-admins --usergroup admins --password changeme
+```
+
+For each member the command:
+
+- creates the user if not found (matched by `slack_user_id` or derived username);
+- updates `email`, `display_name`, `slack_user_id`, `is_admin=True` for existing users;
+- skips bots and deleted Slack accounts.
+
+Re-running the command is safe — existing users are updated, not duplicated.
+
 ## Step 3. Add users to the group
 
 Open:
