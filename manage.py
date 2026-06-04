@@ -1,10 +1,12 @@
 import argparse
 import json
+import os
+import secrets
 from datetime import datetime, timedelta
 
 from app.db import init_database
 from app.login import hash_password
-from app.modules.db.models import UserGroup
+from app.modules.db.models import User, UserGroup
 from app.modules.db.migrations import create_migration, list_migrations, migrate, rollback
 from app.modules.db import channels_repo, groups_repo, rotations_repo, routes_repo, teams_repo, tokens_repo, users_repo
 from app.services.auth import create_raw_token, hash_token
@@ -381,6 +383,132 @@ def cmd_set_password(args):
     print(json.dumps({"id": user.id, "username": user.username, "password": "updated"}, indent=2))
     db.close()
 
+
+def _slack_api(token, method, **params):
+    """
+    Call a Slack Web API method and return the parsed JSON.
+    Raises SystemExit on HTTP or API-level errors.
+    """
+    import requests as http_requests
+
+    resp = http_requests.get(
+        f"https://slack.com/api/{method}",
+        headers={"Authorization": f"Bearer {token}"},
+        params=params,
+        timeout=15,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if not data.get("ok"):
+        raise SystemExit(f"Slack API error ({method}): {data.get('error')}")
+    return data
+
+
+def _resolve_usergroup_id(token, usergroup):
+    """
+    Return the Slack usergroup ID for a handle (e.g. 'admins' or '@admins')
+    or pass through an ID that already starts with 'S'.
+    """
+    if usergroup.startswith("S"):
+        return usergroup
+
+    handle = usergroup.lstrip("@")
+    data = _slack_api(token, "usergroups.list", include_disabled="false")
+    matches = [g for g in data.get("usergroups", []) if g["handle"] == handle]
+    if not matches:
+        raise SystemExit(f"Slack usergroup '{handle}' not found")
+    return matches[0]["id"]
+
+
+def cmd_sync_slack_admins(args):
+    """
+    Create or update admin users from a Slack usergroup.
+
+    For every member of the given Slack usergroup the command will:
+      - look up their Slack profile (email, real name, username);
+      - find an existing IncidentRelay user by slack_user_id or derived username;
+      - create the user if missing (with a random password unless --password is given);
+      - set is_admin=True and sync slack_user_id, email and display_name.
+
+    Required Slack bot-token scopes: usergroups:read, users:read, users:read.email
+    """
+    token = args.slack_token or os.environ.get("SLACK_BOT_TOKEN")
+    if not token:
+        raise SystemExit(
+            "Slack bot token is required: pass --slack-token or set SLACK_BOT_TOKEN env var"
+        )
+
+    usergroup_id = _resolve_usergroup_id(token, args.usergroup)
+
+    members_data = _slack_api(token, "usergroups.users.list", usergroup=usergroup_id)
+    member_ids = members_data.get("users", [])
+    if not member_ids:
+        print(json.dumps({"status": "no members in usergroup", "usergroup_id": usergroup_id}))
+        return
+
+    db = init_database()
+    db.connect(reuse_if_open=True)
+    migrate()
+
+    results = []
+
+    for slack_user_id in member_ids:
+        info = _slack_api(token, "users.info", user=slack_user_id)
+        slack_user = info["user"]
+
+        if slack_user.get("is_bot") or slack_user.get("deleted"):
+            results.append({"slack_user_id": slack_user_id, "action": "skipped", "reason": "bot or deleted"})
+            continue
+
+        profile = slack_user.get("profile", {})
+        email = profile.get("email") or ""
+        display_name = profile.get("real_name") or profile.get("display_name") or slack_user.get("name", "")
+        # username: email prefix if available, otherwise Slack workspace username
+        username = email.split("@")[0] if email else slack_user.get("name", slack_user_id)
+
+        # Match existing user: prefer slack_user_id, fall back to username
+        existing = User.get_or_none(
+            (User.slack_user_id == slack_user_id) & (User.deleted == False)
+        )
+        if not existing:
+            existing = users_repo.get_user_by_username(username)
+
+        raw_password = None
+        user_data = {
+            "username": username,
+            "display_name": display_name,
+            "email": email or None,
+            "slack_user_id": slack_user_id,
+            "is_admin": True,
+            "active": True,
+        }
+
+        if existing:
+            user = users_repo.update_user(existing.id, user_data)
+            action = "updated"
+        else:
+            raw_password = args.password or secrets.token_urlsafe(16)
+            user_data["password_hash"] = hash_password(raw_password)
+            user = users_repo.create_user(**user_data)
+            action = "created"
+
+        result = {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "slack_user_id": slack_user_id,
+            "is_admin": user.is_admin,
+            "action": action,
+        }
+        if raw_password:
+            result["password"] = raw_password
+
+        results.append(result)
+
+    db.close()
+    print(json.dumps({"status": "ok", "usergroup_id": usergroup_id, "users": results}, indent=2))
+
+
 def main():
     """
     Run management commands.
@@ -429,6 +557,29 @@ def main():
     password_parser.add_argument("--username", required=True)
     password_parser.add_argument("--password", required=True)
     password_parser.set_defaults(func=cmd_set_password)
+
+    slack_admins_parser = subparsers.add_parser(
+        "sync-slack-admins",
+        help="Create/update admin users from a Slack usergroup.",
+        description=(
+            "Fetch members of a Slack usergroup and create or update them as admins in IncidentRelay. "
+            "Required Slack scopes: usergroups:read, users:read, users:read.email"
+        ),
+    )
+    slack_admins_parser.add_argument(
+        "--slack-token",
+        help="Slack bot token (xoxb-...). Defaults to SLACK_BOT_TOKEN env var.",
+    )
+    slack_admins_parser.add_argument(
+        "--usergroup",
+        required=True,
+        help="Slack usergroup ID (e.g. S0123ABCDE) or handle (e.g. 'admins' or '@admins').",
+    )
+    slack_admins_parser.add_argument(
+        "--password",
+        help="Password to set for newly created users. Omit to auto-generate a random password.",
+    )
+    slack_admins_parser.set_defaults(func=cmd_sync_slack_admins)
 
     args = parser.parse_args()
     args.func(args)
