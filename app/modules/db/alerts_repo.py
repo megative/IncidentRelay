@@ -509,65 +509,106 @@ def _collect_group_labels(alerts):
 
 
 def recalculate_alert_group(group):
-    """Recalculate counters and aggregate fields from child alerts."""
+    """Recalculate alert group counters, labels and effective status."""
 
-    alerts = list_alerts_for_group(group.id)
     now = datetime.utcnow()
 
-    alert_count = len(alerts)
-    firing_count = sum(1 for item in alerts if item.status == "firing")
-    acknowledged_count = sum(1 for item in alerts if item.status == "acknowledged")
-    resolved_count = sum(1 for item in alerts if item.status == "resolved")
-    silenced_count = sum(1 for item in alerts if item.status == "silenced")
+    alerts = list(
+        Alert
+        .select()
+        .where(Alert.group == group.id)
+        .order_by(Alert.last_seen_at.desc(), Alert.id.desc())
+    )
 
-    common_labels, label_values = _collect_group_labels(alerts)
+    total = len(alerts)
+
+    firing_count = sum(1 for alert in alerts if alert.status == "firing")
+    acknowledged_count = sum(1 for alert in alerts if alert.status == "acknowledged")
+    resolved_count = sum(1 for alert in alerts if alert.status == "resolved")
+    silenced_count = sum(1 for alert in alerts if alert.status == "silenced")
 
     previous_status = group.status
 
-    if group.status != "merged":
-        if alert_count and resolved_count == alert_count:
-            next_status = "resolved"
-        elif group.status == "acknowledged" and firing_count:
-            # Group-level ack is valid even while child alerts are firing.
-            # A new child alert must explicitly reopen the group in upsert_alert().
-            next_status = "acknowledged"
-        elif firing_count:
-            next_status = "firing"
-        elif silenced_count and silenced_count == alert_count:
-            next_status = "silenced"
-        else:
-            next_status = group.status or "firing"
-
-        group.previous_status = previous_status
-        group.status = next_status
-
-        if next_status == "resolved" and not group.resolved_at:
-            group.resolved_at = now
-
-    group.alert_count = alert_count
+    group.alert_count = total
     group.firing_count = firing_count
     group.acknowledged_count = acknowledged_count
     group.resolved_count = resolved_count
     group.silenced_count = silenced_count
-
-    group.common_labels = common_labels
-    group.label_values = label_values
-    group.last_seen_at = max(
-        [item.last_seen_at for item in alerts],
-        default=group.last_seen_at,
-    )
-    group.updated_at = now
+    group.silenced = total > 0 and silenced_count == total
 
     if alerts:
-        newest = max(
-            alerts,
-            key=lambda item: item.last_seen_at or item.first_seen_at,
-        )
-        group.title = newest.title or group.title
-        group.message = newest.message or group.message
-        group.severity = newest.severity or group.severity
+        newest_alert = alerts[0]
 
+        group.title = newest_alert.title
+        group.message = newest_alert.message
+        group.severity = newest_alert.severity
+        group.last_seen_at = newest_alert.last_seen_at or now
+
+        if not group.first_seen_at:
+            group.first_seen_at = min(
+                alert.first_seen_at
+                for alert in alerts
+                if alert.first_seen_at
+            )
+
+        common_labels, label_values = _collect_group_labels(alerts)
+
+        group.common_labels = common_labels
+        group.label_values = label_values
+        group.payload_summary = {
+            "latest_alert_id": newest_alert.id,
+            "latest_dedup_key": newest_alert.dedup_key,
+            "latest_external_id": newest_alert.external_id,
+            "latest_payload": newest_alert.payload or {},
+        }
+
+    if total == 0:
+        pass
+
+    elif resolved_count == total:
+        group.status = "resolved"
+
+        if not group.resolved_at:
+            group.resolved_at = now
+
+        alerts_without_resolved_at = [
+            alert
+            for alert in alerts
+            if not alert.resolved_at
+        ]
+
+        for alert in alerts_without_resolved_at:
+            alert.resolved_at = now
+            alert.updated_at = now
+            alert.save()
+
+    elif firing_count > 0:
+        if group.status == "acknowledged":
+            group.status = "acknowledged"
+        else:
+            group.status = "firing"
+            group.resolved_at = None
+            group.resolved_by = None
+
+    elif silenced_count > 0:
+        group.status = "silenced"
+        group.resolved_at = None
+        group.resolved_by = None
+
+    elif acknowledged_count > 0:
+        group.status = "acknowledged"
+        group.resolved_at = None
+        group.resolved_by = None
+
+    else:
+        group.status = previous_status
+
+    if previous_status != group.status:
+        group.previous_status = previous_status
+
+    group.updated_at = now
     group.save()
+
     return group
 
 

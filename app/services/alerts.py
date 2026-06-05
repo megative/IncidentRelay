@@ -314,7 +314,7 @@ def upsert_alert(alert_data):
             message="Alert group created",
         )
 
-    elif group.status == "acknowledged":
+    elif group.status == "acknowledged" and status == "firing":
         # This is a new child alert inside an existing acknowledged group.
         # A new signal must make the incident visible again.
         group.previous_status = group.status
@@ -395,13 +395,13 @@ def upsert_alert(alert_data):
         },
     )
 
-    if group.status == "firing":
+    if status == "firing" and group.status == "firing":
         _schedule_group_notification(
             group,
             reason="notification" if created_group else "update",
             now=now,
         )
-    else:
+    elif group.status != "firing":
         alerts_repo.clear_alert_group_notification(group)
 
     return group, created_group
