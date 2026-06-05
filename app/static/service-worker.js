@@ -1,4 +1,4 @@
-const IR_PWA_VERSION = "incidentrelay-pwa-v1.0.1";
+const IR_PWA_VERSION = "incidentrelay-pwa-v1.0.2";
 const IR_STATIC_CACHE = IR_PWA_VERSION + "-static";
 const IR_OFFLINE_CACHE = IR_PWA_VERSION + "-offline";
 const OFFLINE_URL = "/static/offline.html";
