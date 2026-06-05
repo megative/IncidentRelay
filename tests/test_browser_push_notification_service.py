@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from app.modules.db.models import AlertEvent, AlertGroup, BrowserPushSubscription
-from app.services import notification_service
+from app.services import notification_rules, notification_service
 from app.services.alerts import upsert_alert
 from tests.factories import (
     attach_channel,
@@ -34,7 +34,7 @@ def create_push_subscription(user):
 def create_assigned_group(user, *, with_regular_channel=False):
     group = create_group()
     team = create_team(group)
-    route = create_route(team)
+    route = create_route(team, group_by=["alertname", "severity"])
 
     if with_regular_channel:
         channel = create_channel(
@@ -45,7 +45,7 @@ def create_assigned_group(user, *, with_regular_channel=False):
         )
         attach_channel(route, channel)
 
-    alert_group, _ = upsert_alert(
+    alert_group, created = upsert_alert(
         {
             "source": "alertmanager",
             "forced_route_id": route.id,
@@ -65,6 +65,7 @@ def create_assigned_group(user, *, with_regular_channel=False):
     )
 
     assert alert_group is not None
+    assert created is True
 
     alert_group.assignee = user
     alert_group.save()
@@ -74,7 +75,7 @@ def create_assigned_group(user, *, with_regular_channel=False):
 
 def test_has_matching_notification_channel_returns_true_for_active_push_subscription(db, monkeypatch):
     monkeypatch.setattr(
-        notification_service.browser_push.Config,
+        notification_rules.browser_push.Config,
         "BROWSER_PUSH_ENABLED",
         True,
         raising=False,
@@ -91,7 +92,7 @@ def test_has_matching_notification_channel_returns_true_for_active_push_subscrip
 
 def test_has_matching_notification_channel_returns_false_without_channels_or_push(db, monkeypatch):
     monkeypatch.setattr(
-        notification_service.browser_push.Config,
+        notification_rules.browser_push.Config,
         "BROWSER_PUSH_ENABLED",
         True,
         raising=False,
@@ -124,7 +125,7 @@ def test_notify_alert_sends_profile_browser_push_without_route_channels(db, monk
         return 1
 
     monkeypatch.setattr(
-        notification_service.browser_push,
+        notification_rules.browser_push,
         "send_alert_push_to_user",
         fake_send_alert_push_to_user,
     )
@@ -144,13 +145,20 @@ def test_notify_alert_sends_profile_browser_push_without_route_channels(db, monk
 
     assert alert_group.last_notification_at is not None
 
+    event = AlertEvent.get(
+        (AlertEvent.group == alert_group.id)
+        & (AlertEvent.event_type == "notification_browser_push_sent")
+    )
+
+    assert "Sent browser push" in event.message
+
 
 def test_notify_alert_does_not_send_browser_push_without_assignee(db, monkeypatch):
     group = create_group()
     team = create_team(group)
-    route = create_route(team)
+    route = create_route(team, group_by=["alertname", "severity"])
 
-    alert_group, _ = upsert_alert(
+    alert_group, created = upsert_alert(
         {
             "source": "alertmanager",
             "forced_route_id": route.id,
@@ -169,7 +177,7 @@ def test_notify_alert_does_not_send_browser_push_without_assignee(db, monkeypatc
         }
     )
 
-    assert alert_group is not None
+    assert created is True
 
     calls = []
 
@@ -178,7 +186,7 @@ def test_notify_alert_does_not_send_browser_push_without_assignee(db, monkeypatc
         return 1
 
     monkeypatch.setattr(
-        notification_service.browser_push,
+        notification_rules.browser_push,
         "send_alert_push_to_user",
         fake_send_alert_push_to_user,
     )
@@ -212,7 +220,7 @@ def test_notify_alert_counts_regular_channel_and_browser_push(db, monkeypatch):
         lambda channel_type: FakeNotifier(),
     )
     monkeypatch.setattr(
-        notification_service.browser_push,
+        notification_rules.browser_push,
         "send_alert_push_to_user",
         lambda assignee, alert_group, event_type="notification": 1,
     )
@@ -227,3 +235,4 @@ def test_notify_alert_counts_regular_channel_and_browser_push(db, monkeypatch):
     }
 
     assert "notification_sent" in event_types
+    assert "notification_browser_push_sent" in event_types

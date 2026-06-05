@@ -396,26 +396,6 @@ function makeAlertBadge(text, cssClass) {
     return makeUiPill(text, cssClass);
 }
 
-
-// function buildAlertsApiUrl() {
-//     const params = [];
-//     if (typeof selectedTeamId === "function" && selectedTeamId()) {
-//         params.push("team_id=" + encodeURIComponent(selectedTeamId()));
-//     }
-//     appendTableFilterParams(params, "status", getTableFilterValues("#status-filter"));
-//     appendTableFilterParams(params, "severity", getTableFilterValues("#severity-filter"));
-//     appendTableFilterParams(params, "service_id", getTableFilterValues("#alerts-service-filter"));
-//     if ($("#alerts-search").val()) {
-//         params.push("search=" + encodeURIComponent($("#alerts-search").val()));
-//     }
-//
-//     params.push("page=" + encodeURIComponent(alertsCurrentPage));
-//     params.push("page_size=" + encodeURIComponent(alertsPageSize));
-//     params.push("sort=" + encodeURIComponent(alertsSortState.column || "activity"));
-//     params.push("order=" + encodeURIComponent(alertsSortState.direction || "desc"));
-//     return "/api/alerts" + (params.length ? "?" + params.join("&") : "");
-// }
-
 function loadAlerts() {
     applyAlertsQueryParams();
     initAlertsTableSorting();
@@ -425,14 +405,11 @@ function loadAlerts() {
             alertsCache = alertsResponseItems(response);
             alertsPagination = alertsResponsePagination(response);
             alertsSummary = alertsResponseSummary(response);
-            alertsPagination = response.pagination || {};
+
             alertsCurrentPage = alertsPagination.page || alertsCurrentPage || 1;
             alertsPageSize = alertsPagination.page_size || alertsPageSize || 25;
 
-            renderAlertsTable(response.items || []);
-            renderAlertsPagination(alertsPagination);
             renderAlertsPage();
-
             writeAlertsQueryParams();
             updateSortableTableHeaders("#alerts-table-view", alertsSortState);
         });
@@ -461,16 +438,6 @@ function renderAlertsPagination(pagination) {
         rowsLabel: "Rows per page",
         pageSizeOptions: [10, 25, 50, 100],
         alwaysVisible: true,
-    });
-}
-
-function ensureAlertsPaginationControls() {
-    return ensureTablePaginationControls({
-        id: "alerts-pagination",
-        prefix: "alerts",
-        tableSelector: "#alerts-table-view",
-        rowsLabel: "Rows per page",
-        pageSizeOptions: [10, 25, 50, 100],
     });
 }
 

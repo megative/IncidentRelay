@@ -1242,15 +1242,14 @@ class BrowserPushActionToken(BaseModel):
         on_delete="CASCADE",
     )
 
-    alert = ForeignKeyField(
-        Alert,
+    group = ForeignKeyField(
+        AlertGroup,
         backref="browser_push_action_tokens",
         on_delete="CASCADE",
     )
 
     action = CharField(max_length=32)
     token_hash = CharField(max_length=128, unique=True)
-
     used_at = DateTimeField(null=True)
     expires_at = DateTimeField()
     created_at = DateTimeField(default=datetime.utcnow)
@@ -1258,7 +1257,7 @@ class BrowserPushActionToken(BaseModel):
     class Meta:
         table_name = "browser_push_action_token"
         indexes = (
-            (("alert", "user", "action"), False),
+            (("group", "user", "action"), False),
             (("expires_at", "used_at"), False),
         )
 
@@ -1298,8 +1297,8 @@ class UserNotificationDelivery(BaseModel):
 
     id = AutoField()
 
-    alert = ForeignKeyField(
-        Alert,
+    group = ForeignKeyField(
+        AlertGroup,
         backref="user_notification_deliveries",
         on_delete="CASCADE",
     )
@@ -1339,6 +1338,6 @@ class UserNotificationDelivery(BaseModel):
         table_name = "user_notification_delivery"
         indexes = (
             (("status", "scheduled_at"), False),
-            (("alert", "user", "method", "event_type"), False),
-            (("rule", "alert", "event_type"), False),
+            (("group", "user", "method", "event_type"), False),
+            (("rule", "group", "event_type"), False),
         )

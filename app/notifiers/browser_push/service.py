@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from pywebpush import WebPushException, webpush
 
 from app.modules.db.models import (
-    Alert,
     BrowserPushActionToken,
     BrowserPushSubscription,
 )
@@ -120,13 +119,13 @@ def _hash_token(token):
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def create_action_token(user, alert, action):
+def create_action_token(user, group, action):
     raw_token = secrets.token_urlsafe(32)
     ttl = int(getattr(Config, "BROWSER_PUSH_ACTION_TOKEN_TTL_SECONDS", 900))
 
     BrowserPushActionToken.create(
         user=user.id,
-        alert=alert.id,
+        group=group.id,
         action=action,
         token_hash=_hash_token(raw_token),
         expires_at=datetime.utcnow() + timedelta(seconds=ttl),
@@ -191,23 +190,24 @@ def can_send_alert_push(alert):
     return has_active_user_subscriptions(getattr(alert, "assignee_id", None))
 
 
-def build_alert_push_payload(alert, user, event_type="notification"):
+def build_alert_push_payload(group, user, event_type="notification"):
     action_tokens = {}
 
-    if alert.status == "firing":
-        action_tokens["ack"] = create_action_token(user, alert, "ack")
-        action_tokens["resolve"] = create_action_token(user, alert, "resolve")
-    elif alert.status == "acknowledged":
-        action_tokens["resolve"] = create_action_token(user, alert, "resolve")
+    if group.status == "firing":
+        action_tokens["ack"] = create_action_token(user, group, "ack")
+        action_tokens["resolve"] = create_action_token(user, group, "resolve")
+    elif group.status == "acknowledged":
+        action_tokens["resolve"] = create_action_token(user, group, "resolve")
 
     return {
-        "title": _build_alert_push_title(alert, event_type),
-        "body": _build_alert_push_body(alert, event_type),
-        "alert_id": alert.id,
-        "alert_title": alert.title,
-        "status": alert.status,
-        "url": build_alert_web_url(alert) or f"/alerts/{alert.id}",
-        "tag": f"incidentrelay-alert-{alert.id}",
+        "title": _build_alert_push_title(group, event_type),
+        "body": _build_alert_push_body(group, event_type),
+        "alert_id": group.id,
+        "alert_group_id": group.id,
+        "alert_title": group.title,
+        "status": group.status,
+        "url": build_alert_web_url(group) or f"/alerts/{group.id}",
+        "tag": f"incidentrelay-alert-group-{group.id}",
         "require_interaction": True,
         "renotify": True,
         "silent": False,
@@ -349,56 +349,53 @@ def execute_push_action(token, action):
         if updated != 1:
             return {"ok": False, "error": "token_already_used"}
 
-        alert = Alert.get_or_none(Alert.id == record.alert_id)
-
-        if not alert:
-            return {"ok": False, "error": "alert_not_found"}
-
-        result_alert = _run_alert_push_action(
-            alert.id,
+        result_group = _run_alert_push_action(
+            record.group_id,
             user_id=record.user_id,
             action=action,
         )
 
-        if action == "ack":
-            audit_event = "alert.ack.browser_push"
-        else:
-            audit_event = "alert.resolve.browser_push"
+    if action == "ack":
+        audit_event = "alert_group.ack.browser_push"
+    else:
+        audit_event = "alert_group.resolve.browser_push"
 
-        write_audit(
-            audit_event,
-            object_type="alert",
-            object_id=result_alert.id,
-            team_id=result_alert.team_id,
-            user_id=record.user_id,
-            data={
-                "source": "browser_push",
-                "action": action,
-            },
-        )
+    write_audit(
+        audit_event,
+        object_type="alert_group",
+        object_id=result_group.id,
+        team_id=result_group.team_id,
+        user_id=record.user_id,
+        data={
+            "source": "browser_push",
+            "action": action,
+        },
+    )
 
     return {
         "ok": True,
         "action": action,
-        "alert_id": result_alert.id,
-        "status": result_alert.status,
+        "alert_group_id": result_group.id,
+        "alert_id": result_group.id,
+        "status": result_group.status,
     }
 
 
-def _run_alert_push_action(alert_id, user_id, action):
+def _run_alert_push_action(group_id, user_id, action):
     """
-    Run alert action from browser push.
+    Run alert group action from browser push.
 
     Imported lazily to avoid circular import:
     alerts -> notifier registry -> browser_push -> alerts.
     """
+
     from app.services.alerts import acknowledge_alert, resolve_alert
 
     if action == "ack":
-        return acknowledge_alert(alert_id, user_id=user_id)
+        return acknowledge_alert(group_id, user_id=user_id)
 
     if action == "resolve":
-        return resolve_alert(alert_id, user_id=user_id)
+        return resolve_alert(group_id, user_id=user_id)
 
     raise ValueError(f"unsupported browser push action: {action}")
 

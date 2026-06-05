@@ -3,13 +3,13 @@ from datetime import datetime, timedelta
 import pytest
 
 from app.modules.db.models import (
-    Alert,
+    AlertGroup,
     BrowserPushActionToken,
     BrowserPushSubscription,
 )
 from app.notifiers.browser_push import service as browser_push
+from app.services.alerts import upsert_alert
 from tests.factories import (
-    create_alert,
     create_group,
     create_route,
     create_team,
@@ -41,15 +41,37 @@ def create_push_subscription(
     )
 
 
-def create_assigned_alert(user, *, status="firing"):
+def create_assigned_group(user, *, status="firing"):
     group = create_group()
     team = create_team(group)
-    route = create_route(team)
-    alert = create_alert(route, status=status)
-    alert.assignee = user
-    alert.save()
+    route = create_route(team, group_by=["alertname", "severity"])
 
-    return alert
+    alert_group, created = upsert_alert(
+        {
+            "source": "alertmanager",
+            "forced_route_id": route.id,
+            "external_id": f"external-{user.id}",
+            "dedup_key": f"dedup-{user.id}",
+            "title": "DiskFull",
+            "message": "/var is 95% full",
+            "severity": "critical",
+            "labels": {
+                "alertname": "DiskFull",
+                "severity": "critical",
+                "instance": "host1",
+            },
+            "payload": {"source": "test"},
+            "status": "firing",
+        }
+    )
+
+    assert created is True
+
+    alert_group.assignee = user
+    alert_group.status = status
+    alert_group.save()
+
+    return alert_group
 
 
 def test_save_user_subscription_creates_subscription(db):
@@ -171,9 +193,12 @@ def test_disable_user_subscription_soft_deletes_own_subscription(db):
     result = browser_push.disable_user_subscription(user, subscription.id)
 
     assert result.id == subscription.id
-    assert result.enabled is False
-    assert result.deleted is True
-    assert result.deleted_at is not None
+
+    subscription = BrowserPushSubscription.get_by_id(subscription.id)
+
+    assert subscription.enabled is False
+    assert subscription.deleted is True
+    assert subscription.deleted_at is not None
 
 
 def test_disable_user_subscription_does_not_disable_other_user_device(db):
@@ -192,41 +217,52 @@ def test_disable_user_subscription_does_not_disable_other_user_device(db):
     assert subscription.deleted is False
 
 
-def test_build_alert_push_payload_for_firing_alert_creates_ack_and_resolve_tokens(db, monkeypatch):
-    monkeypatch.setattr(browser_push.Config, "BROWSER_PUSH_ACTION_TOKEN_TTL_SECONDS", 900, raising=False)
+def test_build_alert_push_payload_for_firing_group_creates_ack_and_resolve_tokens(db, monkeypatch):
+    monkeypatch.setattr(
+        browser_push.Config,
+        "BROWSER_PUSH_ACTION_TOKEN_TTL_SECONDS",
+        900,
+        raising=False,
+    )
 
     group = create_group()
     user = create_user("alice", group)
-    alert = create_assigned_alert(user, status="firing")
+    alert_group = create_assigned_group(user, status="firing")
 
     payload = browser_push.build_alert_push_payload(
-        alert,
+        alert_group,
         user,
         event_type="notification",
     )
 
     assert payload["title"] == "CRITICAL: DiskFull"
-    assert payload["alert_id"] == alert.id
-    assert payload["tag"] == f"incidentrelay-alert-{alert.id}"
+    assert payload["alert_id"] == alert_group.id
+    assert payload["alert_group_id"] == alert_group.id
+    assert payload["tag"] == f"incidentrelay-alert-group-{alert_group.id}"
     assert payload["require_interaction"] is True
     assert payload["renotify"] is True
     assert payload["silent"] is False
     assert payload["action_tokens"]["ack"]
     assert payload["action_tokens"]["resolve"]
 
-    assert BrowserPushActionToken.select().where(
-        BrowserPushActionToken.alert == alert.id,
-        BrowserPushActionToken.user == user.id,
-    ).count() == 2
+    assert (
+        BrowserPushActionToken
+        .select()
+        .where(
+            BrowserPushActionToken.group == alert_group.id,
+            BrowserPushActionToken.user == user.id,
+        )
+        .count()
+    ) == 2
 
 
-def test_build_alert_push_payload_for_acknowledged_alert_creates_only_resolve_token(db):
+def test_build_alert_push_payload_for_acknowledged_group_creates_only_resolve_token(db):
     group = create_group()
     user = create_user("alice", group)
-    alert = create_assigned_alert(user, status="acknowledged")
+    alert_group = create_assigned_group(user, status="acknowledged")
 
     payload = browser_push.build_alert_push_payload(
-        alert,
+        alert_group,
         user,
         event_type="acknowledged",
     )
@@ -237,29 +273,31 @@ def test_build_alert_push_payload_for_acknowledged_alert_creates_only_resolve_to
     tokens = list(
         BrowserPushActionToken
         .select()
-        .where(BrowserPushActionToken.alert == alert.id)
+        .where(BrowserPushActionToken.group == alert_group.id)
     )
 
     assert len(tokens) == 1
     assert tokens[0].action == "resolve"
 
 
-def test_build_alert_push_payload_for_resolved_alert_creates_no_action_tokens(db):
+def test_build_alert_push_payload_for_resolved_group_creates_no_action_tokens(db):
     group = create_group()
     user = create_user("alice", group)
-    alert = create_assigned_alert(user, status="resolved")
+    alert_group = create_assigned_group(user, status="resolved")
 
     payload = browser_push.build_alert_push_payload(
-        alert,
+        alert_group,
         user,
         event_type="resolved",
     )
 
     assert payload["action_tokens"] == {}
-
-    assert BrowserPushActionToken.select().where(
-        BrowserPushActionToken.alert == alert.id,
-    ).count() == 0
+    assert (
+        BrowserPushActionToken
+        .select()
+        .where(BrowserPushActionToken.group == alert_group.id)
+        .count()
+    ) == 0
 
 
 def test_send_alert_push_to_user_sends_to_active_subscriptions_only(db, monkeypatch):
@@ -267,7 +305,7 @@ def test_send_alert_push_to_user_sends_to_active_subscriptions_only(db, monkeypa
 
     group = create_group()
     user = create_user("alice", group)
-    alert = create_assigned_alert(user)
+    alert_group = create_assigned_group(user)
 
     create_push_subscription(
         user,
@@ -303,7 +341,7 @@ def test_send_alert_push_to_user_sends_to_active_subscriptions_only(db, monkeypa
 
     sent = browser_push.send_alert_push_to_user(
         user,
-        alert,
+        alert_group,
         event_type="notification",
     )
 
@@ -320,7 +358,8 @@ def test_send_alert_push_to_user_returns_zero_when_disabled(db, monkeypatch):
 
     group = create_group()
     user = create_user("alice", group)
-    alert = create_assigned_alert(user)
+    alert_group = create_assigned_group(user)
+
     create_push_subscription(user)
 
     monkeypatch.setattr(
@@ -329,13 +368,12 @@ def test_send_alert_push_to_user_returns_zero_when_disabled(db, monkeypatch):
         lambda subscription, payload: pytest.fail("_webpush must not be called"),
     )
 
-    assert browser_push.send_alert_push_to_user(user, alert) == 0
+    assert browser_push.send_alert_push_to_user(user, alert_group) == 0
 
 
 def test_send_test_push_ignores_failed_subscription_and_disables_gone_subscription(db, monkeypatch):
     group = create_group()
     user = create_user("alice", group)
-
     subscription = create_push_subscription(user)
 
     class FakeWebPushException(Exception):
@@ -362,19 +400,20 @@ def test_send_test_push_ignores_failed_subscription_and_disables_gone_subscripti
 def test_execute_push_action_ack_uses_token_once(db, monkeypatch):
     group = create_group()
     user = create_user("alice", group)
-    alert = create_assigned_alert(user, status="firing")
+    alert_group = create_assigned_group(user, status="firing")
 
-    token = browser_push.create_action_token(user, alert, "ack")
+    token = browser_push.create_action_token(user, alert_group, "ack")
 
-    def fake_run_alert_push_action(alert_id, user_id, action):
-        assert alert_id == alert.id
+    def fake_run_alert_push_action(group_id, user_id, action):
+        assert group_id == alert_group.id
         assert user_id == user.id
         assert action == "ack"
 
-        updated_alert = Alert.get_by_id(alert_id)
-        updated_alert.status = "acknowledged"
-        updated_alert.save()
-        return updated_alert
+        updated_group = AlertGroup.get_by_id(group_id)
+        updated_group.status = "acknowledged"
+        updated_group.save()
+
+        return updated_group
 
     monkeypatch.setattr(browser_push, "_run_alert_push_action", fake_run_alert_push_action)
     monkeypatch.setattr(browser_push, "write_audit", lambda *args, **kwargs: None)
@@ -384,7 +423,8 @@ def test_execute_push_action_ack_uses_token_once(db, monkeypatch):
     assert result == {
         "ok": True,
         "action": "ack",
-        "alert_id": alert.id,
+        "alert_group_id": alert_group.id,
+        "alert_id": alert_group.id,
         "status": "acknowledged",
     }
 
@@ -405,15 +445,16 @@ def test_execute_push_action_ack_uses_token_once(db, monkeypatch):
 def test_execute_push_action_resolve(db, monkeypatch):
     group = create_group()
     user = create_user("alice", group)
-    alert = create_assigned_alert(user, status="acknowledged")
+    alert_group = create_assigned_group(user, status="acknowledged")
 
-    token = browser_push.create_action_token(user, alert, "resolve")
+    token = browser_push.create_action_token(user, alert_group, "resolve")
 
-    def fake_run_alert_push_action(alert_id, user_id, action):
-        updated_alert = Alert.get_by_id(alert_id)
-        updated_alert.status = "resolved"
-        updated_alert.save()
-        return updated_alert
+    def fake_run_alert_push_action(group_id, user_id, action):
+        updated_group = AlertGroup.get_by_id(group_id)
+        updated_group.status = "resolved"
+        updated_group.save()
+
+        return updated_group
 
     monkeypatch.setattr(browser_push, "_run_alert_push_action", fake_run_alert_push_action)
     monkeypatch.setattr(browser_push, "write_audit", lambda *args, **kwargs: None)
@@ -422,16 +463,17 @@ def test_execute_push_action_resolve(db, monkeypatch):
 
     assert result["ok"] is True
     assert result["action"] == "resolve"
-    assert result["alert_id"] == alert.id
+    assert result["alert_group_id"] == alert_group.id
+    assert result["alert_id"] == alert_group.id
     assert result["status"] == "resolved"
 
 
 def test_execute_push_action_rejects_action_mismatch(db):
     group = create_group()
     user = create_user("alice", group)
-    alert = create_assigned_alert(user)
+    alert_group = create_assigned_group(user)
 
-    token = browser_push.create_action_token(user, alert, "ack")
+    token = browser_push.create_action_token(user, alert_group, "ack")
 
     result = browser_push.execute_push_action(token, "resolve")
 
@@ -444,13 +486,13 @@ def test_execute_push_action_rejects_action_mismatch(db):
 def test_execute_push_action_rejects_expired_token(db):
     group = create_group()
     user = create_user("alice", group)
-    alert = create_assigned_alert(user)
+    alert_group = create_assigned_group(user)
 
     token = "expired-token"
 
     BrowserPushActionToken.create(
         user=user.id,
-        alert=alert.id,
+        group=alert_group.id,
         action="ack",
         token_hash=browser_push._hash_token(token),
         expires_at=datetime.utcnow() - timedelta(seconds=1),

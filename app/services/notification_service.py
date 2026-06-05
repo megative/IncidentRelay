@@ -6,7 +6,6 @@ from app.notifiers.registry import get_notifier
 from app.services.links import build_alert_web_url
 from app.services.severity import normalize_severity, normalize_severity_list
 from app.services.service_context import format_service_context_plain, service_display_name
-from app.notifiers.browser_push import service as browser_push
 from app.services import notification_rules
 
 EDITABLE_EVENTS = {"acknowledged", "resolved"}
@@ -26,41 +25,6 @@ def _ensure_alert_group(group):
 
 def _group_log_id(group):
     return getattr(group, "id", None)
-
-
-def _event_target_kwargs(group):
-    return {
-        "group_id": group.id,
-    }
-
-
-def alert_service_label(alert):
-    """Return a human-readable affected service label."""
-    service = getattr(alert, "service", None)
-
-    if service:
-        parts = [
-            getattr(service, "name", None)
-            or getattr(service, "slug", None)
-            or f"Service #{getattr(service, 'id', '-')}",
-        ]
-
-        criticality = getattr(service, "criticality", None)
-        status = getattr(service, "status", None)
-
-        if criticality:
-            parts.append(criticality)
-
-        if status:
-            parts.append(status)
-
-        return " / ".join(str(part) for part in parts if part)
-
-    service_id = getattr(alert, "service_id", None)
-    if service_id:
-        return f"Service #{service_id}"
-
-    return "-"
 
 
 def _team_display_name(alert):
@@ -135,97 +99,6 @@ def notification_log_extra(channel, group, event_type, result=None, error=None, 
 
     data.update(extra_fields)
     return {"extra": data}
-
-
-def browser_push_log_extra(group, event_type, sent=None, error=None, reason=None):
-    data = {
-        "alert_group_id": _group_log_id(group),
-        "event_type": event_type,
-        "provider": "browser_push",
-        "assignee_id": getattr(group, "assignee_id", None),
-    }
-
-    if sent is not None:
-        data["sent"] = sent
-
-    if error is not None:
-        data["error"] = str(error)
-
-    if reason:
-        data["reason"] = reason
-
-    return {"extra": data}
-
-
-def send_profile_browser_push(group, event_type="notification"):
-    """Send built-in browser push to alert group assignee profile devices."""
-
-    group = _ensure_alert_group(group)
-
-    assignee = getattr(group, "assignee", None)
-
-    if not assignee:
-        logger.info(
-            "browser push skipped",
-            extra=browser_push_log_extra(
-                group,
-                event_type,
-                reason="no_assignee",
-            ),
-        )
-        return 0
-
-    try:
-        sent = browser_push.send_alert_push_to_user(
-            assignee,
-            group,
-            event_type=event_type,
-        )
-    except Exception as exc:
-        alerts_repo.create_alert_event(
-            group_id=group.id,
-            event_type=f"{event_type}_browser_push_failed",
-            message=f"browser_push: {exc}",
-        )
-
-        logger.warning(
-            "browser push failed",
-            extra=browser_push_log_extra(
-                group,
-                event_type,
-                error=exc,
-            ),
-        )
-        return 0
-
-    if not sent:
-        logger.info(
-            "browser push skipped",
-            extra=browser_push_log_extra(
-                group,
-                event_type,
-                sent=0,
-                reason="no_active_push_subscriptions",
-            ),
-        )
-        return 0
-
-    alerts_repo.create_alert_event(
-        group_id=group.id,
-        event_type=f"{event_type}_browser_push_sent",
-        message=f"Sent browser push to {sent} device(s)",
-    )
-
-    logger.info(
-        "browser push sent",
-        extra=browser_push_log_extra(
-            group,
-            event_type,
-            sent=sent,
-        ),
-    )
-
-    return 1
 
 
 def get_channel_notify_on_severities(channel):

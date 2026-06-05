@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 from app.modules.db.models import (
-    Alert,
+    AlertGroup,
     User,
     UserNotificationDelivery,
     UserNotificationRule,
@@ -14,8 +14,8 @@ from app.notifiers.voice.notifier import VoiceCallNotifier
 from app.services.severity import normalize_severity, normalize_severity_list
 from app.modules.db import alerts_repo
 
-logger = logging.getLogger("oncall.notification_rules")
 
+logger = logging.getLogger("oncall.notification_rules")
 
 NOTIFICATION_METHOD_BROWSER_PUSH = "browser_push"
 NOTIFICATION_METHOD_EMAIL = "email"
@@ -45,14 +45,25 @@ SKIP_IF_NOT_FIRING_EVENT_TYPES = {
 }
 
 
-def should_skip_delivery_for_alert_status(delivery):
+def _ensure_alert_group(group):
+    if group.__class__.__name__ != "AlertGroup":
+        raise TypeError(
+            "notification_rules expects AlertGroup, not Alert. "
+            "Use group-level notifications only."
+        )
+
+    return group
+
+
+def should_skip_delivery_for_group_status(delivery):
     """Return True when delayed delivery is no longer relevant."""
+
     if delivery.event_type not in SKIP_IF_NOT_FIRING_EVENT_TYPES:
         return False
 
-    alert = Alert.get_by_id(delivery.alert_id)
+    group = AlertGroup.get_by_id(delivery.group_id)
 
-    return alert.status != "firing"
+    return group.status != "firing"
 
 
 def serialize_rule(rule):
@@ -140,6 +151,7 @@ def update_user_rule(user, rule_id, payload):
 
 def delete_user_rule(user, rule_id):
     rule = get_user_rule(user, rule_id)
+
     rule.deleted = True
     rule.deleted_at = datetime.utcnow()
     rule.enabled = False
@@ -193,6 +205,7 @@ def validate_rule_payload(method, delay_seconds, severities, event_types):
 
 def has_custom_user_rules(user_id):
     """Return True when user has at least one non-deleted notification rule."""
+
     if not user_id:
         return False
 
@@ -207,9 +220,12 @@ def has_custom_user_rules(user_id):
     )
 
 
-def list_matching_rules(alert, event_type="notification"):
-    """Return enabled rules matching alert severity and event type."""
-    user_id = getattr(alert, "assignee_id", None)
+def list_matching_rules(group, event_type="notification"):
+    """Return enabled rules matching alert group severity and event type."""
+
+    group = _ensure_alert_group(group)
+
+    user_id = getattr(group, "assignee_id", None)
 
     if not user_id:
         return []
@@ -228,11 +244,11 @@ def list_matching_rules(alert, event_type="notification"):
     return [
         rule
         for rule in rules
-        if rule_matches_alert(rule, alert, event_type)
+        if rule_matches_group(rule, group, event_type)
     ]
 
 
-def rule_matches_alert(rule, alert, event_type):
+def rule_matches_group(rule, group, event_type):
     rule_event_types = set(rule.event_types or [])
 
     if rule_event_types:
@@ -244,31 +260,37 @@ def rule_matches_alert(rule, alert, event_type):
     allowed_severities = set(normalize_severity_list(rule.severities or []))
 
     if allowed_severities:
-        alert_severity = normalize_severity(getattr(alert, "severity", None))
+        group_severity = normalize_severity(getattr(group, "severity", None))
 
-        if alert_severity not in allowed_severities:
+        if group_severity not in allowed_severities:
             return False
 
     return True
 
 
-def has_deliverable_user_notification(alert, event_type="notification"):
-    """Return True if alert assignee can receive at least one user-level notification."""
-    user_id = getattr(alert, "assignee_id", None)
+def has_deliverable_user_notification(group, event_type="notification"):
+    """Return True if alert group assignee can receive user-level notification."""
+
+    group = _ensure_alert_group(group)
+
+    user_id = getattr(group, "assignee_id", None)
 
     if not user_id:
         return False
 
     if not has_custom_user_rules(user_id):
-        return browser_push.can_send_alert_push(alert)
+        return browser_push.can_send_alert_push(group)
 
-    return bool(list_matching_rules(alert, event_type=event_type))
+    return bool(list_matching_rules(group, event_type=event_type))
 
 
-def enqueue_user_notifications(alert, event_type="notification"):
-    """Create/send user-level notifications for alert assignee."""
-    assignee = getattr(alert, "assignee", None)
-    assignee_id = getattr(alert, "assignee_id", None)
+def enqueue_user_notifications(group, event_type="notification"):
+    """Create/send user-level notifications for alert group assignee."""
+
+    group = _ensure_alert_group(group)
+
+    assignee = getattr(group, "assignee", None)
+    assignee_id = getattr(group, "assignee_id", None)
 
     if not assignee_id:
         return 0
@@ -281,15 +303,13 @@ def enqueue_user_notifications(alert, event_type="notification"):
 
     now = datetime.utcnow()
 
-    # Backward-compatible default:
-    # no custom rules => profile browser push works immediately,
-    # but still creates UserNotificationDelivery for history/tests.
+    # Default profile browser push when the user has no custom rules.
     if not has_custom_user_rules(assignee.id):
         if event_type not in DEFAULT_RULE_EVENT_TYPES:
             return 0
 
         delivery = create_delivery(
-            alert=alert,
+            group=group,
             user=assignee,
             rule=None,
             method=NOTIFICATION_METHOD_BROWSER_PUSH,
@@ -301,13 +321,13 @@ def enqueue_user_notifications(alert, event_type="notification"):
 
     sent_count = 0
 
-    for rule in list_matching_rules(alert, event_type=event_type):
+    for rule in list_matching_rules(group, event_type=event_type):
         scheduled_at = now + timedelta(
             seconds=max(int(rule.delay_seconds or 0), 0)
         )
 
         delivery = create_delivery(
-            alert=alert,
+            group=group,
             user=assignee,
             rule=rule,
             method=rule.method,
@@ -323,82 +343,11 @@ def enqueue_user_notifications(alert, event_type="notification"):
     return sent_count
 
 
-def send_default_browser_push(alert, user, event_type="notification"):
-    """
-    Send backward-compatible profile browser push.
+def create_delivery(group, user, rule, method, event_type, scheduled_at):
+    group = _ensure_alert_group(group)
 
-    This is the default behavior for users without custom notification rules.
-    It intentionally calls send_alert_push_to_user directly and does not run
-    can_send_alert_push() before it, because the sender already knows whether
-    there are active subscriptions.
-    """
-    try:
-        sent = browser_push.send_alert_push_to_user(
-            user,
-            alert,
-            event_type=event_type,
-        )
-    except Exception as exc:
-        alerts_repo.create_alert_event(
-            alert.id,
-            f"{event_type}_browser_push_failed",
-            f"browser_push: {exc}",
-        )
-
-        logger.warning(
-            "default browser push failed",
-            extra={
-                "extra": {
-                    "alert_id": getattr(alert, "id", None),
-                    "event_type": event_type,
-                    "assignee_id": getattr(user, "id", None),
-                    "error": str(exc),
-                }
-            },
-        )
-
-        return 0
-
-    if not sent:
-        logger.info(
-            "default browser push skipped",
-            extra={
-                "extra": {
-                    "alert_id": getattr(alert, "id", None),
-                    "event_type": event_type,
-                    "assignee_id": getattr(user, "id", None),
-                    "reason": "no_active_push_subscriptions",
-                }
-            },
-        )
-
-        return 0
-
-    alerts_repo.create_alert_event(
-        alert.id,
-        f"{event_type}_browser_push_sent",
-        f"Sent browser push to {sent} device(s)",
-    )
-
-    logger.info(
-        "default browser push sent",
-        extra={
-            "extra": {
-                "alert_id": getattr(alert, "id", None),
-                "event_type": event_type,
-                "assignee_id": getattr(user, "id", None),
-                "sent": sent,
-            }
-        },
-    )
-
-    # Count logical delivery, not number of devices.
-    return 1
-
-
-def create_delivery(alert, user, rule, method, event_type, scheduled_at):
     return UserNotificationDelivery.create(
-        alert=alert.id,
+        group=group.id,
         user=user.id,
         rule=rule.id if rule else None,
         method=method,
@@ -445,7 +394,7 @@ def process_due_user_notifications(limit=100):
 
         delivery = UserNotificationDelivery.get_by_id(due_delivery.id)
 
-        if should_skip_delivery_for_alert_status(delivery):
+        if should_skip_delivery_for_group_status(delivery):
             mark_delivery_skipped(
                 delivery,
                 "alert_not_firing",
@@ -460,20 +409,21 @@ def process_due_user_notifications(limit=100):
 def send_browser_push_delivery(delivery):
     """Send browser push delivery and update delivery history."""
     now = datetime.utcnow()
+    group = delivery.group
 
     try:
         sent = browser_push.send_alert_push_to_user(
             delivery.user,
-            delivery.alert,
+            group,
             event_type=delivery.event_type,
         )
     except Exception as exc:
         mark_delivery_failed(delivery, exc)
 
         alerts_repo.create_alert_event(
-            delivery.alert.id,
-            f"{delivery.event_type}_browser_push_failed",
-            f"browser_push: {exc}",
+            group_id=group.id,
+            event_type=f"{delivery.event_type}_browser_push_failed",
+            message=f"browser_push: {exc}",
         )
 
         return 0
@@ -483,7 +433,6 @@ def send_browser_push_delivery(delivery):
             delivery,
             "no_active_push_subscriptions",
         )
-
         return 0
 
     (
@@ -504,9 +453,9 @@ def send_browser_push_delivery(delivery):
     )
 
     alerts_repo.create_alert_event(
-        delivery.alert.id,
-        f"{delivery.event_type}_browser_push_sent",
-        f"Sent browser push to {sent} device(s)",
+        group_id=group.id,
+        event_type=f"{delivery.event_type}_browser_push_sent",
+        message=f"Sent browser push to {sent} device(s)",
     )
 
     return 1
@@ -514,43 +463,24 @@ def send_browser_push_delivery(delivery):
 
 def send_delivery(delivery):
     """Send pending user notification delivery."""
-    if delivery.method == NOTIFICATION_METHOD_BROWSER_PUSH:
-        return send_browser_push_delivery(delivery)
 
-    alert = Alert.get_or_none(Alert.id == delivery.alert_id)
+    group = AlertGroup.get_or_none(AlertGroup.id == delivery.group_id)
 
-    if not alert:
-        mark_delivery_skipped(delivery, "alert_not_found")
+    if not group:
+        mark_delivery_skipped(delivery, "alert_group_not_found")
         return 0
 
-    if delivery.event_type in {"notification", "reminder", "escalation"}:
-        if alert.status != "firing":
+    if delivery.event_type in SKIP_IF_NOT_FIRING_EVENT_TYPES:
+        if group.status != "firing":
             mark_delivery_skipped(delivery, "alert_not_firing")
             return 0
 
     try:
         if delivery.method == NOTIFICATION_METHOD_BROWSER_PUSH:
-            sent = browser_push.send_alert_push_to_user(
-                delivery.user,
-                alert,
-                event_type=delivery.event_type,
-            )
+            return send_browser_push_delivery(delivery)
 
-            if not sent:
-                mark_delivery_skipped(delivery, "no_active_push_subscriptions")
-                return 0
-
-            result = {
-                "provider": "browser_push",
-                "provider_status": "sent",
-                "provider_payload": {
-                    "sent": sent,
-                },
-            }
-
-        elif delivery.method in DIRECT_NOTIFIERS:
-            result = send_direct_notifier_delivery(delivery, alert)
-
+        if delivery.method in DIRECT_NOTIFIERS:
+            result = send_direct_notifier_delivery(delivery, group)
         else:
             mark_delivery_failed(
                 delivery,
@@ -576,7 +506,7 @@ def send_delivery(delivery):
     return 1
 
 
-def send_direct_notifier_delivery(delivery, alert):
+def send_direct_notifier_delivery(delivery, group):
     from app.services.notification_service import format_alert_message
 
     notifier = DIRECT_NOTIFIERS[delivery.method]
@@ -588,11 +518,11 @@ def send_direct_notifier_delivery(delivery, alert):
         config=build_direct_channel_config(delivery),
     )
 
-    text = format_alert_message(alert, delivery.event_type)
+    text = format_alert_message(group, delivery.event_type)
 
     result = notifier.send(
         channel,
-        alert,
+        group,
         text,
         event_type=delivery.event_type,
     ) or {}

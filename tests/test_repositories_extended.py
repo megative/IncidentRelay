@@ -13,7 +13,6 @@ from app.modules.db.models import (
 from tests.factories import (
     add_user_to_team,
     attach_channel,
-    create_alert,
     create_channel,
     create_group,
     create_route,
@@ -23,47 +22,110 @@ from tests.factories import (
     create_team,
     create_user,
     unique,
+    create_service,
 )
 
 
-def test_alert_pagination_filters_searches_sorts_and_summarizes(db):
-    group = create_group(slug="infra")
-    team = create_team(group, slug="sre")
-    route = create_route(team)
+from app.modules.db import alerts_repo
+from tests.factories import create_group, create_route, create_service, create_team
 
-    first = create_alert(route)
-    first.title = "DiskFull"
-    first.status = "firing"
-    first.reminder_count = 2
-    first.save()
 
-    second = create_alert(route)
-    second.title = "CPUHigh"
-    second.status = "acknowledged"
-    second.severity = "warning"
-    second.save()
+def _create_repo_alert_group(team, route, service, title, status, severity, group_key):
+    counters = {
+        "firing_count": 0,
+        "acknowledged_count": 0,
+        "resolved_count": 0,
+        "silenced_count": 0,
+    }
 
-    result = alerts_repo.paginate_alerts(
-        team_ids=[team.id],
-        page=1,
-        page_size=1,
-        sort="id",
-        order="asc",
+    if status == "firing":
+        counters["firing_count"] = 1
+    elif status == "acknowledged":
+        counters["acknowledged_count"] = 1
+    elif status == "resolved":
+        counters["resolved_count"] = 1
+    elif status == "silenced":
+        counters["silenced_count"] = 1
+
+    return alerts_repo.create_alert_group(
+        team=team.id,
+        route=route.id,
+        service=service.id,
+        source="test",
+        group_key=group_key,
+        title=title,
+        message=title,
+        severity=severity,
+        status=status,
+        common_labels={},
+        label_values={},
+        payload_summary={},
+        alert_count=1,
+        silenced=status == "silenced",
+        **counters,
     )
 
-    assert result["pagination"]["total_items"] == 2
-    assert result["pagination"]["total_pages"] == 2
-    assert result["summary"]["firing"] == 1
-    assert result["summary"]["acknowledged"] == 1
-    assert result["summary"]["reminders"] == 2
-    assert result["items"][0].id == first.id
 
-    search_result = alerts_repo.paginate_alerts(team_ids=[team.id], search="CPU")
-    assert [item.title for item in search_result["items"]] == ["CPUHigh"]
+def test_alert_group_pagination_filters_searches_sorts_and_summarizes(db):
+    group = create_group()
+    team = create_team(group)
+    route = create_route(team, source="test")
 
-    empty = alerts_repo.paginate_alerts(team_ids=[])
-    assert empty["items"] == []
-    assert empty["pagination"]["total_items"] == 0
+    service_a = create_service(team, name="API", slug="api")
+    service_b = create_service(team, name="DB", slug="db")
+
+    keep = _create_repo_alert_group(
+        team,
+        route,
+        service_a,
+        "critical firing api",
+        "firing",
+        "critical",
+        "repo-filter-a",
+    )
+
+    _create_repo_alert_group(
+        team,
+        route,
+        service_b,
+        "warning acknowledged db",
+        "acknowledged",
+        "warning",
+        "repo-filter-b",
+    )
+
+    _create_repo_alert_group(
+        team,
+        route,
+        service_a,
+        "low resolved api",
+        "resolved",
+        "low",
+        "repo-filter-c",
+    )
+
+    page = alerts_repo.paginate_alert_groups(
+        team_id=team.id,
+        status=["firing", "acknowledged"],
+        severity=["critical", "warning"],
+        service_id=[service_a.id],
+        search="critical",
+        sort="id",
+        order="asc",
+        page_size=25,
+    )
+
+    assert [row.id for row in page["items"]] == [keep.id]
+
+    assert page["pagination"]["total_items"] == 1
+    assert page["pagination"]["page"] == 1
+    assert page["pagination"]["page_size"] == 25
+
+    assert page["summary"]["total"] == 1
+    assert page["summary"]["firing"] == 1
+    assert page["summary"]["acknowledged"] == 0
+    assert page["summary"]["resolved"] == 0
+    assert page["summary"]["silenced"] == 0
 
 
 def test_route_channel_link_helpers_replace_and_unlink_links(db):

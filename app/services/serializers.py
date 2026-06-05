@@ -409,9 +409,6 @@ def serialize_alert_notification(notification):
 def serialize_alert(
     alert,
     include_payload=False,
-    include_details=False,
-    events=None,
-    notifications=None,
     current_user=None,
 ):
     """
@@ -550,13 +547,6 @@ def serialize_alert(
 
     if include_payload:
         data["payload"] = alert.payload
-
-    if include_details:
-        data["events"] = [serialize_alert_event(event) for event in events or []]
-        data["notifications"] = [
-            serialize_alert_notification(item)
-            for item in notifications or []
-        ]
 
     return attach_team_permissions(data, team.id if team else None, current_user)
 
