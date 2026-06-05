@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 
+from app.services import alerts as alerts_service
 from app.modules.db import alerts_repo, escalation_policies_repo
 from app.modules.db.models import Alert, AlertEvent, AlertGroup
 from app.services.alerts import (
@@ -264,57 +265,179 @@ def test_acknowledge_and_resolve_alert_update_statuses_and_create_events(monkeyp
     ] == ["acknowledged", "resolved"]
 
 
-def test_reminder_interval_uses_rotation_before_global_config(db):
+def _create_firing_alert_group_for_reminder(route, *, dedup_key, instance="host1"):
+    alert_group, created = alerts_service.upsert_alert(
+        {
+            "source": "alertmanager",
+            "forced_route_id": route.id,
+            "external_id": f"external-{dedup_key}",
+            "dedup_key": dedup_key,
+            "title": "DiskFull",
+            "message": f"/var is 95% full on {instance}",
+            "severity": "critical",
+            "labels": {
+                "alertname": "DiskFull",
+                "severity": "critical",
+                "instance": instance,
+            },
+            "payload": {},
+            "status": "firing",
+        }
+    )
+
+    assert created is True
+    assert alert_group is not None
+
+    return alert_group
+
+
+def test_reminder_interval_uses_rotation_before_global_config(db, monkeypatch):
     group = create_group(slug="infra")
     team = create_team(group, slug="sre")
-    rotation = create_rotation(team)
 
-    rotation.reminder_interval_seconds = 60
+    rotation = create_rotation(team)
+    rotation.reminder_interval_seconds = 30
     rotation.save()
 
-    route = create_route(team, rotation=rotation)
-    alert_group = create_alert_group_for_route(route)
+    route = create_route(
+        team,
+        source="alertmanager",
+        rotation=rotation,
+        group_by=["alertname", "severity"],
+    )
+
+    alert_group = _create_firing_alert_group_for_reminder(
+        route,
+        dedup_key="dedup-reminder-rotation",
+    )
 
     now = datetime.utcnow()
 
-    assert get_alert_reminder_interval(alert_group) == 60
+    alert_group.last_notification_at = now - timedelta(seconds=31)
+    alert_group.notification_pending = False
+    alert_group.notification_due_at = None
+    alert_group.notification_reason = None
+    alert_group.save()
+
+    alert_group = AlertGroup.get_by_id(alert_group.id)
+
+    assert alerts_service.get_alert_reminder_interval(alert_group) == 30
+    assert alerts_service.should_send_reminder(alert_group, now) is True
+
+    alert_group.last_notification_at = now - timedelta(seconds=29)
+    alert_group.save()
+
+    alert_group = AlertGroup.get_by_id(alert_group.id)
+
+    assert alerts_service.should_send_reminder(alert_group, now) is False
 
     alert_group.last_notification_at = None
-    assert should_send_reminder(alert_group, now) is True
+    alert_group.save()
 
-    alert_group.last_notification_at = now - timedelta(seconds=61)
-    assert should_send_reminder(alert_group, now) is True
+    alert_group = AlertGroup.get_by_id(alert_group.id)
 
-    alert_group.last_notification_at = now - timedelta(seconds=59)
-    assert should_send_reminder(alert_group, now) is False
+    assert alerts_service.should_send_reminder(alert_group, now) is False
 
 
 def test_send_unacked_reminders_counts_only_successful_sends(monkeypatch, db):
     group = create_group(slug="infra")
     team = create_team(group, slug="sre")
+
     rotation = create_rotation(team)
-    route = create_route(team, rotation=rotation)
+    rotation.reminder_interval_seconds = 30
+    rotation.save()
 
-    alert_group = create_alert_group_for_route(route)
+    route = create_route(
+        team,
+        source="alertmanager",
+        rotation=rotation,
+        group_by=["alertname", "severity"],
+    )
 
-    alert_group.last_notification_at = None
-    alert_group.save()
+    successful_group = _create_firing_alert_group_for_reminder(
+        route,
+        dedup_key="dedup-reminder-success",
+        instance="host1",
+    )
 
-    monkeypatch.setattr("app.services.alerts.has_matching_notification_channel", lambda alert_group: True)
-    monkeypatch.setattr("app.services.alerts.maybe_escalate_alert", lambda alert_group: False)
-    monkeypatch.setattr("app.services.alerts.notify_alert", lambda alert_group, event_type="reminder": 1)
+    failed_group = _create_firing_alert_group_for_reminder(
+        route,
+        dedup_key="dedup-reminder-failed",
+        instance="host2",
+    )
 
-    assert send_unacked_reminders() == 1
+    now = datetime.utcnow()
 
-    stored = AlertGroup.get_by_id(alert_group.id)
+    for alert_group in (successful_group, failed_group):
+        alert_group.rotation = rotation.id
+        alert_group.status = "firing"
+        alert_group.last_notification_at = now - timedelta(seconds=120)
+        alert_group.notification_pending = False
+        alert_group.notification_due_at = None
+        alert_group.notification_reason = None
+        alert_group.reminder_count = 0
+        alert_group.save()
 
-    assert stored.reminder_count == 1
-    assert stored.last_notification_at is not None
+    sent_calls = []
 
-    assert AlertEvent.select().where(
-        (AlertEvent.group == alert_group.id)
-        & (AlertEvent.event_type == "reminder_sent")
-    ).exists()
+    monkeypatch.setattr(
+        alerts_service,
+        "has_matching_notification_channel",
+        lambda alert_group: True,
+    )
+
+    monkeypatch.setattr(
+        alerts_service,
+        "maybe_escalate_alert",
+        lambda alert_group: False,
+    )
+
+    def fake_notify_alert(alert_group, event_type="reminder"):
+        assert event_type == "reminder"
+
+        sent_calls.append(alert_group.id)
+
+        if alert_group.id == successful_group.id:
+            return 1
+
+        return 0
+
+    monkeypatch.setattr(
+        alerts_service,
+        "notify_alert",
+        fake_notify_alert,
+    )
+
+    count = alerts_service.send_unacked_reminders()
+
+    successful_group = AlertGroup.get_by_id(successful_group.id)
+    failed_group = AlertGroup.get_by_id(failed_group.id)
+
+    assert count == 1
+    assert sent_calls == [successful_group.id, failed_group.id]
+
+    assert successful_group.reminder_count == 1
+    assert failed_group.reminder_count == 0
+
+    assert (
+        AlertEvent
+        .select()
+        .where(
+            (AlertEvent.group == successful_group.id)
+            & (AlertEvent.event_type == "reminder_sent")
+        )
+        .exists()
+    ) is True
+
+    assert (
+        AlertEvent
+        .select()
+        .where(
+            (AlertEvent.group == failed_group.id)
+            & (AlertEvent.event_type == "reminder_sent")
+        )
+        .exists()
+    ) is False
 
 
 def test_zero_reminder_interval_disables_reminders(db):

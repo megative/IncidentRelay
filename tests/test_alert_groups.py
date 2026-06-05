@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 
+from app.modules.db.models import AlertGroup
 from app.settings import Config
 from app.services import alerts as alerts_service
 from app.modules.db import alerts_repo
@@ -275,24 +276,72 @@ def test_new_group_schedules_notification_instead_of_sending_immediately(db, mon
 
 
 def test_due_group_notification_is_sent(db, monkeypatch):
-    route = _route(group_by=["alertname", "severity"])
+    group = create_group()
+    team = create_team(group)
+    route = create_route(
+        team,
+        source="alertmanager",
+        group_by=["alertname", "severity"],
+    )
 
-    sent = []
+    alert_group, created = upsert_alert(
+        {
+            "source": "alertmanager",
+            "forced_route_id": route.id,
+            "external_id": "external-due-notification",
+            "dedup_key": "dedup-due-notification",
+            "title": "DiskFull",
+            "message": "/var is 95% full",
+            "severity": "critical",
+            "labels": {
+                "alertname": "DiskFull",
+                "severity": "critical",
+                "instance": "host1",
+            },
+            "payload": {},
+            "status": "firing",
+        }
+    )
 
-    monkeypatch.setattr(Config, "ALERT_GROUP_WAIT_SECONDS", 0)
-    monkeypatch.setattr(alerts_service, "notify_alert", lambda group, event_type: sent.append((group.id, event_type)))
+    assert created is True
 
-    group, _ = upsert_alert(_alert(route, "DiskFull", "host1"))
+    alert_group.notification_pending = True
+    alert_group.notification_due_at = datetime.utcnow() - timedelta(seconds=1)
+    alert_group.notification_reason = "notification"
+    alert_group.status = "firing"
+    alert_group.save()
+
+    calls = []
+
+    monkeypatch.setattr(
+        alerts_service,
+        "has_matching_notification_channel",
+        lambda group: True,
+    )
+
+    monkeypatch.setattr(
+        alerts_service,
+        "notify_alert",
+        lambda group, event_type="notification": calls.append(
+            (group.id, event_type)
+        ) or 1,
+    )
 
     result = alerts_service.process_due_alert_group_notifications()
 
-    group = alerts_repo.get_alert_group(group.id)
+    alert_group = AlertGroup.get_by_id(alert_group.id)
 
+    assert result["processed"] == 1
     assert result["sent"] == 1
-    assert sent == [(group.id, "notification")]
-    assert group.notification_pending is False
-    assert group.notification_due_at is None
-    assert group.last_notification_at is not None
+    assert result["skipped"] == 0
+    assert result["failed"] == 0
+
+    assert calls == [(alert_group.id, "notification")]
+
+    assert alert_group.notification_pending is False
+    assert alert_group.notification_due_at is None
+    assert alert_group.notification_reason is None
+    assert alert_group.last_notification_at is not None
 
 
 def test_group_resolved_before_group_wait_does_not_send_notification(db, monkeypatch):
@@ -324,25 +373,108 @@ def test_group_resolved_before_group_wait_does_not_send_notification(db, monkeyp
 
 
 def test_new_child_after_notification_schedules_group_interval_update(db, monkeypatch):
-    route = _route(group_by=["alertname", "severity"])
+    group = create_group()
+    team = create_team(group)
+    route = create_route(
+        team,
+        source="alertmanager",
+        group_by=["alertname", "severity"],
+    )
 
-    sent = []
+    monkeypatch.setattr(
+        alerts_service.Config,
+        "ALERT_GROUP_WAIT_SECONDS",
+        30,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        alerts_service.Config,
+        "ALERT_GROUP_INTERVAL_SECONDS",
+        300,
+        raising=False,
+    )
 
-    monkeypatch.setattr(Config, "ALERT_GROUP_WAIT_SECONDS", 0)
-    monkeypatch.setattr(Config, "ALERT_GROUP_INTERVAL_SECONDS", 300)
-    monkeypatch.setattr(alerts_service, "notify_alert", lambda group, event_type: sent.append((group.id, event_type)))
+    alert_group, created = upsert_alert(
+        {
+            "source": "alertmanager",
+            "forced_route_id": route.id,
+            "external_id": "external-host1",
+            "dedup_key": "dedup-host1",
+            "title": "DiskFull",
+            "message": "/var is 95% full on host1",
+            "severity": "critical",
+            "labels": {
+                "alertname": "DiskFull",
+                "severity": "critical",
+                "instance": "host1",
+            },
+            "payload": {},
+            "status": "firing",
+        }
+    )
 
-    group, _ = upsert_alert(_alert(route, "DiskFull", "host1"))
+    assert created is True
+    assert alert_group.status == "firing"
+    assert alert_group.notification_pending is True
+    assert alert_group.notification_reason == "notification"
 
-    alerts_service.process_due_alert_group_notifications()
+    alert_group.notification_due_at = datetime.utcnow() - timedelta(seconds=1)
+    alert_group.save()
 
-    group = alerts_repo.get_alert_group(group.id)
-    first_notification_at = group.last_notification_at
+    calls = []
 
-    upsert_alert(_alert(route, "DiskFull", "host2"))
+    monkeypatch.setattr(
+        alerts_service,
+        "notify_alert",
+        lambda group, event_type="notification": calls.append(
+            (group.id, event_type)
+        ) or 1,
+    )
 
-    group = alerts_repo.get_alert_group(group.id)
+    result = alerts_service.process_due_alert_group_notifications()
 
-    assert sent == [(group.id, "notification")]
-    assert group.notification_pending is True
-    assert group.notification_due_at >= first_notification_at + timedelta(seconds=300)
+    alert_group = AlertGroup.get_by_id(alert_group.id)
+
+    assert result["processed"] == 1
+    assert result["sent"] == 1
+    assert result["skipped"] == 0
+    assert result["failed"] == 0
+    assert calls == [(alert_group.id, "notification")]
+
+    assert alert_group.notification_pending is False
+    assert alert_group.notification_due_at is None
+    assert alert_group.notification_reason is None
+    assert alert_group.last_notification_at is not None
+
+    first_notification_at = alert_group.last_notification_at
+
+    alert_group, created = upsert_alert(
+        {
+            "source": "alertmanager",
+            "forced_route_id": route.id,
+            "external_id": "external-host2",
+            "dedup_key": "dedup-host2",
+            "title": "DiskFull",
+            "message": "/var is 95% full on host2",
+            "severity": "critical",
+            "labels": {
+                "alertname": "DiskFull",
+                "severity": "critical",
+                "instance": "host2",
+            },
+            "payload": {},
+            "status": "firing",
+        }
+    )
+
+    alert_group = AlertGroup.get_by_id(alert_group.id)
+
+    assert created is False
+    assert alert_group.status == "firing"
+    assert alert_group.alert_count == 2
+    assert alert_group.firing_count == 2
+
+    assert alert_group.notification_pending is True
+    assert alert_group.notification_reason == "update"
+    assert alert_group.notification_due_at == first_notification_at + timedelta(seconds=300)
+    assert alert_group.last_notification_at == first_notification_at

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone as dt_timezone
 from flask import Blueprint, jsonify, request
 
 from app.services.calendar_service import build_team_calendar
-from app.services.rbac import parse_date_or_datetime, require_team_read
+from app.services.rbac import parse_date_or_datetime, require_team_oncall_read
 
 calendar_bp = Blueprint("calendar_api", __name__)
 
@@ -89,7 +89,7 @@ def get_calendar():
             ]
         )
 
-    error = require_team_read(team_id)
+    error = require_team_oncall_read(team_id)
     if error:
         return error
 

@@ -12,11 +12,11 @@ from app.api.schemas.teams import (
 from app.modules.db import groups_repo, teams_repo
 from app.services.audit import write_audit
 from app.services.rbac import (
-    get_allowed_team_ids,
+    get_allowed_oncall_team_ids,
     require_group_write,
-    require_team_read,
+    require_team_user_admin,
     require_team_write,
-    require_team_user_admin
+    require_team_read,
 )
 from app.services.serializers import serialize_team
 from app.services.validation import validate_body
@@ -38,9 +38,11 @@ def list_teams():
     if user and user.is_admin:
         teams = teams_repo.list_teams(active_only=active_only)
     else:
-        team_ids = get_allowed_team_ids(
-            use_active_group=True,
-            active_only=active_only,
+        team_ids = set(
+            get_allowed_oncall_team_ids(
+                use_active_group=True,
+                active_only=active_only,
+            )
         )
         teams = [
             team

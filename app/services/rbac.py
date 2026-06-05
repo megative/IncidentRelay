@@ -1,4 +1,4 @@
-from flask import jsonify, request
+from flask import has_request_context, jsonify, request
 
 from app.api.schemas.roles import (
     GROUP_EDITOR_ROLE,
@@ -24,11 +24,19 @@ TEAM_WRITE_ROLES = {TEAM_MANAGER_ROLE}
 
 def current_user():
     """Return the current request user."""
+
+    if not has_request_context():
+        return None
+
     return getattr(request, "current_user", None)
 
 
 def current_api_token():
     """Return the current request API token."""
+
+    if not has_request_context():
+        return None
+
     return getattr(request, "current_api_token", None)
 
 
@@ -43,7 +51,12 @@ def token_group_filter(group_ids):
     api_token = current_api_token()
     if not api_token or not api_token.group_id:
         return group_ids
-    return [group_id for group_id in group_ids if group_id == api_token.group_id]
+
+    return [
+        group_id
+        for group_id in group_ids
+        if group_id == api_token.group_id
+    ]
 
 
 def get_allowed_group_ids(user=None, write_required=False, manage_users_required=False, use_active_group=False):
@@ -145,6 +158,40 @@ def get_allowed_team_ids(
     return sorted(managed_team_ids | member_team_ids)
 
 
+def get_allowed_oncall_team_ids(
+    user=None,
+    use_active_group=True,
+    active_only=True,
+):
+    """
+    Return team ids whose on-call schedule is visible to a user.
+
+    This is intentionally broader than get_allowed_team_ids():
+    group members may view on-call schedules for all teams in their groups,
+    but they still cannot read or edit team resources without team membership.
+    """
+
+    user = user or current_user()
+
+    group_ids = get_allowed_group_ids(
+        user=user,
+        write_required=False,
+        manage_users_required=False,
+        use_active_group=use_active_group,
+    )
+
+    if not group_ids:
+        return []
+
+    return [
+        team.id
+        for team in teams_repo.list_teams(
+            active_only=active_only,
+            group_ids=group_ids,
+        )
+    ]
+
+
 def can_read_group(user, group_id):
     """Return True when a user can read a group."""
     if not user:
@@ -189,6 +236,23 @@ def can_read_team(user, team_id):
     if not can_read_group(user, team.group_id):
         return False
     return teams_repo.get_user_team_role(user.id, team_id) in TEAM_READ_ROLES
+
+
+def can_view_team_oncall(user, team_id):
+    """Return True when user can view on-call schedule for a team."""
+
+    if not user:
+        return False
+
+    if user.is_admin:
+        return True
+
+    team = teams_repo.get_team(team_id)
+
+    if not team or not team.group_id:
+        return False
+
+    return can_read_group(user, team.group_id)
 
 
 def can_respond_team(user, team_id):
@@ -267,6 +331,21 @@ def require_team_read(team_id):
     return None
 
 
+def require_team_oncall_read(team_id):
+    """Return an error response when current user cannot view team on-call schedule."""
+
+    if is_admin_user():
+        return None
+
+    if not can_view_team_oncall(current_user(), team_id):
+        return jsonify({
+            "error": "team_oncall_access_denied",
+            "message": "Access to this team on-call schedule is denied",
+        }), 403
+
+    return None
+
+
 def require_team_respond(team_id):
     """Return an error response when current user cannot operate team alerts."""
     if is_admin_user():
@@ -342,6 +421,7 @@ def get_team_permissions(user, team_id):
         "can_write": can_write_team(user, team_id),
         "can_respond": can_respond_team(user, team_id),
         "can_manage_users": can_manage_team_users(user, team_id),
+        "can_view_oncall": can_view_team_oncall(user, team_id),
     }
 
 

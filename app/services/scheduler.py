@@ -41,7 +41,6 @@ def reminder_job():
         logger.info("reminder job started")
 
         count = send_unacked_reminders()
-        count += process_due_user_notifications()
 
         logger.info(
             "reminder job finished",
@@ -154,11 +153,7 @@ def user_notification_rules_job():
 
 
 def alert_group_notification_job():
-    """Send due alert group notifications under a database lock.
-
-    The scheduler runs outside Flask request hooks, so it opens and closes
-    a database connection explicitly for the APScheduler worker thread.
-    """
+    """Send due alert group notifications under a database lock."""
 
     if db.is_closed():
         db.connect(reuse_if_open=True)
@@ -170,23 +165,12 @@ def alert_group_notification_job():
 
         if not owner:
             logger.debug("alert group notification job skipped because lock is busy")
-            return {
-                "processed": 0,
-                "sent": 0,
-                "skipped": 0,
-                "failed": 0,
-            }
+            return {"processed": 0, "sent": 0, "skipped": 0, "failed": 0}
 
         logger.info("alert group notification job started")
 
         result = process_due_alert_group_notifications(
-            limit=int(
-                getattr(
-                    Config,
-                    "ALERT_GROUP_NOTIFICATION_BATCH_SIZE",
-                    100,
-                )
-            )
+            limit=int(getattr(Config, "ALERT_GROUP_NOTIFICATION_BATCH_SIZE", 100))
         )
 
         logger.info(
@@ -206,13 +190,7 @@ def alert_group_notification_job():
 
     except Exception:
         logger.exception("alert group notification job failed")
-
-        return {
-            "processed": 0,
-            "sent": 0,
-            "skipped": 0,
-            "failed": 1,
-        }
+        return {"processed": 0, "sent": 0, "skipped": 0, "failed": 1}
 
     finally:
         if owner:
@@ -291,6 +269,17 @@ def start_scheduler():
                 10,
             )
         ),
+        max_instances=1,
+        coalesce=True,
+        next_run_time=datetime.utcnow(),
+        id="alert_group_notification_job",
+        replace_existing=True,
+    )
+
+    _scheduler.add_job(
+        alert_group_notification_job,
+        "interval",
+        seconds=int(getattr(Config, "ALERT_GROUP_NOTIFICATION_CHECK_INTERVAL_SECONDS", 10)),
         max_instances=1,
         coalesce=True,
         next_run_time=datetime.utcnow(),

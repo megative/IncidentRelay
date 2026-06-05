@@ -196,5 +196,26 @@ class Config:
         900,
     )
 
-    ALERT_GROUP_WAIT_SECONDS = settings.get_int("alert_group_wait_seconds", "30")
-    ALERT_GROUP_INTERVAL_SECONDS = settings.get_int("alert_group_interval_seconds", "300")
+    ALERT_GROUP_WAIT_SECONDS = settings.get_int(
+        "alerts",
+        "alert_group_wait_seconds",
+        30,
+    )
+
+    ALERT_GROUP_INTERVAL_SECONDS = settings.get_int(
+        "alerts",
+        "alert_group_interval_seconds",
+        300,
+    )
+
+    ALERT_GROUP_NOTIFICATION_CHECK_INTERVAL_SECONDS = settings.get_int(
+        "alerts",
+        "alert_group_notification_check_interval_seconds",
+        10,
+    )
+
+    ALERT_GROUP_NOTIFICATION_BATCH_SIZE = settings.get_int(
+        "alerts",
+        "alert_group_notification_batch_size",
+        100,
+    )

@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pywebpush import WebPushException, webpush
 
 from app.modules.db.models import (
+    AlertGroup,
     BrowserPushActionToken,
     BrowserPushSubscription,
 )
@@ -186,8 +187,8 @@ def has_active_user_subscriptions(user_id):
     )
 
 
-def can_send_alert_push(alert):
-    return has_active_user_subscriptions(getattr(alert, "assignee_id", None))
+def can_send_alert_push(group):
+    return has_active_user_subscriptions(getattr(group, "assignee_id", None))
 
 
 def build_alert_push_payload(group, user, event_type="notification"):
@@ -217,7 +218,7 @@ def build_alert_push_payload(group, user, event_type="notification"):
     }
 
 
-def send_alert_push_to_user(user, alert, event_type="notification"):
+def send_alert_push_to_user(user, group, event_type="notification"):
     if not Config.BROWSER_PUSH_ENABLED:
         return 0
 
@@ -226,7 +227,8 @@ def send_alert_push_to_user(user, alert, event_type="notification"):
     if not subscriptions:
         return 0
 
-    payload = build_alert_push_payload(alert, user, event_type=event_type)
+    payload = build_alert_push_payload(group, user, event_type=event_type)
+
     sent = 0
 
     for subscription in subscriptions:
@@ -349,8 +351,13 @@ def execute_push_action(token, action):
         if updated != 1:
             return {"ok": False, "error": "token_already_used"}
 
+        group = AlertGroup.get_or_none(AlertGroup.id == record.group_id)
+
+        if not group:
+            return {"ok": False, "error": "alert_group_not_found"}
+
         result_group = _run_alert_push_action(
-            record.group_id,
+            group.id,
             user_id=record.user_id,
             action=action,
         )
@@ -382,12 +389,7 @@ def execute_push_action(token, action):
 
 
 def _run_alert_push_action(group_id, user_id, action):
-    """
-    Run alert group action from browser push.
-
-    Imported lazily to avoid circular import:
-    alerts -> notifier registry -> browser_push -> alerts.
-    """
+    """Run alert group action from browser push."""
 
     from app.services.alerts import acknowledge_alert, resolve_alert
 

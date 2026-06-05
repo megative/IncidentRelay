@@ -1,3 +1,6 @@
+from datetime import datetime, timedelta
+
+from app.modules.db.models import AlertGroup
 from app.settings import Config
 from app.modules.db import alerts_repo
 from app.services import alerts as alerts_service
@@ -63,28 +66,55 @@ def test_new_group_schedules_notification_instead_of_sending_immediately(db, mon
 
 
 def test_due_group_notification_is_sent(db, monkeypatch):
-    route = _route(group_by=["alertname", "severity"])
+    group = create_group()
+    team = create_team(group)
+    route = create_route(team, group_by=["alertname", "severity"])
 
-    sent = []
+    alert_group, created = upsert_alert(
+        {
+            "source": "alertmanager",
+            "forced_route_id": route.id,
+            "external_id": "external-1",
+            "dedup_key": "dedup-1",
+            "title": "DiskFull",
+            "message": "/var is 95% full",
+            "severity": "critical",
+            "labels": {
+                "alertname": "DiskFull",
+                "severity": "critical",
+                "instance": "host1",
+            },
+            "payload": {},
+            "status": "firing",
+        }
+    )
 
-    monkeypatch.setattr(Config, "ALERT_GROUP_WAIT_SECONDS", 0)
+    assert created is True
+
+    alert_group.notification_pending = True
+    alert_group.notification_due_at = datetime.utcnow() - timedelta(seconds=1)
+    alert_group.notification_reason = "notification"
+    alert_group.save()
+
+    calls = []
+
     monkeypatch.setattr(
         alerts_service,
         "notify_alert",
-        lambda group, event_type: sent.append((group.id, event_type)),
+        lambda group, event_type="notification": calls.append((group.id, event_type)) or 1,
     )
-
-    group, _ = upsert_alert(_alert(route, "DiskFull", "host1"))
 
     result = alerts_service.process_due_alert_group_notifications()
 
-    group = alerts_repo.get_alert_group(group.id)
+    alert_group = AlertGroup.get_by_id(alert_group.id)
 
+    assert result["processed"] == 1
     assert result["sent"] == 1
-    assert sent == [(group.id, "notification")]
-    assert group.notification_pending is False
-    assert group.notification_due_at is None
-    assert group.last_notification_at is not None
+    assert result["skipped"] == 0
+    assert calls == [(alert_group.id, "notification")]
+    assert alert_group.notification_pending is False
+    assert alert_group.notification_due_at is None
+    assert alert_group.last_notification_at is not None
 
 
 def test_group_resolved_before_group_wait_does_not_send_notification(db, monkeypatch):

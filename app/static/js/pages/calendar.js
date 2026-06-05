@@ -249,6 +249,28 @@ function getCalendarEventTeamId(event) {
     return Number(event.team_id || event.teamId || 0);
 }
 
+function getCalendarTeamById(teamId) {
+    teamId = Number(teamId || 0);
+
+    if (!teamId) {
+        return null;
+    }
+
+    return calendarTeamsCache.find(function (team) {
+        return Number(team.id) === teamId;
+    }) || null;
+}
+
+function canManageCalendarTeam(teamId) {
+    const team = getCalendarTeamById(teamId);
+
+    if (!team || !team.permissions) {
+        return false;
+    }
+
+    return !!team.permissions.can_write;
+}
+
 
 function getCalendarEventRotationId(event) {
     /*
@@ -1374,19 +1396,19 @@ function renderCalendarDetails(event, clippedStart, clippedEnd) {
         .append(calendarDetailsItem("Timezone", event.timezone || "-"))
         .append(calendarDetailsItem("Type", typeLabel))
         .append(calendarDetailsItem(
-            "Start",
-            formatDateTimeMinutesInTimezone(
-                clippedStart || event.start,
-                getCalendarEventTimezone(event)
-            )
+                "Start",
+                formatDateTimeMinutesInTimezone(
+                    clippedStart || event.start,
+                    getCalendarEventTimezone(event)
+                )
             )
         )
         .append(calendarDetailsItem(
-            "End",
-            formatDateTimeMinutesInTimezone(
-                clippedEnd || event.end,
-                getCalendarEventTimezone(event)
-            )
+                "End",
+                formatDateTimeMinutesInTimezone(
+                    clippedEnd || event.end,
+                    getCalendarEventTimezone(event)
+                )
             )
         );
 
@@ -1396,19 +1418,23 @@ function renderCalendarDetails(event, clippedStart, clippedEnd) {
 
     body.append(details);
 
-    body.append(
-        $("<div>")
-            .addClass("details-actions")
-            .append(
-                makeIconButton({
-                    icon: "fas fa-user-clock",
-                    label: "Create override",
-                    onClick: function () {
-                        openCalendarOverrideModal(event, clippedStart, clippedEnd);
-                    }
-                })
-            )
-    );
+    const actions = $("<div>").addClass("details-actions");
+
+    if (canManageCalendarTeam(event.team_id)) {
+        actions.append(
+            makeIconButton({
+                icon: "fas fa-user-clock",
+                label: "Create override",
+                onClick: function () {
+                    openCalendarOverrideModal(event, clippedStart, clippedEnd);
+                }
+            })
+        );
+    }
+
+    if (actions.children().length) {
+        body.append(actions);
+    }
 }
 
 

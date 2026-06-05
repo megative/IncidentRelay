@@ -588,7 +588,7 @@ def should_send_reminder(group, now):
         return False
 
     if not group.last_notification_at:
-        return True
+        return False
 
     return group.last_notification_at <= now - timedelta(seconds=reminder_interval)
 
@@ -596,8 +596,8 @@ def should_send_reminder(group, now):
 def send_unacked_reminders():
     """Send reminder notifications for unacknowledged alert groups.
 
-    A reminder is counted only when at least one notification was actually sent.
-    Groups that do not match any enabled channel severity filter are skipped.
+    Escalation policy checks are intentionally evaluated before reminder gating:
+    policy escalation must work even when reminder interval is disabled.
     """
 
     now = datetime.utcnow()
@@ -622,6 +622,34 @@ def send_unacked_reminders():
                     },
                 )
                 continue
+
+        if group.notification_pending:
+            logger.debug(
+                "reminder skipped because alert group notification is pending",
+                extra={
+                    "extra": {
+                        "alert_group_id": group.id,
+                        "notification_reason": group.notification_reason,
+                        "notification_due_at": (
+                            group.notification_due_at.isoformat()
+                            if group.notification_due_at
+                            else None
+                        ),
+                    }
+                },
+            )
+            continue
+
+        if not group.last_notification_at:
+            logger.debug(
+                "reminder skipped because initial notification was not sent yet",
+                extra={
+                    "extra": {
+                        "alert_group_id": group.id,
+                    }
+                },
+            )
+            continue
 
         interval = get_alert_reminder_interval(group)
 
@@ -726,7 +754,19 @@ def process_due_alert_group_notifications(limit=100):
                 else "update"
             )
 
-            notify_alert(group, event_type=event_type)
+            sent_count = notify_alert(group, event_type=event_type)
+
+            if not sent_count:
+                alerts_repo.clear_alert_group_notification(group)
+
+                alerts_repo.create_alert_event(
+                    group_id=group.id,
+                    event_type=f"{event_type}_skipped",
+                    message="Due alert group notification skipped: no delivery target",
+                )
+
+                skipped += 1
+                continue
 
             alerts_repo.mark_alert_group_notification_sent(group, now=now)
 
