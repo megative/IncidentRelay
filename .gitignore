@@ -1,0 +1,40 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env
+
+# Test artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+tests/.tmp/
+
+# Local runtime data
+logs/
+*.log
+*.sqlite
+*.sqlite3
+*.db
+
+# Local config (operators put real secrets here)
+incidentrelay.conf
+*.local.conf
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Build / packaging
+*.egg-info/
+build/
+dist/
