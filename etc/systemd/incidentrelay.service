@@ -10,7 +10,7 @@ Group=incidentrelay
 
 WorkingDirectory=/var/www/incidentrelay
 
-Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
+Environment=INCIDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 
 ExecStart=/usr/local/bin/gunicorn \
     --workers 4 \

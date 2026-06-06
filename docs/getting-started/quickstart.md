@@ -6,7 +6,7 @@ Use this checklist after installation.
 
 - [ ] Installed with Docker, RPM, or manual systemd guide
 - [ ] Config file exists
-- [ ] `INCEDENTRELAY_CONFIG_FILE` points to the config file
+- [ ] `INCIDENTRELAY_CONFIG_FILE` points to the config file
 - [ ] Web service is running
 - [ ] Scheduler service is running
 - [ ] Migrations have been applied with `python manage.py migrate`

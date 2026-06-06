@@ -51,13 +51,13 @@ Do not run scheduler jobs inside every web worker.
 IncidentRelay reads the config path from:
 
 ```text
-INCEDENTRELAY_CONFIG_FILE
+INCIDENTRELAY_CONFIG_FILE
 ```
 
 Example:
 
 ```bash
-export INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
+export INCIDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 ```
 
 The old `ONCALL_CONFIG_FILE` name should not be used.

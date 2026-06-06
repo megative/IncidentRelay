@@ -31,7 +31,7 @@ COPY docker/entrypoint.sh /entrypoint.sh
 
 RUN chmod +x /entrypoint.sh
 
-ENV INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
+ENV INCIDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 ENV INCIDENTRELAY_SERVICE=web
 
 EXPOSE 8080

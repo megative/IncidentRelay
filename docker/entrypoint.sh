@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONFIG_FILE="${INCEDENTRELAY_CONFIG_FILE:-/etc/incidentrelay/incidentrelay.conf}"
+# Prefer the correctly-spelled env var; fall back to the legacy mis-spelled
+# one so existing deployments keep working until operators migrate.
+if [ -n "${INCEDENTRELAY_CONFIG_FILE:-}" ] && [ -z "${INCIDENTRELAY_CONFIG_FILE:-}" ]; then
+  echo "WARNING: environment variable INCEDENTRELAY_CONFIG_FILE is deprecated (typo); please use INCIDENTRELAY_CONFIG_FILE instead." >&2
+fi
+CONFIG_FILE="${INCIDENTRELAY_CONFIG_FILE:-${INCEDENTRELAY_CONFIG_FILE:-/etc/incidentrelay/incidentrelay.conf}}"
 SERVICE="${INCIDENTRELAY_SERVICE:-web}"
 
 if [ ! -f "$CONFIG_FILE" ]; then
