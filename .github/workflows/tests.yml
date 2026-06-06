@@ -27,7 +27,7 @@ jobs:
           - "3.12"
 
     env:
-      INCEDENTRELAY_CONFIG_FILE: ${{ github.workspace }}/tests/incidentrelay.test.conf
+      INCIDENTRELAY_CONFIG_FILE: ${{ github.workspace }}/tests/incidentrelay.test.conf
       PYTHONPATH: ${{ github.workspace }}
 
     steps:

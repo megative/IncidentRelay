@@ -7,7 +7,7 @@ services:
     container_name: incidentrelay
     restart: unless-stopped
     environment:
-      INCEDENTRELAY_CONFIG_FILE: /etc/incidentrelay/incidentrelay.conf
+      INCIDENTRELAY_CONFIG_FILE: /etc/incidentrelay/incidentrelay.conf
       INCIDENTRELAY_SERVICE: web
       INCIDENTRELAY_RUN_MIGRATIONS: "1"
       INCIDENTRELAY_PORT: "8080"
@@ -35,7 +35,7 @@ services:
     container_name: incidentrelay-scheduler
     restart: unless-stopped
     environment:
-      INCEDENTRELAY_CONFIG_FILE: /etc/incidentrelay/incidentrelay.conf
+      INCIDENTRELAY_CONFIG_FILE: /etc/incidentrelay/incidentrelay.conf
       INCIDENTRELAY_SERVICE: scheduler
       INCIDENTRELAY_RUN_MIGRATIONS: "0"
     volumes:
@@ -54,7 +54,7 @@ services:
     container_name: incidentrelay-telegram
     restart: unless-stopped
     environment:
-      INCEDENTRELAY_CONFIG_FILE: /etc/incidentrelay/incidentrelay.conf
+      INCIDENTRELAY_CONFIG_FILE: /etc/incidentrelay/incidentrelay.conf
       INCIDENTRELAY_SERVICE: telegram
       INCIDENTRELAY_RUN_MIGRATIONS: "0"
       PYTHONUNBUFFERED: "1"

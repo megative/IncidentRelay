@@ -30,7 +30,7 @@ The scheduler must run as a separate service. Do not start it inside every web w
 IncidentRelay reads the configuration path from:
 
 ```text
-INCEDENTRELAY_CONFIG_FILE
+INCIDENTRELAY_CONFIG_FILE
 ```
 
 The old `ONCALL_CONFIG_FILE` variable should not be used.
@@ -166,7 +166,7 @@ sudo systemctl daemon-reload
 ```bash
 cd /var/www/incidentrelay
 sudo -u www-data \
-  INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
+  INCIDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
   /var/www/incidentrelay/venv/bin/python app/migrate.py migrate
 ```
 
@@ -175,7 +175,7 @@ sudo -u www-data \
 ```bash
 cd /var/www/incidentrelay
 sudo -u www-data \
-  INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
+  INCIDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
   /var/www/incidentrelay/venv/bin/python manage.py create-admin \
     --username admin \
     --password 'change-me-123' \
@@ -243,7 +243,7 @@ Group=www-data
 
 WorkingDirectory=/var/www/incidentrelay
 
-Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
+Environment=INCIDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 Environment=INCIDENTRELAY_SERVICE=web
 Environment=PYTHONUNBUFFERED=1
 
@@ -282,7 +282,7 @@ Group=www-data
 
 WorkingDirectory=/var/www/incidentrelay
 
-Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
+Environment=INCIDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 Environment=INCIDENTRELAY_SERVICE=scheduler
 Environment=PYTHONUNBUFFERED=1
 
@@ -391,7 +391,7 @@ sudo git pull
 sudo /var/www/incidentrelay/venv/bin/pip install -r requirements.txt
 
 sudo -u www-data \
-  INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
+  INCIDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
   /var/www/incidentrelay/venv/bin/python app/migrate.py migrate
 
 sudo systemctl start incidentrelay

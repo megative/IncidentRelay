@@ -8,7 +8,7 @@ User=incidentrelay
 Group=incidentrelay
 WorkingDirectory=/var/www/incidentrelay
 
-Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
+Environment=INCIDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 Environment=PYTHONUNBUFFERED=1
 
 ExecStart=/usr/bin/python3 -m app.telegram_worker

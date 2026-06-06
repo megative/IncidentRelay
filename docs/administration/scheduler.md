@@ -56,7 +56,7 @@ Do not use a global runtime fallback for reminder-after when rotations require a
 The scheduler process should use:
 
 ```text
-INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
+INCIDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 INCIDENTRELAY_SERVICE=scheduler
 PYTHONUNBUFFERED=1
 ```
@@ -64,7 +64,7 @@ PYTHONUNBUFFERED=1
 The web process should use:
 
 ```text
-INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
+INCIDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 INCIDENTRELAY_SERVICE=web
 PYTHONUNBUFFERED=1
 ```
@@ -98,7 +98,7 @@ Type=simple
 User=www-data
 Group=www-data
 WorkingDirectory=/var/www/incidentrelay
-Environment=INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
+Environment=INCIDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 Environment=INCIDENTRELAY_SERVICE=scheduler
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/var/www/incidentrelay/venv/bin/python -m app.scheduler_worker

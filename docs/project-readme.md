@@ -57,13 +57,13 @@ Telegram worker is optional and only needed when Telegram polling/actions are us
 IncidentRelay reads config path from:
 
 ```text
-INCEDENTRELAY_CONFIG_FILE
+INCIDENTRELAY_CONFIG_FILE
 ```
 
 Example:
 
 ```bash
-export INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
+export INCIDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 ```
 
 Do not use the old `ONCALL_CONFIG_FILE` name.

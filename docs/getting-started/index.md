@@ -33,7 +33,7 @@ After installation:
 The config file is selected by:
 
 ```text
-INCEDENTRELAY_CONFIG_FILE
+INCIDENTRELAY_CONFIG_FILE
 ```
 
 Use the exact name above. The older `ONCALL_CONFIG_FILE` name should not be used.

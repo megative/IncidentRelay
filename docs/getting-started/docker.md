@@ -43,7 +43,7 @@ Default config path inside the container:
 The config file is selected by:
 
 ```text
-INCEDENTRELAY_CONFIG_FILE
+INCIDENTRELAY_CONFIG_FILE
 ```
 
 ## Quick start with SQLite

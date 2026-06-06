@@ -217,13 +217,13 @@ incidentrelay
 IncidentRelay reads the configuration file path from:
 
 ```text
-INCEDENTRELAY_CONFIG_FILE
+INCIDENTRELAY_CONFIG_FILE
 ```
 
 Example:
 
 ```bash
-export INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
+export INCIDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf
 ```
 
 For production, set the public URL used for generated links and callback URLs:
@@ -267,7 +267,7 @@ For RPM/systemd installations:
 
 ```bash
 sudo -u incidentrelay \
-  INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
+  INCIDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
   /var/www/incidentrelay/venv/bin/python \
   /var/www/incidentrelay/manage.py migrate
 ```
@@ -285,7 +285,7 @@ For RPM/systemd installations:
 
 ```bash
 sudo -u incidentrelay \
-  INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
+  INCIDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
   /var/www/incidentrelay/venv/bin/python \
   /var/www/incidentrelay/manage.py create-admin \
   --username admin \

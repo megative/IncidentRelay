@@ -101,7 +101,7 @@ The RPM package may run migrations during installation. If the database was not 
 
 ```bash
 sudo -u incidentrelay \
-  INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
+  INCIDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
   /var/www/incidentrelay/venv/bin/python \
   /var/www/incidentrelay/manage.py migrate
 ```
@@ -110,7 +110,7 @@ sudo -u incidentrelay \
 
 ```bash
 sudo -u incidentrelay \
-  INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
+  INCIDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
   /var/www/incidentrelay/venv/bin/python \
   /var/www/incidentrelay/manage.py create-admin \
     --username admin \
@@ -179,7 +179,7 @@ After upgrade, run migrations if needed:
 
 ```bash
 sudo -u incidentrelay \
-  INCEDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
+  INCIDENTRELAY_CONFIG_FILE=/etc/incidentrelay/incidentrelay.conf \
   /var/www/incidentrelay/venv/bin/python \
   /var/www/incidentrelay/manage.py migrate
 ```
