@@ -348,6 +348,7 @@ def serialize_route(route, current_user=None):
     data = {
         "id": route.id,
         "team_id": route.team.id,
+        "team_name": route.team.name,
         "team_slug": route.team.slug,
         "name": route.name,
         "source": route.source,
@@ -928,3 +929,31 @@ def serialize_alert_group(
         ]
 
     return attach_team_permissions(data, team.id if team else None, current_user)
+
+
+def serialize_alert_comment(comment):
+    user = comment.user if getattr(comment, "user_id", None) else None
+
+    created_at = comment.created_at.isoformat() if comment.created_at else None
+    updated_at = comment.updated_at.isoformat() if comment.updated_at else None
+
+    return {
+        "id": comment.id,
+        "group_id": comment.group_id,
+        "alert_id": comment.alert_id,
+        "user_id": comment.user_id,
+        "user": {
+            "id": user.id,
+            "username": getattr(user, "username", None),
+            "email": getattr(user, "email", None),
+            "display_name": getattr(user, "display_name", None),
+        } if user else None,
+        "body": comment.body,
+        "created_at": created_at,
+        "updated_at": updated_at,
+        "edited": bool(
+            comment.created_at
+            and comment.updated_at
+            and comment.updated_at > comment.created_at
+        ),
+    }

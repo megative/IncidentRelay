@@ -3,7 +3,13 @@ let selectedRouteDetailsId = null;
 let routesSortState = createTableSortState("id", "desc");
 const routesSortColumns = {
     name: {path: "name", type: "text", defaultDirection: "asc"},
-    team: {path: "team_slug", type: "text", defaultDirection: "asc"},
+    team: {
+        value: function (route) {
+            return getRouteTeamLabel(route);
+        },
+        type: "text",
+        defaultDirection: "asc"
+    },
     source: {path: "source", type: "text", defaultDirection: "asc"},
     rotation: {
         value: function (route) {
@@ -25,6 +31,9 @@ const routesSortColumns = {
 };
 let selectedRouteForServiceRules = null;
 let routeServiceRulesCache = [];
+function getRouteTeamLabel(route) {
+    return route.team_name || route.team_slug || "-";
+}
 function getRouteEscalationLabel(route) {
     if (route.escalation_policy_name) {
         return "Policy: " + route.escalation_policy_name;
@@ -231,6 +240,7 @@ function getRouteSearchText(route) {
 
     return [
         route.id,
+        route.team_name,
         route.team_slug,
         route.name,
         route.source,
@@ -288,7 +298,7 @@ function renderRouteRow(route) {
             )
             .append($("<div>").addClass("row-subtitle").text("Route #" + route.id))
     );
-    row.append($("<td>").append($("<span>").addClass("route-pill").text(route.team_slug || "-")));
+    row.append($("<td>").append($("<span>").addClass("route-pill").text(getRouteTeamLabel(route))));
     row.append($("<td>").text(route.source || "-"));
     row.append($("<td>").text(getRouteEscalationLabel(route)));
     row.append($("<td>").append(renderRouteChannels(channels)));
@@ -321,7 +331,7 @@ function renderRouteActions(route) {
                 label: "Edit",
                 icon: "fas fa-edit",
                 required: "write",
-                denyMessage: "Team manager role is required to edit this route.",
+                denyMessage: "Team manager or group editor/admin role is required to edit this route.",
                 onClick: function () {
                     editRoute(route.id);
                 }
@@ -650,7 +660,7 @@ function routeDetailsCode(label, value) {
 function renderRouteDetails(route) {
     selectedRouteDetailsId = route.id;
 
-    $("#route-details-subtitle").text((route.team_slug || "-") + " / " + (route.enabled ? "Enabled" : "Disabled"));
+    $("#route-details-subtitle").text(getRouteTeamLabel(route) + " / " + (route.enabled ? "Enabled" : "Disabled"));
 
     const body = $("#route-details-body");
     body.empty();
@@ -658,7 +668,7 @@ function renderRouteDetails(route) {
         $("<div>")
             .addClass("details-list")
             .append(routeDetailsItem("Name", route.name))
-            .append(routeDetailsItem("Team", route.team_slug))
+            .append(routeDetailsItem("Team", getRouteTeamLabel(route)))
             .append(routeDetailsItem("Source", route.source))
             .append(routeDetailsItem("Escalation", getRouteEscalationLabel(route)))
             .append(routeDetailsItem("Team escalation", getRouteTeamEscalationLabel(route)))

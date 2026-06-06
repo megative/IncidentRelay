@@ -7,8 +7,14 @@ from app.services.rbac import get_allowed_team_ids, require_team_read, require_t
 from app.services.serializers import (
     serialize_alert_group,
     serialize_alert_event,
+    serialize_alert_comment,
 )
-
+from app.services.alert_comments import (
+    create_group_comment,
+    create_child_alert_comment,
+    update_group_comment,
+    delete_group_comment,
+)
 alerts_bp = Blueprint("alerts_api", __name__)
 
 
@@ -269,3 +275,225 @@ def merge_alert_groups_view():
             current_user=user,
         )
     )
+
+
+@alerts_bp.route("/<int:alert_id>/comments", methods=["GET"])
+def list_alert_group_comments(alert_id):
+    group = alerts_repo.get_alert_group(alert_id)
+    if not group:
+        return jsonify({"error": "not_found", "message": "Alert group not found"}), 404
+
+    if group.team_id:
+        error = require_team_read(group.team_id)
+        if error:
+            return error
+
+    comments = alerts_repo.list_group_comments(group.id)
+
+    return jsonify([serialize_alert_comment(comment) for comment in comments])
+
+
+@alerts_bp.route("/<int:alert_id>/comments", methods=["POST"])
+def add_alert_group_comment(alert_id):
+    group = alerts_repo.get_alert_group(alert_id)
+    if not group:
+        return jsonify({"error": "not_found", "message": "Alert group not found"}), 404
+
+    if group.team_id:
+        error = require_team_respond(group.team_id)
+        if error:
+            return error
+
+    payload = request.get_json(silent=True) or {}
+    user = getattr(request, "current_user", None)
+
+    try:
+        comment = create_group_comment(
+            group_id=group.id,
+            body=payload.get("body"),
+            user_id=getattr(user, "id", None),
+        )
+    except ValueError as exc:
+        return jsonify({
+            "error": "validation_error",
+            "message": str(exc),
+        }), 400
+    except LookupError as exc:
+        return jsonify({
+            "error": "not_found",
+            "message": str(exc),
+        }), 404
+
+    write_audit(
+        "alert_group.comment",
+        object_type="alert_group",
+        object_id=group.id,
+        team_id=group.team.id if group.team else None,
+        user_id=getattr(user, "id", None),
+        data={"comment_id": comment.id},
+    )
+
+    return jsonify(serialize_alert_comment(comment)), 201
+
+
+@alerts_bp.route("/<int:group_id>/alerts/<int:child_alert_id>/comments", methods=["GET"])
+def list_child_alert_comments(group_id, child_alert_id):
+    group = alerts_repo.get_alert_group(group_id)
+    if not group:
+        return jsonify({"error": "not_found", "message": "Alert group not found"}), 404
+
+    if group.team_id:
+        error = require_team_read(group.team_id)
+        if error:
+            return error
+
+    alert = alerts_repo.get_alert(child_alert_id)
+    if not alert or alert.group_id != group.id:
+        return jsonify({"error": "not_found", "message": "Alert not found in this group"}), 404
+
+    comments = alerts_repo.list_alert_comments(alert.id)
+
+    return jsonify([serialize_alert_comment(comment) for comment in comments])
+
+
+@alerts_bp.route("/<int:group_id>/alerts/<int:child_alert_id>/comments", methods=["POST"])
+def add_child_alert_comment(group_id, child_alert_id):
+    group = alerts_repo.get_alert_group(group_id)
+    if not group:
+        return jsonify({"error": "not_found", "message": "Alert group not found"}), 404
+
+    if group.team_id:
+        error = require_team_respond(group.team_id)
+        if error:
+            return error
+
+    payload = request.get_json(silent=True) or {}
+    user = getattr(request, "current_user", None)
+
+    try:
+        comment = create_child_alert_comment(
+            group_id=group.id,
+            alert_id=child_alert_id,
+            body=payload.get("body"),
+            user_id=getattr(user, "id", None),
+        )
+    except ValueError as exc:
+        return jsonify({
+            "error": "validation_error",
+            "message": str(exc),
+        }), 400
+    except LookupError as exc:
+        return jsonify({
+            "error": "not_found",
+            "message": str(exc),
+        }), 404
+
+    write_audit(
+        "alert.comment",
+        object_type="alert",
+        object_id=child_alert_id,
+        team_id=group.team.id if group.team else None,
+        user_id=getattr(user, "id", None),
+        data={
+            "comment_id": comment.id,
+            "group_id": group.id,
+        },
+    )
+
+    return jsonify(serialize_alert_comment(comment)), 201
+
+
+@alerts_bp.route("/<int:alert_id>/comments/<int:comment_id>", methods=["PUT"])
+def update_alert_group_comment(alert_id, comment_id):
+    group = alerts_repo.get_alert_group(alert_id)
+    if not group:
+        return jsonify({
+            "error": "not_found",
+            "message": "Alert group not found",
+        }), 404
+
+    if group.team_id:
+        error = require_team_respond(group.team_id)
+        if error:
+            return error
+
+    payload = request.get_json(silent=True) or {}
+    user = getattr(request, "current_user", None)
+    user_id = getattr(user, "id", None)
+
+    try:
+        comment = update_group_comment(
+            group_id=group.id,
+            comment_id=comment_id,
+            body=payload.get("body"),
+            user_id=user_id,
+        )
+    except ValueError as exc:
+        return jsonify({
+            "error": "validation_error",
+            "message": str(exc),
+        }), 400
+    except LookupError as exc:
+        return jsonify({
+            "error": "not_found",
+            "message": str(exc),
+        }), 404
+
+    write_audit(
+        "alert_group.comment.update",
+        object_type="alert_group",
+        object_id=group.id,
+        team_id=group.team.id if group.team else None,
+        user_id=user_id,
+        data={
+            "comment_id": comment.id,
+        },
+    )
+
+    return jsonify(serialize_alert_comment(comment))
+
+
+@alerts_bp.route("/<int:alert_id>/comments/<int:comment_id>", methods=["DELETE"])
+def delete_alert_group_comment(alert_id, comment_id):
+    group = alerts_repo.get_alert_group(alert_id)
+    if not group:
+        return jsonify({
+            "error": "not_found",
+            "message": "Alert group not found",
+        }), 404
+
+    if group.team_id:
+        error = require_team_respond(group.team_id)
+        if error:
+            return error
+
+    user = getattr(request, "current_user", None)
+    user_id = getattr(user, "id", None)
+
+    try:
+        comment = delete_group_comment(
+            group_id=group.id,
+            comment_id=comment_id,
+            user_id=user_id,
+        )
+    except LookupError as exc:
+        return jsonify({
+            "error": "not_found",
+            "message": str(exc),
+        }), 404
+
+    write_audit(
+        "alert_group.comment.delete",
+        object_type="alert_group",
+        object_id=group.id,
+        team_id=group.team.id if group.team else None,
+        user_id=user_id,
+        data={
+            "comment_id": comment.id,
+        },
+    )
+
+    return jsonify({
+        "deleted": True,
+        "id": comment.id,
+    })

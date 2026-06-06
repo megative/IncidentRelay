@@ -370,6 +370,273 @@ def alert_group_merge_request_schema():
     }
 
 
+def alert_comment_user_schema():
+    """Build compact alert comment author schema."""
+    return {
+        "type": "object",
+        "nullable": True,
+        "properties": {
+            "id": {"type": "integer", "readOnly": True, "example": 7},
+            "username": {"type": "string", "nullable": True, "example": "alice"},
+            "display_name": {"type": "string", "nullable": True, "example": "Alice"},
+            "email": {
+                "type": "string",
+                "format": "email",
+                "nullable": True,
+                "example": "alice@example.com",
+            },
+        },
+    }
+
+
+def alert_comment_schema():
+    """Build alert comment response schema."""
+    return {
+        "type": "object",
+        "properties": {
+            "id": {"type": "integer", "readOnly": True, "example": 42},
+            "group_id": {
+                "type": "integer",
+                "nullable": True,
+                "description": "Alert group id.",
+                "example": 1001,
+            },
+            "alert_id": {
+                "type": "integer",
+                "nullable": True,
+                "description": "Concrete child alert id when the comment is attached to a child alert.",
+                "example": None,
+            },
+            "user_id": {
+                "type": "integer",
+                "nullable": True,
+                "description": "Author user id.",
+                "example": 7,
+            },
+            "user": alert_comment_user_schema(),
+            "body": {
+                "type": "string",
+                "description": "Comment text.",
+                "minLength": 1,
+                "maxLength": 5000,
+                "example": "Investigating disk usage on host1.",
+            },
+            "created_at": date_time_property("Comment creation timestamp in UTC."),
+            "updated_at": date_time_property("Last comment update timestamp in UTC."),
+            "edited": {
+                "type": "boolean",
+                "description": "True when updated_at is later than created_at.",
+                "example": False,
+            },
+        },
+    }
+
+
+def alert_comment_user_schema():
+    """Build alert comment user schema."""
+    return {
+        "type": "object",
+        "nullable": True,
+        "properties": {
+            "id": {"type": "integer"},
+            "username": {"type": "string", "nullable": True},
+            "email": {"type": "string", "nullable": True},
+            "display_name": {"type": "string", "nullable": True},
+        },
+    }
+
+
+def alert_comment_schema():
+    """Build alert comment response schema."""
+    return {
+        "type": "object",
+        "properties": {
+            "id": {"type": "integer"},
+            "group_id": {"type": "integer", "nullable": True},
+            "alert_id": {"type": "integer", "nullable": True},
+            "user_id": {"type": "integer", "nullable": True},
+            "user": alert_comment_user_schema(),
+            "body": {"type": "string"},
+            "created_at": date_time_property("Comment creation timestamp in UTC."),
+            "updated_at": date_time_property("Comment update timestamp in UTC."),
+            "edited": {
+                "type": "boolean",
+                "description": "True when updated_at is later than created_at.",
+            },
+        },
+        "additionalProperties": True,
+    }
+
+
+def alert_comment_create_request_schema():
+    """Build alert comment create request schema."""
+    return {
+        "type": "object",
+        "required": ["body"],
+        "properties": {
+            "body": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 5000,
+                "description": "Comment body. Leading and trailing whitespace is trimmed.",
+            },
+        },
+    }
+
+
+def alert_comment_update_request_schema():
+    """Build alert comment update request schema."""
+    return {
+        "type": "object",
+        "required": ["body"],
+        "properties": {
+            "body": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 5000,
+                "description": "Updated comment body. Leading and trailing whitespace is trimmed.",
+            },
+        },
+    }
+
+
+def delete_alert_comment_response_schema():
+    """Build delete alert comment response schema."""
+    return {
+        "type": "object",
+        "properties": {
+            "deleted": {"type": "boolean"},
+            "id": {"type": "integer"},
+        },
+    }
+
+
+ALERT_COMMENT_CREATE_SCHEMA = {
+    "type": "object",
+    "required": ["body"],
+    "properties": {
+        "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5000,
+            "description": "Comment text. Leading and trailing whitespace is trimmed.",
+            "example": "Investigating disk usage on host1.",
+        },
+    },
+}
+
+
+ALERT_COMMENT_UPDATE_SCHEMA = {
+    "type": "object",
+    "required": ["body"],
+    "properties": {
+        "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5000,
+            "description": "New comment text. Leading and trailing whitespace is trimmed.",
+            "example": "Root cause found: log rotation failed.",
+        },
+    },
+}
+
+
+ALERT_COMMENT_DELETE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "deleted": {"type": "boolean", "example": True},
+        "id": {"type": "integer", "example": 42},
+    },
+}
+
+
+ALERT_COMMENT_PATHS = {
+    "/api/alerts/{alert_id}/comments": {
+        "get": {
+            "tags": ["alerts"],
+            "summary": "List alert comments",
+            "description": (
+                "Returns comments attached to an alert group. "
+                "The alert_id path parameter is the alert group id used by the alert details endpoint."
+            ),
+            "operationId": "listAlertComments",
+            "parameters": [path_param("alert_id", "Alert group id.")],
+            "responses": {
+                "200": response(
+                    "List of alert comments.",
+                    {"type": "array", "items": alert_comment_schema()},
+                ),
+                "403": response("Access denied."),
+                "404": response("Alert group not found."),
+            },
+        },
+        "post": {
+            "tags": ["alerts"],
+            "summary": "Create alert comment",
+            "description": (
+                "Creates a human comment on an alert group and appends a commented event "
+                "to the alert event history. Requires team responder, team manager, or global admin access."
+            ),
+            "operationId": "createAlertComment",
+            "parameters": [path_param("alert_id", "Alert group id.")],
+            "requestBody": json_body(
+                "Comment properties.",
+                ALERT_COMMENT_CREATE_SCHEMA,
+            ),
+            "responses": {
+                "201": response("Alert comment created.", alert_comment_schema()),
+                "400": response("Validation error."),
+                "403": response("Access denied."),
+                "404": response("Alert group not found."),
+            },
+        },
+    },
+    "/api/alerts/{alert_id}/comments/{comment_id}": {
+        "put": {
+            "tags": ["alerts"],
+            "summary": "Update alert comment",
+            "description": (
+                "Updates an existing alert group comment and appends a comment_updated event "
+                "to the alert event history. Requires team responder, team manager, or global admin access."
+            ),
+            "operationId": "updateAlertComment",
+            "parameters": [
+                path_param("alert_id", "Alert group id."),
+                path_param("comment_id", "Alert comment id."),
+            ],
+            "requestBody": json_body(
+                "Updated comment properties.",
+                ALERT_COMMENT_UPDATE_SCHEMA,
+            ),
+            "responses": {
+                "200": response("Alert comment updated.", alert_comment_schema()),
+                "400": response("Validation error."),
+                "403": response("Access denied."),
+                "404": response("Alert group or comment not found."),
+            },
+        },
+        "delete": {
+            "tags": ["alerts"],
+            "summary": "Delete alert comment",
+            "description": (
+                "Soft-deletes an alert group comment and appends a comment_deleted event "
+                "to the alert event history. Deleted comments are hidden from the list endpoint."
+            ),
+            "operationId": "deleteAlertComment",
+            "parameters": [
+                path_param("alert_id", "Alert group id."),
+                path_param("comment_id", "Alert comment id."),
+            ],
+            "responses": {
+                "200": response("Alert comment deleted.", ALERT_COMMENT_DELETE_SCHEMA),
+                "403": response("Access denied."),
+                "404": response("Alert group or comment not found."),
+            },
+        },
+    },
+}
+
+
 def tags():
     """Return OpenAPI tags."""
 
@@ -646,5 +913,113 @@ def paths():
                     "404": response("Alert group not found."),
                 },
             }
+        },
+        "/api/alerts/{alert_id}/comments": {
+            "get": {
+                "tags": ["alerts"],
+                "summary": "List alert group comments",
+                "description": (
+                    "Returns non-deleted human comments attached to an alert group. "
+                    "The path parameter is named alert_id for backwards compatibility, "
+                    "but it is an alert group id."
+                ),
+                "operationId": "listAlertGroupComments",
+                "security": bearer_security(),
+                "parameters": [
+                    path_param("alert_id", "Alert group id."),
+                ],
+                "responses": {
+                    "200": response(
+                        "Alert group comments.",
+                        {
+                            "type": "array",
+                            "items": alert_comment_schema(),
+                        },
+                    ),
+                    "401": response("Authentication required."),
+                    "403": response("Access denied."),
+                    "404": response("Alert group not found."),
+                },
+            },
+            "post": {
+                "tags": ["alerts"],
+                "summary": "Create alert group comment",
+                "description": (
+                    "Creates a human comment attached to an alert group and records "
+                    "a comment event in the alert timeline."
+                ),
+                "operationId": "createAlertGroupComment",
+                "security": bearer_security(),
+                "parameters": [
+                    path_param("alert_id", "Alert group id."),
+                ],
+                "requestBody": json_body(
+                    "Comment payload.",
+                    alert_comment_create_request_schema(),
+                ),
+                "responses": {
+                    "201": response(
+                        "Created alert group comment.",
+                        alert_comment_schema(),
+                    ),
+                    "400": response("Invalid comment payload."),
+                    "401": response("Authentication required."),
+                    "403": response("Access denied."),
+                    "404": response("Alert group not found."),
+                },
+            },
+        },
+        "/api/alerts/{alert_id}/comments/{comment_id}": {
+            "put": {
+                "tags": ["alerts"],
+                "summary": "Update alert group comment",
+                "description": (
+                    "Updates an existing non-deleted comment attached to an alert group "
+                    "and records a comment update event in the alert timeline."
+                ),
+                "operationId": "updateAlertGroupComment",
+                "security": bearer_security(),
+                "parameters": [
+                    path_param("alert_id", "Alert group id."),
+                    path_param("comment_id", "Comment id."),
+                ],
+                "requestBody": json_body(
+                    "Updated comment payload.",
+                    alert_comment_update_request_schema(),
+                ),
+                "responses": {
+                    "200": response(
+                        "Updated alert group comment.",
+                        alert_comment_schema(),
+                    ),
+                    "400": response("Invalid comment payload."),
+                    "401": response("Authentication required."),
+                    "403": response("Access denied."),
+                    "404": response("Alert group or comment not found."),
+                },
+            },
+            "delete": {
+                "tags": ["alerts"],
+                "summary": "Delete alert group comment",
+                "description": (
+                    "Soft-deletes a comment attached to an alert group and records "
+                    "a comment deletion event in the alert timeline."
+                ),
+                "operationId": "deleteAlertGroupComment",
+                "security": bearer_security(),
+                "parameters": [
+                    path_param("alert_id", "Alert group id."),
+                    path_param("comment_id", "Comment id."),
+                ],
+                "responses": {
+                    "200": response(
+                        "Deleted alert group comment.",
+                        delete_alert_comment_response_schema(),
+                    ),
+                    "401": response("Authentication required."),
+                    "403": response("Access denied."),
+                    "404": response("Alert group or comment not found."),
+                },
+            },
         },
     }

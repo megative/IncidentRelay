@@ -12,6 +12,7 @@ from app.modules.db.models import (
     AlertGroup,
     AlertGroupMerge,
     AlertRoute,
+    AlertComment,
     Rotation,
     Service,
     Team,
@@ -379,6 +380,10 @@ def paginate_alert_groups(
             "order": order,
         },
     }
+
+
+def get_alert(alert_id: int) -> Alert | None:
+    return Alert.get_or_none(Alert.id == alert_id)
 
 
 def get_alert_group(group_id):
@@ -879,3 +884,108 @@ def list_due_alert_group_notifications(now=None, limit=100):
         .order_by(AlertGroup.notification_due_at.asc(), AlertGroup.id.asc())
         .limit(limit)
     )
+
+
+def create_alert_comment(
+    *,
+    group_id: int | None = None,
+    alert_id: int | None = None,
+    user_id: int | None = None,
+    body: str,
+) -> AlertComment:
+    if not group_id and not alert_id:
+        raise ValueError("group_id or alert_id is required")
+
+    return AlertComment.create(
+        group=group_id,
+        alert=alert_id,
+        user=user_id,
+        body=body,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+
+
+def list_group_comments(
+    group_id: int,
+    *,
+    include_deleted: bool = False,
+) -> list[AlertComment]:
+    query = (
+        AlertComment
+        .select(AlertComment, User)
+        .join(User, JOIN.LEFT_OUTER)
+        .switch(AlertComment)
+        .where(AlertComment.group == group_id)
+        .order_by(AlertComment.created_at.asc(), AlertComment.id.asc())
+    )
+
+    if not include_deleted:
+        query = query.where(AlertComment.deleted == False)  # noqa: E712
+
+    return list(query)
+
+
+def list_alert_comments(
+    alert_id: int,
+    *,
+    include_deleted: bool = False,
+) -> list[AlertComment]:
+    query = (
+        AlertComment
+        .select(AlertComment, User)
+        .join(User, JOIN.LEFT_OUTER)
+        .switch(AlertComment)
+        .where(AlertComment.alert == alert_id)
+        .order_by(AlertComment.created_at.asc(), AlertComment.id.asc())
+    )
+
+    if not include_deleted:
+        query = query.where(AlertComment.deleted == False)  # noqa: E712
+
+    return list(query)
+
+
+def get_alert_comment(comment_id: int) -> AlertComment | None:
+    return AlertComment.get_or_none(AlertComment.id == comment_id)
+
+
+def soft_delete_alert_comment(comment_id: int) -> bool:
+    updated = (
+        AlertComment
+        .update(
+            deleted=True,
+            deleted_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        .where(
+            AlertComment.id == comment_id,
+            AlertComment.deleted == False,  # noqa: E712
+        )
+        .execute()
+    )
+
+    return bool(updated)
+
+
+def update_alert_comment(
+    comment_id: int,
+    *,
+    body: str,
+) -> AlertComment | None:
+    comment = AlertComment.get_or_none(
+        AlertComment.id == comment_id,
+        AlertComment.deleted == False,  # noqa: E712
+    )
+
+    if not comment:
+        return None
+
+    comment.body = body
+    comment.updated_at = datetime.utcnow()
+    comment.save(only=[
+        AlertComment.body,
+        AlertComment.updated_at,
+    ])
+
+    return comment

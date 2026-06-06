@@ -11,7 +11,12 @@ from app.modules.db import (
 )
 from app.services.auth import create_raw_token, hash_token
 from app.services.audit import write_audit
-from app.services.rbac import get_allowed_team_ids, require_team_read, require_team_write
+from app.services.rbac import (
+    current_user,
+    get_allowed_team_ids,
+    require_team_read,
+    require_team_write,
+)
 from app.services.serializers import serialize_route
 from app.services.validation import validate_body
 
@@ -181,7 +186,7 @@ def list_routes():
     else:
         routes = routes_repo.list_routes(team_ids=get_allowed_team_ids())
 
-    return jsonify([serialize_route(route) for route in routes])
+    return jsonify([serialize_route(route, current_user=current_user()) for route in routes])
 
 
 @routes_bp.route("/<int:route_id>", methods=["GET"])
@@ -196,7 +201,7 @@ def get_route(route_id):
     if error:
         return error
 
-    return jsonify(serialize_route(route))
+    return jsonify(serialize_route(route, current_user=current_user()))
 
 
 @routes_bp.route("", methods=["POST"])
@@ -256,7 +261,7 @@ def create_route():
         data={**payload.model_dump(), "intake_token": "***"},
     )
 
-    response = serialize_route(route)
+    response = serialize_route(route, current_user=current_user())
     response["intake_token"] = raw_token
 
     return jsonify(response), 201
@@ -328,7 +333,7 @@ def update_route(route_id):
         data=payload.model_dump(),
     )
 
-    return jsonify(serialize_route(route))
+    return jsonify(serialize_route(route, current_user=current_user()))
 
 
 @routes_bp.route("/<int:route_id>/disable", methods=["POST"])
@@ -355,7 +360,7 @@ def disable_route(route_id):
         },
     )
 
-    return jsonify(serialize_route(route))
+    return jsonify(serialize_route(route, current_user=current_user()))
 
 
 @routes_bp.route("/<int:route_id>/enable", methods=["POST"])
@@ -382,7 +387,7 @@ def enable_route(route_id):
         },
     )
 
-    return jsonify(serialize_route(route))
+    return jsonify(serialize_route(route, current_user=current_user()))
 
 
 @routes_bp.route("/<int:route_id>", methods=["DELETE"])
@@ -441,7 +446,7 @@ def regenerate_route_intake_token(route_id):
         team_id=route.team.id,
     )
 
-    response = serialize_route(route)
+    response = serialize_route(route, current_user=current_user())
     response["intake_token"] = raw_token
 
     return jsonify(response)
@@ -478,7 +483,7 @@ def replace_route_channels(route_id):
         data=payload.model_dump(),
     )
 
-    return jsonify(serialize_route(route))
+    return jsonify(serialize_route(route, current_user=current_user()))
 
 
 @routes_bp.route("/<int:route_id>/channels/<int:channel_id>", methods=["POST"])

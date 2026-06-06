@@ -1,8 +1,12 @@
+import re
 import logging
 from datetime import datetime, timedelta
 
+from urllib.parse import urlsplit
 from telebot.apihelper import ApiTelegramException
+from requests import exceptions as requests_exceptions
 
+from app.settings import Config
 from app.db import database_proxy as db
 from app.modules.db import alerts_repo, channels_repo, users_repo
 from app.services.alerts import acknowledge_alert, resolve_alert
@@ -19,8 +23,70 @@ logger = logging.getLogger("oncall.telegram")
 
 _channel_offsets = {}
 _channel_auth_failed_until = {}
+_channel_transport_failed_until = {}
 
 TELEGRAM_AUTH_RETRY_SECONDS = 300
+TELEGRAM_TRANSPORT_RETRY_SECONDS = 60
+_TOKEN_IN_URL_RE = re.compile(r"/bot[^/\s]+")
+_PROXY_AUTH_RE = re.compile(r"://([^:@/\s]+):([^@/\s]+)@")
+
+
+def _sanitize_error_message(message):
+    """Return safe error text without Telegram bot token or proxy credentials."""
+    message = str(message or "")
+    message = _TOKEN_IN_URL_RE.sub("/bot***REDACTED***", message)
+    message = _PROXY_AUTH_RE.sub("://***:***@", message)
+    return message[:500]
+
+
+def _safe_proxy_label():
+    """Return proxy endpoint without credentials."""
+    proxy_url = (getattr(Config, "TELEGRAM_PROXY_URL", "") or "").strip()
+
+    if not proxy_url:
+        return None
+
+    parsed = urlsplit(proxy_url)
+
+    if not parsed.scheme or not parsed.hostname:
+        return "configured"
+
+    port = f":{parsed.port}" if parsed.port else ""
+
+    return f"{parsed.scheme}://{parsed.hostname}{port}"
+
+
+def _friendly_transport_error(exc):
+    """Convert transport exception into a short human-readable reason."""
+    message = str(exc).lower()
+
+    if "connection refused" in message and "socks" in message:
+        return "telegram proxy refused connection"
+
+    if "connection refused" in message:
+        return "connection refused"
+
+    if "timed out" in message or "timeout" in message:
+        return "connection timed out"
+
+    if "proxy" in message:
+        return "telegram proxy connection failed"
+
+    if "name or service not known" in message or "temporary failure in name resolution" in message:
+        return "dns resolution failed"
+
+    return exc.__class__.__name__
+
+
+def _is_channel_transport_backoff_active(channel_id):
+    retry_at = _channel_transport_failed_until.get(channel_id)
+    return bool(retry_at and retry_at > datetime.utcnow())
+
+
+def _mark_channel_transport_failed(channel_id):
+    _channel_transport_failed_until[channel_id] = (
+        datetime.utcnow() + timedelta(seconds=TELEGRAM_TRANSPORT_RETRY_SECONDS)
+    )
 
 
 def _telegram_exception_error_code(exc):
@@ -68,6 +134,9 @@ def poll_telegram_channels_once(timeout=20):
         if _is_channel_auth_backoff_active(channel.id):
             continue
 
+        if _is_channel_transport_backoff_active(channel.id):
+            continue
+
         try:
             processed += poll_telegram_channel_once(channel, timeout=timeout)
 
@@ -90,15 +159,53 @@ def poll_telegram_channels_once(timeout=20):
                 )
                 continue
 
-            logger.exception(
-                "telegram channel poll failed",
-                extra={"extra": {"channel_id": channel.id}},
+            logger.warning(
+                "telegram api error while polling channel",
+                extra={
+                    "extra": {
+                        "event_type": "telegram_poll_api_error",
+                        "channel_id": channel.id,
+                        "channel_name": getattr(channel, "name", None),
+                        "telegram_error_code": _telegram_exception_error_code(exc),
+                        "telegram_error": _sanitize_error_message(
+                            getattr(exc, "description", str(exc))
+                        ),
+                    }
+                },
             )
+            continue
 
-        except Exception:
+        except requests_exceptions.RequestException as exc:
+            _mark_channel_transport_failed(channel.id)
+
+            logger.warning(
+                "telegram channel poll transport error; polling temporarily suspended",
+                extra={
+                    "extra": {
+                        "event_type": "telegram_poll_transport_error",
+                        "channel_id": channel.id,
+                        "channel_name": getattr(channel, "name", None),
+                        "reason": _friendly_transport_error(exc),
+                        "retry_after_seconds": TELEGRAM_TRANSPORT_RETRY_SECONDS,
+                        "proxy": _safe_proxy_label(),
+                        "error_type": exc.__class__.__name__,
+                        "error": _sanitize_error_message(exc),
+                    }
+                },
+            )
+            continue
+
+        except Exception as exc:
             logger.exception(
                 "telegram channel poll failed",
-                extra={"extra": {"channel_id": channel.id}},
+                extra={
+                    "extra": {
+                        "event_type": "telegram_poll_unexpected_error",
+                        "channel_id": channel.id,
+                        "channel_name": getattr(channel, "name", None),
+                        "error": str(exc),
+                    }
+                },
             )
 
     return processed

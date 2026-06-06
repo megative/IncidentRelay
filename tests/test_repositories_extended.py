@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from app.modules.db import alerts_repo, channels_repo, groups_repo, locks_repo, routes_repo, teams_repo, tokens_repo
+from app.modules.db import channels_repo, groups_repo, locks_repo, routes_repo, teams_repo, tokens_repo
 from app.modules.db.models import (
     AlertRouteChannel,
     ApiToken,
@@ -14,15 +14,11 @@ from tests.factories import (
     add_user_to_team,
     attach_channel,
     create_channel,
-    create_group,
-    create_route,
     create_rotation,
     create_rotation_override,
     create_silence,
-    create_team,
     create_user,
     unique,
-    create_service,
 )
 
 

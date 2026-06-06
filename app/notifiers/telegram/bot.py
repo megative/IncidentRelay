@@ -2,6 +2,7 @@ import logging
 
 import telebot
 from telebot import apihelper, types
+from requests import exceptions as requests_exceptions
 from telebot.apihelper import ApiTelegramException
 
 from app.settings import Config
@@ -20,8 +21,18 @@ def ensure_polling_mode(bot):
 
     try:
         bot.remove_webhook()
+    except requests_exceptions.RequestException as exc:
+        logger.warning(
+            "failed to remove telegram webhook before polling due to transport error",
+            extra={
+                "extra": {
+                    "event_type": "telegram_remove_webhook_transport_error",
+                    "error_type": exc.__class__.__name__,
+                }
+            },
+        )
     except Exception:
-        logging.warning("failed to remove telegram webhook before polling", exc_info=True)
+        logger.exception("failed to remove telegram webhook before polling")
 
 
 def configure_telegram_proxy():

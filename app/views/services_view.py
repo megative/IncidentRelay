@@ -49,7 +49,7 @@ def _json_error(error, message, status=400, **extra):
     return jsonify(payload), status
 
 
-def _readable_services_from_request():
+def _readable_services_from_request(*, include_disabled=True):
     """Return services visible to current user for aggregate service context endpoints."""
     team_id = request.args.get("team_id", type=int)
     service_id = request.args.get("service_id", type=int)
@@ -65,16 +65,30 @@ def _readable_services_from_request():
                 service_id=service_id,
             )
 
+        if not include_disabled and not services_repo.is_service_active(service):
+            return None, _json_error(
+                "service_not_found",
+                "Service was not found",
+                404,
+                service_id=service_id,
+            )
+
         error = require_team_read(service.team_id)
         if error:
             return None, error
 
         return [service], None
 
-    services = services_repo.list_services(team_id=team_id)
-    visible = []
+    services = services_repo.list_services(
+        team_id=team_id,
+        include_disabled=include_disabled,
+    )
 
+    visible = []
     for service in services:
+        if not include_disabled and not services_repo.is_service_active(service):
+            continue
+
         error = require_team_read(service.team_id)
         if not error:
             visible.append(service)
@@ -984,7 +998,7 @@ def list_all_service_dependencies():
 @services_bp.route("/analytics", methods=["GET"])
 def service_analytics():
     """Return alert analytics grouped by affected service."""
-    services, error = _readable_services_from_request()
+    services, error = _readable_services_from_request(include_disabled=False)
     if error:
         return error
 
@@ -1730,23 +1744,21 @@ def _compute_service_impact_row(
 @services_bp.route("/impact", methods=["GET"])
 def list_service_impact():
     """Return computed service impact based on alerts and dependencies."""
-    services, error = _readable_services_from_request()
+    services, error = _readable_services_from_request(include_disabled=False)
+
     if error:
         return error
 
-    requested_service_ids = [service.id for service in services]
-    if not requested_service_ids:
+    service_ids = [service.id for service in services]
+
+    if not service_ids:
         return jsonify([])
 
     days = request.args.get("days", default=30, type=int)
     days = max(1, min(days or 30, 365))
 
-    impact_services_by_id, dependencies_by_service = (
-        _collect_dependency_impact_context(services)
-    )
-
     alert_impact = _build_alert_impact_by_service(
-        list(impact_services_by_id.keys()),
+        service_ids,
         days=days,
     )
 
@@ -1755,24 +1767,30 @@ def list_service_impact():
             service,
             alert_impact,
         )
-        for service in impact_services_by_id.values()
+        for service in services
     }
 
-    state = {}
+    dependencies = services_repo.list_service_dependencies(
+        service_ids=service_ids,
+    )
 
-    for service_id in requested_service_ids:
-        _compute_service_impact_row(
-            service_id,
+    dependencies_by_service = {}
+
+    for dependency in dependencies:
+        dependencies_by_service.setdefault(
+            dependency.service_id,
+            [],
+        ).append(dependency)
+
+    for service in services:
+        row = rows_by_service[service.id]
+        _apply_dependency_impact(
+            row,
+            dependencies_by_service.get(service.id, []),
             rows_by_service,
-            dependencies_by_service,
-            state,
         )
 
-    result = [
-        rows_by_service[service_id]
-        for service_id in requested_service_ids
-        if service_id in rows_by_service
-    ]
+    result = list(rows_by_service.values())
 
     result.sort(
         key=lambda row: (

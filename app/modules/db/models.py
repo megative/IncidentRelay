@@ -805,6 +805,48 @@ class Alert(BaseModel):
         )
 
 
+class AlertComment(BaseModel):
+    """Human comment attached to an alert group or concrete alert."""
+
+    id = AutoField()
+
+    group = ForeignKeyField(
+        AlertGroup,
+        null=True,
+        backref="comments",
+        on_delete="CASCADE",
+    )
+    alert = ForeignKeyField(
+        Alert,
+        null=True,
+        backref="comments",
+        on_delete="CASCADE",
+    )
+
+    user = ForeignKeyField(
+        User,
+        null=True,
+        backref="alert_comments",
+        on_delete="SET NULL",
+    )
+
+    body = TextField()
+
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    deleted = BooleanField(default=False, index=True)
+    deleted_at = DateTimeField(null=True)
+
+    class Meta:
+        table_name = "alert_comment"
+        indexes = (
+            (("group", "created_at"), False),
+            (("alert", "created_at"), False),
+            (("user", "created_at"), False),
+        )
+
+
 class ServiceStatusHistory(BaseModel):
     """Product history of service status changes."""
 

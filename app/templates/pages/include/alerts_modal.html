@@ -19,6 +19,37 @@
     <div class="app-modal-body">
       <div id="alert-details-summary" class="details-grid"></div>
 
+        <section class="details-section alert-comments-section">
+          <div class="details-section-header">
+            <h3>Comments</h3>
+                <button
+                    type="button"
+                    id="alert-comments-refresh"
+                    class="btn btn-secondary btn-small"
+                  >
+                    Refresh
+                </button>
+          </div>
+
+          <div id="alert-comments-list" class="alert-comments-list"></div>
+
+          <form id="alert-comment-form" class="alert-comment-form">
+            <textarea
+              id="alert-comment-body"
+              class="form-control"
+              rows="3"
+              maxlength="5000"
+              placeholder="Add a comment..."
+            ></textarea>
+
+            <div class="modal-actions">
+              <button type="submit" class="btn btn-primary">
+                Add comment
+              </button>
+            </div>
+          </form>
+        </section>
+
       <div class="details-section">
         <div class="details-section-title">Labels</div>
         <pre id="alert-details-labels" class="details-code"></pre>

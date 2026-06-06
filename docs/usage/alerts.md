@@ -124,6 +124,14 @@ When incoming resolved payloads are received for existing child alerts, the grou
 
 An orphan resolved payload does not create a new group.
 
+## Comments
+
+Alert details include a Comments section for responder notes.
+
+Comments can be used for investigation context, handover notes, mitigation details, links to dashboards or tickets, and post-resolution follow-up.
+
+Read more: [Alert comments](alert-comments.md).
+
 ### Merged
 
 A merged source group is marked as `merged` and points to the target group. Child alerts from the source group are moved into the target group.

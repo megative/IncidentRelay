@@ -321,10 +321,37 @@ def notify_alert(group, event_type="notification"):
                     ),
                 )
 
-    sent_count += notification_rules.enqueue_user_notifications(
-        group,
-        event_type=event_type,
-    )
+    try:
+        user_sent_count = notification_rules.enqueue_user_notifications(
+            group,
+            event_type=event_type,
+        )
+
+        sent_count += user_sent_count
+
+        alerts_repo.create_alert_event(
+            group_id=group.id,
+            event_type=f"{event_type}_user_notifications_processed",
+            message=f"User-level notifications processed: {user_sent_count}",
+        )
+
+    except Exception as exc:
+        alerts_repo.create_alert_event(
+            group_id=group.id,
+            event_type=f"{event_type}_user_notifications_failed",
+            message=f"User-level notification failed: {exc}",
+        )
+
+        logger.exception(
+            "user-level notification failed",
+            extra={
+                "extra": {
+                    "alert_group_id": group.id,
+                    "event_type": event_type,
+                    "error": str(exc),
+                }
+            },
+        )
 
     if sent_count:
         alerts_repo.record_group_notification_time(group, datetime.utcnow())

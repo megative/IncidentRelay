@@ -262,23 +262,6 @@ def start_scheduler():
     _scheduler.add_job(
         alert_group_notification_job,
         "interval",
-        seconds=int(
-            getattr(
-                Config,
-                "ALERT_GROUP_NOTIFICATION_CHECK_INTERVAL_SECONDS",
-                10,
-            )
-        ),
-        max_instances=1,
-        coalesce=True,
-        next_run_time=datetime.utcnow(),
-        id="alert_group_notification_job",
-        replace_existing=True,
-    )
-
-    _scheduler.add_job(
-        alert_group_notification_job,
-        "interval",
         seconds=int(getattr(Config, "ALERT_GROUP_NOTIFICATION_CHECK_INTERVAL_SECONDS", 10)),
         max_instances=1,
         coalesce=True,

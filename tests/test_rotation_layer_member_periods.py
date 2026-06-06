@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from app.api.openapi.spec import build_openapi_spec
 from app.api.schemas.rotations import RotationLayerMemberAddSchema

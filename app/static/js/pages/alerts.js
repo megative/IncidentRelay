@@ -853,6 +853,7 @@ function showAlertDetails(alertId) {
         renderAlertGroupChildren(alert.alerts || [], modal);
         renderEvents(alert.events || [], modal);
         renderNotifications(alert.notifications || [], modal);
+        prepareAlertComments(alert, modal);
 
         if (!currentDetailsAlertCanRespond || normalizeAlertValue(alert.status) === "resolved") {
             modal.find("#modal-alert-ack").hide();

@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 
 from app.modules.db.models import (
     UserNotificationDelivery,
-    UserNotificationRule,
 )
 from app.services import notification_rules
 from app.services.alerts import upsert_alert
