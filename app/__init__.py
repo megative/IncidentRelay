@@ -28,6 +28,8 @@ from app.services.db_errors import handle_integrity_error, handle_not_found_erro
 from app.views.services_view import services_bp
 from app.views.push_view import push_bp
 from app.views.notification_rules_view import notification_rules_bp
+from app.views.incidents_view import incidents_bp
+from app.views.maintenance_view import maintenance_bp
 
 
 def create_app(log_role=None):
@@ -88,6 +90,8 @@ def register_blueprints(flask_app):
     flask_app.register_blueprint(rotations_bp, url_prefix="/api/rotations")
     flask_app.register_blueprint(calendar_bp, url_prefix="/api/calendar")
     flask_app.register_blueprint(alerts_bp, url_prefix="/api/alerts")
+    flask_app.register_blueprint(incidents_bp, url_prefix="/api/incidents")
+    flask_app.register_blueprint(maintenance_bp, url_prefix="/api/maintenance-windows")
     flask_app.register_blueprint(channels_bp, url_prefix="/api/channels")
     flask_app.register_blueprint(routes_bp, url_prefix="/api/routes")
     flask_app.register_blueprint(services_bp, url_prefix="/api/services")

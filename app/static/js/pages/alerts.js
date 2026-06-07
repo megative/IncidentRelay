@@ -598,13 +598,13 @@ function renderAlertPageRow(alert) {
     row.append(idCell);
 
     row.append(
-        $("<td>")
-            .append(
-                $("<div>")
-                    .addClass("status-cell")
-                    .append($("<span>").addClass("status-dot dot-" + normalizeAlertValue(alert.status)))
-                    .append(makeAlertBadge(statusLabel(alert.status), statusBadgeClass(alert.status)))
-            )
+        window.AppMaintenanceBadges.statusCell(
+            [
+                $("<span>").addClass("status-dot dot-" + normalizeAlertValue(alert.status)),
+                makeAlertBadge(statusLabel(alert.status), statusBadgeClass(alert.status)),
+            ],
+            alert
+        )
     );
 
     row.append(
@@ -742,7 +742,6 @@ function renderEscalationModeBadge(alert) {
             : "Simple rotation escalation")
         .text(label);
 }
-
 function renderEscalationCell(alert) {
     const wrapper = $("<div>").addClass("alerts-escalation-cell");
 
@@ -855,6 +854,12 @@ function showAlertDetails(alertId) {
         renderNotifications(alert.notifications || [], modal);
         prepareAlertComments(alert, modal);
 
+        if (window.AlertIncidentManagement) {
+            window.AlertIncidentManagement.render(alert, modal, {
+                onChange: loadAlerts,
+            });
+        }
+
         if (!currentDetailsAlertCanRespond || normalizeAlertValue(alert.status) === "resolved") {
             modal.find("#modal-alert-ack").hide();
             modal.find("#modal-alert-resolve").hide();
@@ -903,13 +908,15 @@ function renderAlertPrimaryDetails(alert, modal) {
 
     const header = $("<div>").addClass("alert-primary-header");
 
-    header.append(
-        $("<div>")
-            .addClass("badge-success")
-            .append(makeAlertBadge(statusLabel(alert.status), statusBadgeClass(alert.status)))
-            .append(makeAlertBadge(severityLabel(alert.severity), severityBadgeClass(alert.severity)))
-            .append($("<span>").addClass("pill badge-muted").text("#" + alert.id))
-    );
+    const primaryBadges = $("<div>")
+    .addClass("badge-success")
+    .append(makeAlertBadge(statusLabel(alert.status), statusBadgeClass(alert.status)))
+    .append(makeAlertBadge(severityLabel(alert.severity), severityBadgeClass(alert.severity)))
+    .append($("<span>").addClass("pill badge-muted").text("#" + alert.id));
+
+    window.AppMaintenanceBadges.appendTo(primaryBadges, alert);
+
+    header.append(primaryBadges);
 
     header.append(
         $("<div>")
@@ -991,7 +998,7 @@ function buildAlertPrimaryTimeLine(alert) {
 
 
 function buildAlertPrimaryContext(alert) {
-    return [
+    const context = [
         {
             label: "Assignee",
             value: alert.assignee || "-"
@@ -1009,6 +1016,15 @@ function buildAlertPrimaryContext(alert) {
             value: formatDateTimeMinutes(alert.next_escalation_at)
         }
     ];
+
+    if (window.AppMaintenanceBadges && window.AppMaintenanceBadges.has(alert)) {
+        context.push({
+            label: "Maintenance",
+            value: window.AppMaintenanceBadges.text(alert)
+        });
+    }
+
+    return context;
 }
 
 

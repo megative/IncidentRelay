@@ -9,7 +9,7 @@ TEST_DB = ROOT_DIR / "tests" / ".tmp" / "incidentrelay-ci.db"
 TEST_CONFIG = ROOT_DIR / "tests" / "incidentrelay.test.conf"
 
 # Must be set before importing app.settings/app.db/app models.
-os.environ.setdefault("INCIDENTRELAY_CONFIG_FILE", str(TEST_CONFIG))
+os.environ.setdefault("INCEDENTRELAY_CONFIG_FILE", str(TEST_CONFIG))
 os.environ.setdefault("PYTHONPATH", str(ROOT_DIR))
 
 (ROOT_DIR / "tests" / ".tmp").mkdir(parents=True, exist_ok=True)
@@ -69,6 +69,10 @@ from app.modules.db.models import (  # noqa: E402
     BrowserPushSubscription,
     UserNotificationDelivery,
     UserNotificationRule,
+    IncidentPriority,
+    IncidentResponder,
+    IncidentStakeholder,
+    MaintenanceWindowScope,
 )
 
 
@@ -82,6 +86,8 @@ CLEANUP_MODELS = [
     BrowserPushSubscription,
     UserNotificationDelivery,
     UserNotificationRule,
+    IncidentResponder,
+    IncidentStakeholder,
     Silence,
     AlertRouteChannel,
     Alert,
@@ -120,6 +126,10 @@ CLEANUP_MODELS = [
     Group,
     EscalationPolicyRule,
     EscalationPolicy,
+    MaintenanceWindowScope,
+    MaintenanceWindowService,
+    MaintenanceWindow,
+    IncidentPriority,
 ]
 
 

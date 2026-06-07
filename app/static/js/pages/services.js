@@ -154,7 +154,12 @@ function renderServiceRow(service) {
             .text(service.team_name || service.team_slug || "-")
     );
 
-    row.append($("<td>").append(renderServiceStatusBadge(service)));
+    row.append(
+        window.AppMaintenanceBadges.statusCell(
+            renderServiceStatusBadge(service),
+            service
+        )
+    );
     row.append($("<td>").text(service.criticality || "-"));
     row.append($("<td>").text(service.environment || "-"));
 
@@ -173,7 +178,6 @@ function renderServiceRow(service) {
 
     return row;
 }
-
 
 function renderServiceStatusBadge(service) {
     if (!service.enabled || service.status === "disabled") {
@@ -282,6 +286,7 @@ function renderServiceDetails(service) {
             .append(serviceDetailsItem("Tier", service.tier))
             .append(serviceDetailsItem("Status", service.status))
             .append(serviceDetailsItem("Status message", service.status_message))
+            .append(serviceDetailsItem("Maintenance", window.AppMaintenanceBadges.text(service, "-")))
             .append(serviceDetailsItem("Default rotation", service.default_rotation_name))
             .append(serviceDetailsItem("Default policy", service.default_escalation_policy_name))
             .append(serviceDetailsItem("Enabled", service.enabled ? "Yes" : "No"))

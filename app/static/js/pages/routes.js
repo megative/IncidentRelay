@@ -303,7 +303,12 @@ function renderRouteRow(route) {
     row.append($("<td>").text(getRouteEscalationLabel(route)));
     row.append($("<td>").append(renderRouteChannels(channels)));
     row.append($("<td>").append($("<span>").addClass("token-pill").text(route.intake_token_prefix || "-")));
-    row.append($("<td>").append(renderStatusBadge(route.enabled, "Enabled", "Disabled")));
+    row.append(
+        window.AppMaintenanceBadges.statusCell(
+            renderStatusBadge(route.enabled, "Enabled", "Disabled"),
+            route
+        )
+    );
     row.append($("<td>").addClass("actions-cell").append(renderRouteActions(route)));
     return row;
 }
@@ -670,6 +675,7 @@ function renderRouteDetails(route) {
             .append(routeDetailsItem("Name", route.name))
             .append(routeDetailsItem("Team", getRouteTeamLabel(route)))
             .append(routeDetailsItem("Source", route.source))
+            .append(routeDetailsItem("Maintenance", window.AppMaintenanceBadges.text(route, "-")))
             .append(routeDetailsItem("Escalation", getRouteEscalationLabel(route)))
             .append(routeDetailsItem("Team escalation", getRouteTeamEscalationLabel(route)))
             .append(routeDetailsItem("Channels", asArray(route.channels).map(function (channel) {

@@ -151,6 +151,11 @@
             <span class="menu-text">Services</span>
         </a>
 
+        <a href="/maintenance-windows" data-page="maintenance-windows" class="menu-link" title="Maintenance">
+          <svg class="menu-icon"><use href="#icon-services"></use></svg>
+          <span class="menu-text">Maintenance</span>
+        </a>
+
         <a href="/escalation-policies" data-page="escalation-policies" class="menu-link" title="Escalation Policies">
           <svg class="menu-icon"><use href="#icon-escalation-policies"></use></svg>
           <span class="menu-text">Escalation Policies</span>
@@ -255,6 +260,7 @@
             <div id="view-calendar" class="view">{% include "pages/calendar.html" %}</div>
             <div id="view-routes" class="view">{% include "pages/routes.html" %}</div>
             <div id="view-services" class="view">{% include "pages/services.html" %}</div>
+            <div id="view-maintenance-windows" class="view">{% include "pages/maintenance_windows.html" %}</div>
             <div id="view-escalation-policies" class="view">{% include "pages/escalation_policies.html" %}</div>
             <div id="view-channels" class="view">{% include "pages/channels.html" %}</div>
             <div id="view-silences" class="view">{% include "pages/silences.html" %}</div>
@@ -320,17 +326,21 @@
 <script src="/static/js/core/browser_push.js"></script>
 <script src="/static/js/core/router.js"></script>
 <script src="/static/js/core/forms.js"></script>
+<script src="{{ url_for('static', filename='js/core/timezones.js') }}"></script>
 <script src="/static/js/sidebar.js"></script>
 <script src="/static/js/components/alerts_summary_grid.js"></script>
 <script src="/static/js/components/buttons.js"></script>
 <script src="/static/js/components/oncall_status_panel.js"></script>
 <script src="{{ url_for('static', filename='js/components/action_menu.js') }}"></script>
 <script src="{{ url_for('static', filename='js/components/alerts/alerts_comment.js') }}"></script>
+<script src="{{ url_for('static', filename='js/components/alerts/alert_incident_management.js') }}"></script>
+<script src="{{ url_for('static', filename='js/components/maintenance_badges.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pages/alerts.js') }}"></script>
 <script src="/static/js/pages/rotations.js"></script>
 <script src="/static/js/pages/calendar.js"></script>
 <script src="/static/js/pages/routes.js"></script>
 <script src="{{ url_for('static', filename='js/pages/services.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/maintenance_windows.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pages/escalation_policies.js') }}"></script>
 <script src="/static/js/pages/channels.js"></script>
 <script src="/static/js/pages/silences.js"></script>

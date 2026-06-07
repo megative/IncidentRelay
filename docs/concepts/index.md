@@ -25,3 +25,4 @@ Recommended reading order:
 5. [Reminders and Escalations](reminders-and-escalations.md)
 6. [Escalation policy](escalation-policies.md)
 7. [Service](service.md)
+8. [Maintenance window](maintenance-windows.md)

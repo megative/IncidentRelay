@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timedelta
 
 from app.settings import Config
-from app.modules.db import alerts_repo, users_repo
+from app.modules.db import alerts_repo, users_repo, incidents_repo
 from app.services import escalation_policies as escalation_policy_service
 from app.services.oncall import get_current_oncall_user, get_next_rotation_user
 from app.services.routing import build_group_key, find_route_for_alert
@@ -17,9 +17,150 @@ from app.services.service_resolution import (
     get_effective_route_rotation,
     resolve_alert_service,
 )
+from app.services.incident_features import apply_maintenance_to_incoming_alert
+from app.services.maintenance import get_maintenance_decision
 
 
 logger = logging.getLogger("oncall.alerts")
+
+
+def _incident_priority_from_alert(alert_data):
+    """Resolve incident priority from alert severity."""
+    return incidents_repo.priority_from_severity(
+        alert_data.get("severity")
+    )
+
+
+def _incident_priority_create_kwargs(priority):
+    """Return kwargs for AlertGroup/Alert priority fields."""
+    return {
+        "priority": priority.id if priority else None,
+        "priority_slug": priority.slug if priority else "p3",
+        "priority_order": priority.level if priority else 3,
+    }
+
+
+def _apply_priority_to_existing_alert(alert, priority):
+    """Attach resolved priority to an existing child alert."""
+    if not priority:
+        alert.priority = None
+        alert.priority_slug = "p3"
+        alert.priority_order = 3
+        return alert
+
+    alert.priority = priority.id
+    alert.priority_slug = priority.slug
+    alert.priority_order = priority.level
+
+    return alert
+
+
+def _maybe_apply_auto_priority_to_group(group, priority):
+    """
+    Update incident priority automatically.
+
+    Manual priority must never be overwritten by incoming alert severity.
+    For auto priority, only upgrade to a more severe priority.
+    Example: p3 -> p1 is allowed, p1 -> p3 is not automatic.
+    """
+    if not group or not priority:
+        return group
+
+    if getattr(group, "priority_set_manually", False):
+        return group
+
+    current_order = group.priority_order or 999
+
+    if priority.level >= current_order:
+        return group
+
+    group.priority = priority.id
+    group.priority_slug = priority.slug
+    group.priority_order = priority.level
+    group.priority_set_manually = False
+    group.updated_at = datetime.utcnow()
+
+    group.save(only=[
+        group.__class__.priority,
+        group.__class__.priority_slug,
+        group.__class__.priority_order,
+        group.__class__.priority_set_manually,
+        group.__class__.updated_at,
+    ])
+
+    alerts_repo.create_alert_event(
+        group_id=group.id,
+        event_type="priority_auto_updated",
+        message=f"Priority automatically updated to {priority.slug}",
+    )
+
+    return group
+
+
+def _add_service_stakeholders_for_new_group(group):
+    """Auto-add service stakeholders to a newly created incident."""
+    try:
+        incidents_repo.add_service_stakeholders_to_incident(group)
+    except Exception as exc:
+        logger.exception(
+            "failed to auto-add service stakeholders to incident",
+            extra={
+                "extra": {
+                    "alert_group_id": getattr(group, "id", None),
+                    "service_id": getattr(group, "service_id", None),
+                    "error": str(exc),
+                }
+            },
+        )
+
+
+def _maintenance_create_kwargs(maintenance_decision):
+    if not maintenance_decision or not maintenance_decision.window:
+        return {}
+
+    return {
+        "maintenance_window": maintenance_decision.window,
+        "maintenance_behavior": maintenance_decision.behavior,
+        "maintenance_suppressed": maintenance_decision.suppress_notifications,
+    }
+
+
+def _apply_maintenance_to_existing_alert(alert, maintenance_decision):
+    if not maintenance_decision or not maintenance_decision.window:
+        return
+
+    alert.maintenance_window = maintenance_decision.window
+    alert.maintenance_behavior = maintenance_decision.behavior
+    alert.maintenance_suppressed = maintenance_decision.suppress_notifications
+
+
+def _maybe_apply_maintenance_to_group(group, maintenance_decision):
+    if not maintenance_decision or not maintenance_decision.window:
+        return
+
+    group.maintenance_window = maintenance_decision.window
+    group.maintenance_behavior = maintenance_decision.behavior
+    group.maintenance_suppressed = maintenance_decision.suppress_notifications
+    group.save()
+
+
+def _record_maintenance_match(group, maintenance_decision, *, alert_id=None):
+    """Write timeline event when an alert/incident matched maintenance."""
+    if not group or not maintenance_decision or not maintenance_decision.matched:
+        return
+
+    window = maintenance_decision.window
+
+    alerts_repo.create_alert_event(
+        alert_id=alert_id,
+        group_id=group.id,
+        event_type="maintenance_matched",
+        message=(
+            f"Matched maintenance window: {window.name}"
+            if window
+            else "Matched maintenance window"
+        ),
+    )
 
 
 def _create_group_for_alert(alert_data, route, team, service, rotation, group_key, status):
@@ -28,6 +169,9 @@ def _create_group_for_alert(alert_data, route, team, service, rotation, group_ke
     policy_rule, rotation, assignee, next_escalation_at = (
         apply_initial_escalation_policy_assignment(policy, rotation)
     )
+
+    priority = _incident_priority_from_alert(alert_data)
+    priority_kwargs = _incident_priority_create_kwargs(priority)
 
     return alerts_repo.create_alert_group(
         team=team.id if team else None,
@@ -46,6 +190,8 @@ def _create_group_for_alert(alert_data, route, team, service, rotation, group_ke
         status=status,
         first_seen_at=datetime.utcnow(),
         last_seen_at=datetime.utcnow(),
+        priority_set_manually=False,
+        **priority_kwargs,
     )
 
 
@@ -116,14 +262,14 @@ def _schedule_group_notification(group, reason="notification", now=None):
 
 
 def upsert_alert(alert_data):
-    """Create/update concrete alert and attach it to an alert group.
+    """
+    Create/update concrete alert and attach it to an incident.
 
     Return:
         tuple[AlertGroup | None, bool]:
-            - group object or None
-            - True if a new group was created, False otherwise
+        - group object or None
+        - True if a new group was created, False otherwise
     """
-
     route = find_route_for_alert(alert_data)
 
     if not route:
@@ -146,6 +292,9 @@ def upsert_alert(alert_data):
 
     status = alert_data.get("status") or "firing"
 
+    priority = _incident_priority_from_alert(alert_data)
+    priority_kwargs = _incident_priority_create_kwargs(priority)
+
     group_key = build_group_key(
         route,
         alert_data,
@@ -153,6 +302,21 @@ def upsert_alert(alert_data):
     )
 
     now = datetime.utcnow()
+
+    maintenance_decision = get_maintenance_decision(
+        team=team,
+        route=route,
+        service=service,
+        status=status,
+        now=now,
+    )
+
+    if maintenance_decision.incident_status:
+        status = maintenance_decision.incident_status
+
+    maintenance_kwargs = _maintenance_create_kwargs(
+        maintenance_decision,
+    )
 
     existing_alert = alerts_repo.find_existing_alert(
         alert_data["source"],
@@ -168,6 +332,26 @@ def upsert_alert(alert_data):
         service_id=service.id if service else None,
     )
 
+    if maintenance_decision.suppress_incident and not existing_alert and not existing_group:
+        logger.info(
+            "alert suppressed by maintenance window",
+            extra={
+                "extra": {
+                    "source": alert_data["source"],
+                    "dedup_key": alert_data["dedup_key"],
+                    "group_key": group_key,
+                    "team_id": team.id if team else None,
+                    "route_id": route.id if route else None,
+                    "service_id": service.id if service else None,
+                    "maintenance_window_id": maintenance_decision.window.id
+                    if maintenance_decision.window
+                    else None,
+                    "maintenance_behavior": maintenance_decision.behavior,
+                }
+            },
+        )
+        return None, False
+
     # Existing concrete alert: this is dedup/update, not a new child alert.
     # Do not reopen acknowledged group just because the same alert was updated.
     if existing_alert:
@@ -175,9 +359,13 @@ def upsert_alert(alert_data):
 
         if not group:
             policy = get_effective_escalation_policy(route, service)
+
             policy_rule, rotation, assignee, next_escalation_at = (
                 apply_initial_escalation_policy_assignment(policy, rotation)
             )
+
+            if maintenance_decision.pause_escalation_only:
+                next_escalation_at = None
 
             group = alerts_repo.create_alert_group(
                 team=team.id if team else None,
@@ -197,12 +385,22 @@ def upsert_alert(alert_data):
                 first_seen_at=existing_alert.first_seen_at or now,
                 last_seen_at=now,
                 silenced=bool(existing_alert.silenced),
+                priority_set_manually=False,
+                **priority_kwargs,
+                **maintenance_kwargs,
             )
+
+            _add_service_stakeholders_for_new_group(group)
 
             alerts_repo.create_alert_event(
                 group_id=group.id,
                 event_type="created",
-                message="Alert group created for existing alert",
+                message="Incident created for existing alert",
+            )
+
+            _record_maintenance_match(
+                group,
+                maintenance_decision,
             )
 
         existing_alert, previous_status = alerts_repo.update_alert_from_payload(
@@ -217,7 +415,24 @@ def upsert_alert(alert_data):
         existing_alert.service = service.id if service else None
         existing_alert.rotation = rotation.id if rotation else None
         existing_alert.group = group.id
+
+        if maintenance_decision.pause_escalation_only:
+            existing_alert.next_escalation_at = None
+
+        _apply_priority_to_existing_alert(existing_alert, priority)
+        _apply_maintenance_to_existing_alert(existing_alert, maintenance_decision)
+
         existing_alert.save()
+
+        _maybe_apply_auto_priority_to_group(group, priority)
+        _maybe_apply_maintenance_to_group(group, maintenance_decision)
+
+        if maintenance_decision.matched:
+            _record_maintenance_match(
+                group,
+                maintenance_decision,
+                alert_id=existing_alert.id,
+            )
 
         if status == "resolved" and previous_status != "resolved":
             alerts_repo.create_alert_event(
@@ -236,18 +451,23 @@ def upsert_alert(alert_data):
 
         group = alerts_repo.recalculate_alert_group(group)
 
-        if status == "resolved":
+        if maintenance_decision.suppress_notifications:
+            alerts_repo.clear_alert_group_notification(group)
+
+        elif status == "resolved":
             if group.status == "resolved":
                 alerts_repo.clear_alert_group_notification(group)
 
                 if group.last_notification_at:
                     notify_alert(group, event_type="resolved")
+
             elif group.status == "firing":
                 _schedule_group_notification(
                     group,
                     reason="update",
                     now=now,
                 )
+
         else:
             if group.status == "firing":
                 _schedule_group_notification(
@@ -273,9 +493,13 @@ def upsert_alert(alert_data):
         return None, False
 
     policy = get_effective_escalation_policy(route, service)
+
     policy_rule, rotation, assignee, next_escalation_at = (
         apply_initial_escalation_policy_assignment(policy, rotation)
     )
+
+    if maintenance_decision.pause_escalation_only:
+        next_escalation_at = None
 
     silence = find_active_silence(team.id if team else None, alert_data)
 
@@ -304,14 +528,24 @@ def upsert_alert(alert_data):
             first_seen_at=now,
             last_seen_at=now,
             silenced=bool(silence),
+            priority_set_manually=False,
+            **priority_kwargs,
+            **maintenance_kwargs,
         )
 
         created_group = True
 
+        _add_service_stakeholders_for_new_group(group)
+
         alerts_repo.create_alert_event(
             group_id=group.id,
             event_type="created",
-            message="Alert group created",
+            message="Incident created",
+        )
+
+        _record_maintenance_match(
+            group,
+            maintenance_decision,
         )
 
     elif group.status == "acknowledged" and status == "firing":
@@ -327,8 +561,11 @@ def upsert_alert(alert_data):
         alerts_repo.create_alert_event(
             group_id=group.id,
             event_type="reopened",
-            message="New alert received in acknowledged group",
+            message="New alert received in acknowledged incident",
         )
+
+    _maybe_apply_auto_priority_to_group(group, priority)
+    _maybe_apply_maintenance_to_group(group, maintenance_decision)
 
     alert = alerts_repo.create_alert(
         group=group.id,
@@ -353,6 +590,8 @@ def upsert_alert(alert_data):
         first_seen_at=now,
         last_seen_at=now,
         silenced=bool(silence),
+        **priority_kwargs,
+        **maintenance_kwargs,
     )
 
     alerts_repo.create_alert_event(
@@ -361,6 +600,13 @@ def upsert_alert(alert_data):
         event_type="created",
         message="Alert created",
     )
+
+    if maintenance_decision.matched:
+        _record_maintenance_match(
+            group,
+            maintenance_decision,
+            alert_id=alert.id,
+        )
 
     if alert_data.get("routing_error"):
         alerts_repo.create_alert_event(
@@ -381,26 +627,39 @@ def upsert_alert(alert_data):
     group = alerts_repo.recalculate_alert_group(group)
 
     logger.info(
-        "alert added to group",
+        "alert added to incident",
         extra={
             "extra": {
                 "alert_id": alert.id,
                 "alert_group_id": group.id,
+                "incident_id": group.id,
                 "team": group.team.slug if group.team else None,
                 "route_id": group.route.id if group.route else None,
                 "service_id": service.id if service else None,
                 "created_group": created_group,
                 "group_key": group.group_key,
+                "priority": group.priority_slug,
+                "maintenance_window_id": group.maintenance_window_id,
+                "maintenance_behavior": group.maintenance_behavior,
+                "maintenance_suppressed": group.maintenance_suppressed,
             }
         },
     )
 
-    if status == "firing" and group.status == "firing":
+    if (
+        status == "firing"
+        and group.status == "firing"
+        and not maintenance_decision.suppress_notifications
+    ):
         _schedule_group_notification(
             group,
             reason="notification" if created_group else "update",
             now=now,
         )
+
+    elif maintenance_decision.suppress_notifications:
+        alerts_repo.clear_alert_group_notification(group)
+
     elif group.status != "firing":
         alerts_repo.clear_alert_group_notification(group)
 

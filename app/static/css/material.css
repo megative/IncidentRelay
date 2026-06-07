@@ -2635,3 +2635,117 @@ body.md-theme .login-sso-protocol,
     overflow: visible;
     text-align: right;
 }
+body.md-theme .details-section {
+    margin-top: 1rem;
+}
+
+body.md-theme .details-section-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+body.md-theme .details-section-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 650;
+    color: var(--md-on-surface);
+}
+
+body.md-theme .details-section-subtitle,
+body.md-theme .details-muted {
+    margin: 0.2rem 0 0;
+    font-size: 0.85rem;
+    color: var(--md-muted);
+}
+
+body.md-theme .details-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+body.md-theme .details-card {
+    border: 1px solid var(--md-border);
+    border-radius: 16px;
+    background: var(--md-surface);
+    box-shadow: var(--md-shadow-sm);
+    padding: 0.9rem;
+}
+
+body.md-theme .details-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+body.md-theme .details-card-header h4 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 650;
+    color: var(--md-on-surface);
+}
+
+body.md-theme .details-empty {
+    padding: 0.75rem;
+    border-radius: 12px;
+    background: var(--md-surface-soft);
+    color: var(--md-muted);
+    font-size: 0.875rem;
+}
+
+body.md-theme .details-list-item {
+    padding: 0.75rem 0;
+    border-top: 1px solid var(--md-border);
+}
+
+body.md-theme .details-list-item:first-child {
+    border-top: 0;
+    padding-top: 0;
+}
+
+body.md-theme .details-list-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+body.md-theme .details-list-title {
+    font-weight: 650;
+    color: var(--md-on-surface);
+}
+
+body.md-theme .details-list-meta {
+    margin-top: 0.25rem;
+    font-size: 0.82rem;
+    color: var(--md-muted);
+}
+
+body.md-theme .details-list-text {
+    margin-top: 0.4rem;
+    font-size: 0.875rem;
+    color: var(--md-on-surface);
+}
+
+body.md-theme .incident-priority-select {
+    width: 100%;
+}
+
+@media (max-width: 1100px) {
+    body.md-theme .details-grid {
+        grid-template-columns: 1fr;
+    }
+}
+.field-error {
+    border-color: var(--md-error, #dc2626) !important;
+}
+
+.field-error-text {
+    margin-top: 4px;
+    color: var(--md-error, #dc2626);
+    font-size: 12px;
+    line-height: 1.4;
+}

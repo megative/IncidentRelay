@@ -17,6 +17,7 @@ from app.api.openapi.endpoints import (
     teams,
     users,
     version,
+    maintenance_windows,
 )
 from app.version import get_service_version
 
@@ -40,6 +41,7 @@ ENDPOINT_MODULES = [
     groups,
     sso,
     services,
+    maintenance_windows,
 ]
 
 

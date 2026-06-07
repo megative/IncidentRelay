@@ -1,0 +1,236 @@
+<div class="first-div-page-layout maintenance-windows-page page-stack">
+  <div class="summary-grid">
+    <div class="summary-card summary-primary">
+      <div class="summary-icon">☑</div>
+      <div>
+        <div class="summary-title">Maintenance</div>
+        <div id="maintenance-total-count" class="summary-value">0</div>
+        <div class="summary-hint">Current scope</div>
+      </div>
+    </div>
+
+    <div class="summary-card summary-success">
+      <div class="summary-icon">▶</div>
+      <div>
+        <div class="summary-title">Active</div>
+        <div id="maintenance-active-count" class="summary-value">0</div>
+        <div class="summary-hint">Affecting alerts now</div>
+      </div>
+    </div>
+
+    <div class="summary-card summary-muted">
+      <div class="summary-icon">⏱</div>
+      <div>
+        <div class="summary-title">Scheduled</div>
+        <div id="maintenance-scheduled-count" class="summary-value">0</div>
+        <div class="summary-hint">Planned windows</div>
+      </div>
+    </div>
+
+    <div class="summary-card summary-info">
+      <div class="summary-icon">×</div>
+      <div>
+        <div class="summary-title">Cancelled</div>
+        <div id="maintenance-cancelled-count" class="summary-value">0</div>
+        <div class="summary-hint">Cancelled windows</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="maintenance-page-layout" class="page-layout-grid">
+    <section class="card page-layout-main">
+      <div class="card-header">
+        <div>
+          <h2>Maintenance windows</h2>
+          <div class="card-subtitle">
+            Showing <span id="maintenance-filtered-count">0</span>
+            of <span id="maintenance-total-list-count">0</span> windows
+          </div>
+        </div>
+
+        <div class="card-header-actions">
+          <button id="open-maintenance-create-modal" type="button" class="btn btn-primary">New window</button>
+          <button id="reload-maintenance-windows" type="button" class="btn">Reload</button>
+        </div>
+      </div>
+
+      <div class="page-toolbar is-flush-top">
+        <div class="page-toolbar-search">
+          <span class="page-toolbar-search-icon">⌕</span>
+          <input
+            id="maintenance-window-search"
+            class="input"
+            type="search"
+            placeholder="Search maintenance windows..."
+            autocomplete="off"
+          >
+        </div>
+
+        <select id="maintenance-window-status-filter" class="input page-toolbar-filter">
+          <option value="">All statuses</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="active">Active</option>
+          <option value="finished">Finished</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+
+        <select id="maintenance-window-behavior-filter" class="input page-toolbar-filter">
+          <option value="">All behaviors</option>
+          <option value="suppress_notifications">Suppress notifications</option>
+          <option value="suppress_incident">Suppress incident</option>
+          <option value="create_maintenance_incident">Create maintenance incident</option>
+          <option value="pause_escalation_only">Pause escalation only</option>
+        </select>
+          <label class="md-checkbox">
+            <input id="maintenance-window-active-only" type="checkbox">
+            <span>Active only</span>
+          </label>
+      </div>
+
+      <div class="table-wrapper">
+        <table id="maintenance-windows-table-view" class="data-table sortable-table">
+          <thead>
+            <tr>
+                <th>Window</th>
+                <th>Scope</th>
+                <th>Status</th>
+                <th>Behavior</th>
+                <th>Repeat</th>
+                <th>Starts</th>
+                <th>Ends</th>
+                <th class="actions-th">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="maintenance-windows-table">
+            <tr>
+              <td colspan="7" class="empty-cell">No maintenance windows loaded</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <aside id="maintenance-details-card" class="card page-details-card">
+      <div class="card-header">
+        <div>
+          <h2>Window details</h2>
+          <div id="maintenance-details-subtitle" class="card-subtitle">Select a window</div>
+        </div>
+      </div>
+
+      <div id="maintenance-details-body" class="details-body">
+        <p>Click a maintenance window name to inspect schedule, scope and behavior.</p>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div id="maintenance-window-modal" class="app-modal" style="display: none;">
+  <div class="app-modal-dialog app-modal-dialog-wide">
+    <div class="app-modal-header">
+      <div>
+        <h2 id="maintenance-window-modal-title">Create maintenance window</h2>
+        <div class="card-subtitle">
+          Configure planned maintenance and matching alert behavior.
+        </div>
+      </div>
+      <button id="close-maintenance-window-modal" type="button" class="app-modal-close" aria-label="Close">×</button>
+    </div>
+
+    <div class="app-modal-body">
+      <div class="grid-two">
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <h2>Window</h2>
+              <div class="card-subtitle">Name, description and behavior.</div>
+            </div>
+          </div>
+
+          <div class="form-body">
+            <input id="maintenance-window-id" type="hidden">
+            <div id="maintenance-window-error" class="alert alert-danger is-hidden"></div>
+
+            <label for="maintenance-name">Name</label>
+            <input id="maintenance-name" class="input" type="text" placeholder="Payments deploy">
+
+            <label for="maintenance-description">Description</label>
+            <textarea id="maintenance-description" class="input" rows="3"></textarea>
+
+            <label for="maintenance-behavior">Behavior</label>
+            <select id="maintenance-behavior" class="input">
+              <option value="suppress_notifications">Suppress notifications</option>
+              <option value="suppress_incident">Suppress incident</option>
+              <option value="create_maintenance_incident">Create maintenance incident</option>
+              <option value="pause_escalation_only">Pause escalation only</option>
+            </select>
+
+            <label for="maintenance-timezone">Timezone</label>
+            <select id="maintenance-timezone" class="input timezone-select"></select>
+
+            <label for="maintenance-repeat">Repeat</label>
+            <select id="maintenance-repeat" class="input">
+                <option value="">Does not repeat</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="custom">Custom RRULE</option>
+            </select>
+
+            <div id="maintenance-repeat-count-row">
+                <label for="maintenance-repeat-count">Repeat count</label>
+                <input id="maintenance-repeat-count" class="input" type="number" min="1" max="365" value="1">
+                <div class="help-text">How many occurrences should be created.</div>
+            </div>
+
+            <div id="maintenance-custom-rrule-row" style="display: none;">
+                <label for="maintenance-rrule">Custom RRULE</label>
+                <input id="maintenance-rrule" class="input" type="text" placeholder="FREQ=WEEKLY;BYDAY=MO">
+                <div class="help-text">Use RFC5545 RRULE without the RRULE: prefix.</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <h2>Schedule and scope</h2>
+              <div class="card-subtitle">Time range and affected object.</div>
+            </div>
+          </div>
+
+          <div class="form-body">
+            <label for="maintenance-starts-at">Starts at</label>
+            <input id="maintenance-starts-at" class="input" type="datetime-local">
+
+            <label for="maintenance-ends-at">Ends at</label>
+            <input id="maintenance-ends-at" class="input" type="datetime-local">
+
+            <label for="maintenance-scope-type">Scope type</label>
+            <select id="maintenance-scope-type" class="input">
+              <option value="service">Service</option>
+              <option value="team">Team</option>
+              <option value="route">Route</option>
+              <option value="group">Group</option>
+            </select>
+
+            <label for="maintenance-scope-target">Scope target</label>
+            <select id="maintenance-scope-target" class="input">
+              <option value="">Select target</option>
+            </select>
+
+            <label class="md-checkbox">
+              <input id="maintenance-enabled" type="checkbox" checked>
+              <span>Enabled</span>
+            </label>
+
+            <div class="form-actions">
+              <button id="reset-maintenance-window-form" type="button" class="btn">Reset</button>
+              <button id="save-maintenance-window" type="button" class="btn btn-primary">Save window</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>

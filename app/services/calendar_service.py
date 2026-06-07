@@ -1,7 +1,8 @@
-from datetime import date, datetime, time, timedelta, timezone as dt_timezone
+from datetime import datetime, time, timedelta, timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
 from app.modules.db import rotations_repo
+from app.api.schemas.base import as_utc_aware
 
 
 _OVERRIDE_PRIORITY = 1_000_000
@@ -517,15 +518,6 @@ def minutes_from_hhmm(value):
 
     hour_raw, minute_raw = str(value).split(":", 1)
     return int(hour_raw) * 60 + int(minute_raw)
-
-
-def as_utc_aware(value):
-    """Treat naive datetimes as UTC and return aware UTC datetime."""
-
-    if value.tzinfo is None:
-        return value.replace(tzinfo=dt_timezone.utc)
-
-    return value.astimezone(dt_timezone.utc)
 
 
 def as_utc_naive(value):

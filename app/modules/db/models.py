@@ -462,61 +462,28 @@ class ServiceLink(SoftDeleteModel):
         )
 
 
-class MaintenanceWindow(SoftDeleteModel):
-    """Maintenance window that can affect one or more services."""
+class IncidentPriority(BaseModel):
+    """Configurable incident priority."""
 
     id = AutoField()
-    group = ForeignKeyField(Group, null=True, backref="maintenance_windows", on_delete="CASCADE")
-    team = ForeignKeyField(Team, null=True, backref="maintenance_windows", on_delete="CASCADE")
 
+    slug = CharField(unique=True, index=True)
     name = CharField()
     description = TextField(null=True)
 
-    starts_at = DateTimeField()
-    ends_at = DateTimeField()
-    timezone = CharField(default="UTC")
+    level = IntegerField(index=True)
+    color = CharField(null=True)
 
-    recurrence = TextField(null=True)
-    recurrence_until = DateTimeField(null=True)
+    enabled = BooleanField(default=True, index=True)
+    default = BooleanField(default=False, index=True)
 
-    behavior = CharField(default="suppress_notifications")
-    status = CharField(default="scheduled")
-
-    created_by = ForeignKeyField(
-        User,
-        null=True,
-        backref="created_maintenance_windows",
-        on_delete="SET NULL",
-    )
-
-    enabled = BooleanField(default=True)
     created_at = DateTimeField(default=datetime.utcnow)
     updated_at = DateTimeField(default=datetime.utcnow)
 
     class Meta:
-        table_name = "maintenance_window"
+        table_name = "incident_priority"
         indexes = (
-            (("team", "starts_at"), False),
-            (("group", "starts_at"), False),
-            (("status", "enabled"), False),
-        )
-
-
-class MaintenanceWindowService(BaseModel):
-    """Link maintenance window to affected services."""
-
-    id = AutoField()
-    maintenance_window = ForeignKeyField(
-        MaintenanceWindow,
-        backref="service_links",
-        on_delete="CASCADE",
-    )
-    service = ForeignKeyField(Service, backref="maintenance_windows", on_delete="CASCADE")
-
-    class Meta:
-        table_name = "maintenance_window_service"
-        indexes = (
-            (("maintenance_window", "service"), True),
+            (("level", "enabled"), False),
         )
 
 
@@ -593,6 +560,142 @@ class AlertRoute(SoftDeleteModel):
     class Meta:
         indexes = (
             (("team", "name"), True),
+        )
+
+
+class MaintenanceWindow(SoftDeleteModel):
+    """Planned maintenance window."""
+
+    id = AutoField()
+
+    group = ForeignKeyField(
+        Group,
+        null=True,
+        backref="maintenance_windows",
+        on_delete="CASCADE",
+    )
+    team = ForeignKeyField(
+        Team,
+        null=True,
+        backref="maintenance_windows",
+        on_delete="CASCADE",
+    )
+
+    name = CharField()
+    description = TextField(null=True)
+
+    starts_at = DateTimeField()
+    ends_at = DateTimeField()
+
+    timezone = CharField(default="UTC")
+    rrule = TextField(null=True)
+
+    behavior = CharField(default="suppress_notifications", index=True)
+    status = CharField(default="scheduled", index=True)
+
+    enabled = BooleanField(default=True, index=True)
+
+    created_by = ForeignKeyField(
+        User,
+        null=True,
+        backref="created_maintenance_windows",
+        on_delete="SET NULL",
+    )
+
+    cancelled_by = ForeignKeyField(
+        User,
+        null=True,
+        backref="cancelled_maintenance_windows",
+        on_delete="SET NULL",
+    )
+    cancelled_at = DateTimeField(null=True)
+    cancel_reason = TextField(null=True)
+
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "maintenance_window"
+        indexes = (
+            (("team", "starts_at"), False),
+            (("group", "starts_at"), False),
+            (("status", "enabled"), False),
+            (("starts_at", "ends_at"), False),
+        )
+
+
+class MaintenanceWindowService(BaseModel):
+    """Legacy link maintenance window to affected services."""
+
+    id = AutoField()
+
+    maintenance_window = ForeignKeyField(
+        MaintenanceWindow,
+        backref="service_links",
+        on_delete="CASCADE",
+    )
+    service = ForeignKeyField(
+        Service,
+        backref="maintenance_windows",
+        on_delete="CASCADE",
+    )
+
+    created_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "maintenance_window_service"
+        indexes = (
+            (("maintenance_window", "service"), True),
+        )
+
+
+class MaintenanceWindowScope(BaseModel):
+    """Target scope for a maintenance window."""
+
+    id = AutoField()
+
+    maintenance_window = ForeignKeyField(
+        MaintenanceWindow,
+        backref="scopes",
+        on_delete="CASCADE",
+    )
+
+    scope_type = CharField(index=True)
+    group = ForeignKeyField(
+        Group,
+        null=True,
+        backref="maintenance_window_scopes",
+        on_delete="CASCADE",
+    )
+    team = ForeignKeyField(
+        Team,
+        null=True,
+        backref="maintenance_window_scopes",
+        on_delete="CASCADE",
+    )
+    service = ForeignKeyField(
+        Service,
+        null=True,
+        backref="maintenance_window_scopes",
+        on_delete="CASCADE",
+    )
+    route = ForeignKeyField(
+        AlertRoute,
+        null=True,
+        backref="maintenance_window_scopes",
+        on_delete="CASCADE",
+    )
+
+    created_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "maintenance_window_scope"
+        indexes = (
+            (("maintenance_window", "scope_type"), False),
+            (("group", "scope_type"), False),
+            (("team", "scope_type"), False),
+            (("service", "scope_type"), False),
+            (("route", "scope_type"), False),
         )
 
 
@@ -735,6 +838,36 @@ class AlertGroup(BaseModel):
     created_at = DateTimeField(default=datetime.utcnow)
     updated_at = DateTimeField(default=datetime.utcnow)
 
+    priority = ForeignKeyField(
+        IncidentPriority,
+        null=True,
+        backref="alert_groups",
+        on_delete="SET NULL",
+    )
+
+    priority_slug = CharField(default="p3", index=True)
+    priority_order = IntegerField(default=3, index=True)
+    priority_set_manually = BooleanField(default=False, index=True)
+
+    priority_set_by = ForeignKeyField(
+        User,
+        null=True,
+        backref="priority_changes",
+        on_delete="SET NULL",
+    )
+
+    priority_set_at = DateTimeField(null=True)
+
+    maintenance_window = ForeignKeyField(
+        MaintenanceWindow,
+        null=True,
+        backref="alert_groups",
+        on_delete="SET NULL",
+    )
+
+    maintenance_behavior = CharField(null=True)
+    maintenance_suppressed = BooleanField(default=False, index=True)
+
     class Meta:
         table_name = "alert_group"
         indexes = (
@@ -776,6 +909,25 @@ class Alert(BaseModel):
     title = CharField()
     message = TextField(null=True)
     severity = CharField(null=True)
+    priority = ForeignKeyField(
+        IncidentPriority,
+        null=True,
+        backref="alerts",
+        on_delete="SET NULL",
+    )
+
+    priority_slug = CharField(default="p3", index=True)
+    priority_order = IntegerField(default=3, index=True)
+
+    maintenance_window = ForeignKeyField(
+        MaintenanceWindow,
+        null=True,
+        backref="alerts",
+        on_delete="SET NULL",
+    )
+
+    maintenance_behavior = CharField(null=True)
+    maintenance_suppressed = BooleanField(default=False, index=True)
     labels = JSONTextField(null=True)
     payload = JSONTextField(null=True)
     status = CharField(default="firing")
@@ -844,6 +996,142 @@ class AlertComment(BaseModel):
             (("group", "created_at"), False),
             (("alert", "created_at"), False),
             (("user", "created_at"), False),
+        )
+
+
+class IncidentResponder(BaseModel):
+    """Responder request attached to an incident / alert group."""
+
+    id = AutoField()
+
+    group = ForeignKeyField(
+        AlertGroup,
+        backref="incident_responders",
+        on_delete="CASCADE",
+    )
+
+    target_type = CharField(index=True)
+
+    target_user = ForeignKeyField(
+        User,
+        null=True,
+        backref="incident_responder_requests",
+        on_delete="SET NULL",
+    )
+    target_team = ForeignKeyField(
+        Team,
+        null=True,
+        backref="incident_responder_requests",
+        on_delete="SET NULL",
+    )
+    target_rotation = ForeignKeyField(
+        Rotation,
+        null=True,
+        backref="incident_responder_requests",
+        on_delete="SET NULL",
+    )
+    target_escalation_policy = ForeignKeyField(
+        EscalationPolicy,
+        null=True,
+        backref="incident_responder_requests",
+        on_delete="SET NULL",
+    )
+
+    requested_by = ForeignKeyField(
+        User,
+        null=True,
+        backref="requested_incident_responders",
+        on_delete="SET NULL",
+    )
+
+    accepted_by = ForeignKeyField(
+        User,
+        null=True,
+        backref="accepted_incident_responder_requests",
+        on_delete="SET NULL",
+    )
+
+    declined_by = ForeignKeyField(
+        User,
+        null=True,
+        backref="declined_incident_responder_requests",
+        on_delete="SET NULL",
+    )
+
+    status = CharField(default="requested", index=True)
+
+    message = TextField(null=True)
+    response_message = TextField(null=True)
+
+    notification_status = CharField(default="pending", index=True)
+    notification_error = TextField(null=True)
+
+    requested_at = DateTimeField(default=datetime.utcnow)
+    responded_at = DateTimeField(null=True)
+    expires_at = DateTimeField(null=True)
+
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "incident_responder"
+        indexes = (
+            (("group", "status"), False),
+            (("target_user", "status"), False),
+            (("target_team", "status"), False),
+            (("target_rotation", "status"), False),
+            (("target_escalation_policy", "status"), False),
+        )
+
+
+class IncidentStakeholder(BaseModel):
+    """Stakeholder subscribed to incident updates."""
+
+    id = AutoField()
+
+    group = ForeignKeyField(
+        AlertGroup,
+        backref="incident_stakeholders",
+        on_delete="CASCADE",
+    )
+
+    user = ForeignKeyField(
+        User,
+        null=True,
+        backref="incident_stakeholder_subscriptions",
+        on_delete="SET NULL",
+    )
+
+    email = CharField(null=True)
+    display_name = CharField(null=True)
+
+    role = CharField(default="stakeholder", index=True)
+    source = CharField(default="manual", index=True)
+
+    notify_on_created = BooleanField(default=True)
+    notify_on_priority_change = BooleanField(default=True)
+    notify_on_status_change = BooleanField(default=True)
+    notify_on_resolved = BooleanField(default=True)
+
+    active = BooleanField(default=True, index=True)
+
+    created_by = ForeignKeyField(
+        User,
+        null=True,
+        backref="created_incident_stakeholders",
+        on_delete="SET NULL",
+    )
+
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+
+    class Meta:
+        table_name = "incident_stakeholder"
+        indexes = (
+            (("group", "user"), False),
+            (("group", "email"), False),
+            (("group", "role"), False),
+            (("group", "active"), False),
         )
 
 
