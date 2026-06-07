@@ -1705,6 +1705,9 @@ def _compute_service_impact_row(
 
     Cycles are ignored safely:
         A -> B -> A
+
+    In a cycle, the currently visiting row is returned as-is instead of recursing
+    forever. The cycle itself is still visible through dependency issue paths.
     """
     current_state = state.get(service_id)
 
@@ -1721,14 +1724,22 @@ def _compute_service_impact_row(
     state[service_id] = "visiting"
 
     for dependency in dependencies_by_service.get(service_id, []):
+        if not dependency.enabled:
+            continue
+
         target = dependency.depends_on_service
-        if target and target.id in rows_by_service:
-            _compute_service_impact_row(
-                target.id,
-                rows_by_service,
-                dependencies_by_service,
-                state,
-            )
+        if not target:
+            continue
+
+        if target.id not in rows_by_service:
+            continue
+
+        _compute_service_impact_row(
+            target.id,
+            rows_by_service,
+            dependencies_by_service,
+            state,
+        )
 
     _apply_dependency_impact(
         row,
@@ -1745,20 +1756,23 @@ def _compute_service_impact_row(
 def list_service_impact():
     """Return computed service impact based on alerts and dependencies."""
     services, error = _readable_services_from_request(include_disabled=False)
-
     if error:
         return error
 
-    service_ids = [service.id for service in services]
-
-    if not service_ids:
+    requested_service_ids = [service.id for service in services]
+    if not requested_service_ids:
         return jsonify([])
 
     days = request.args.get("days", default=30, type=int)
     days = max(1, min(days or 30, 365))
 
+    services_by_id, dependencies_by_service = _collect_dependency_impact_context(
+        services,
+        max_depth=SERVICE_IMPACT_MAX_DEPTH,
+    )
+
     alert_impact = _build_alert_impact_by_service(
-        service_ids,
+        list(services_by_id.keys()),
         days=days,
     )
 
@@ -1767,30 +1781,24 @@ def list_service_impact():
             service,
             alert_impact,
         )
-        for service in services
+        for service in services_by_id.values()
     }
 
-    dependencies = services_repo.list_service_dependencies(
-        service_ids=service_ids,
-    )
+    state = {}
 
-    dependencies_by_service = {}
-
-    for dependency in dependencies:
-        dependencies_by_service.setdefault(
-            dependency.service_id,
-            [],
-        ).append(dependency)
-
-    for service in services:
-        row = rows_by_service[service.id]
-        _apply_dependency_impact(
-            row,
-            dependencies_by_service.get(service.id, []),
+    for service_id in requested_service_ids:
+        _compute_service_impact_row(
+            service_id,
             rows_by_service,
+            dependencies_by_service,
+            state,
         )
 
-    result = list(rows_by_service.values())
+    result = [
+        rows_by_service[service_id]
+        for service_id in requested_service_ids
+        if service_id in rows_by_service
+    ]
 
     result.sort(
         key=lambda row: (

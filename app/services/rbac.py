@@ -283,9 +283,6 @@ def can_write_team(user, team_id):
     if not team or not team.group_id:
         return False
 
-    if can_write_group(user, team.group_id):
-        return True
-
     if not can_read_group(user, team.group_id):
         return False
 
