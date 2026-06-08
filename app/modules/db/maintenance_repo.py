@@ -8,6 +8,7 @@ from app.modules.db.models import (
     MaintenanceWindow,
     MaintenanceWindowScope,
 )
+from app.modules.common import as_naive_datetime
 
 
 ACTIVE_STATUSES = ("scheduled", "active")
@@ -20,28 +21,25 @@ def _get_zoneinfo(timezone_name):
         return ZoneInfo("UTC")
 
 
-def _as_naive_datetime(value):
-    if not value:
-        return None
-
-    if value.tzinfo:
-        return value.replace(tzinfo=None)
-
-    return value
-
-
 def _window_local_now(window, now=None):
+    """Return current time as naive wall-clock time in window timezone."""
     zone = _get_zoneinfo(getattr(window, "timezone", None))
 
     if now is None:
         return datetime.now(zone).replace(tzinfo=None)
 
-    if now.tzinfo is None:
-        aware_now = now.replace(tzinfo=dt_timezone.utc)
-    else:
-        aware_now = now
+    if isinstance(now, str):
+        text = now.strip()
 
-    return aware_now.astimezone(zone).replace(tzinfo=None)
+        if text.endswith("Z"):
+            text = f"{text[:-1]}+00:00"
+
+        now = datetime.fromisoformat(text)
+
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=dt_timezone.utc)
+
+    return now.astimezone(zone).replace(tzinfo=None)
 
 
 def _normalize_rrule_text(value):
@@ -57,7 +55,7 @@ def _normalize_rrule_text(value):
 
 
 def _build_window_rrule(window):
-    starts_at = _as_naive_datetime(window.starts_at)
+    starts_at = as_naive_datetime(window.starts_at)
     rrule_text = _normalize_rrule_text(getattr(window, "rrule", None))
 
     if not starts_at or not rrule_text:
@@ -70,8 +68,8 @@ def _build_window_rrule(window):
 
 
 def _get_window_duration(window):
-    starts_at = _as_naive_datetime(window.starts_at)
-    ends_at = _as_naive_datetime(window.ends_at)
+    starts_at = as_naive_datetime(window.starts_at)
+    ends_at = as_naive_datetime(window.ends_at)
 
     if not starts_at or not ends_at:
         return None
@@ -115,8 +113,8 @@ def get_effective_window_occurrence(window, now=None):
     if status == "cancelled":
         return None
 
-    starts_at = _as_naive_datetime(window.starts_at)
-    ends_at = _as_naive_datetime(window.ends_at)
+    starts_at = as_naive_datetime(window.starts_at)
+    ends_at = as_naive_datetime(window.ends_at)
 
     if not starts_at or not ends_at:
         return None
@@ -202,9 +200,13 @@ def get_effective_window_status(window, now=None):
         if recurring_status:
             return recurring_status
 
-    starts_at = _as_naive_datetime(window.starts_at)
-    ends_at = _as_naive_datetime(window.ends_at)
+    starts_at = as_naive_datetime(window.starts_at)
+    ends_at = as_naive_datetime(window.ends_at)
     local_now = _window_local_now(window, now=now)
+    print('starts_at',starts_at)
+    print('ends_at',ends_at)
+    print('local_now',local_now)
+    print('now',now)
 
     if starts_at and local_now < starts_at:
         return "scheduled"
@@ -316,8 +318,8 @@ def create_maintenance_window(
         team=team,
         name=name,
         description=description,
-        starts_at=starts_at,
-        ends_at=ends_at,
+        starts_at=as_naive_datetime(starts_at),
+        ends_at=as_naive_datetime(ends_at),
         behavior=behavior,
         timezone=timezone,
         rrule=rrule,
@@ -344,6 +346,9 @@ def update_maintenance_window(window, **fields):
     for field_name, value in fields.items():
         if field_name not in allowed_fields:
             continue
+
+        if field_name in ("starts_at", "ends_at"):
+            value = as_naive_datetime(value)
 
         setattr(window, field_name, value)
 
@@ -419,8 +424,8 @@ def find_active_maintenance_window(
         .distinct()
         .join(MaintenanceWindowScope)
         .where(
-            MaintenanceWindow.deleted == False,  # noqa: E712
-            MaintenanceWindow.enabled == True,  # noqa: E712
+            MaintenanceWindow.deleted == False,
+            MaintenanceWindow.enabled == True,
             MaintenanceWindow.status.in_(ACTIVE_STATUSES),
         )
         .order_by(

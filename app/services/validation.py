@@ -68,11 +68,27 @@ def make_validation_response(message, details):
     )
 
 
-def validate_body(schema_cls):
+def _validate_payload(schema_cls, payload):
+    try:
+        return schema_cls.model_validate(payload), None
+    except ValidationError as exc:
+        return None, make_validation_response(
+            "Request validation failed",
+            [
+                normalize_validation_error(error)
+                for error in exc.errors()
+            ],
+        )
+
+
+def validate_body(schema_cls, *, allow_empty=False):
     """Validate JSON request body with a Pydantic schema."""
     raw_body = request.get_data(cache=True) or b""
 
     if not raw_body.strip():
+        if allow_empty:
+            return _validate_payload(schema_cls, {})
+
         message = "Request body is required"
         return None, make_validation_response(
             message,
@@ -90,10 +106,4 @@ def validate_body(schema_cls):
             [make_body_validation_detail(message, "json_invalid", raw_text)],
         )
 
-    try:
-        return schema_cls.model_validate(payload), None
-    except ValidationError as exc:
-        return None, make_validation_response(
-            "Request validation failed",
-            [normalize_validation_error(error) for error in exc.errors()],
-        )
+    return _validate_payload(schema_cls, payload)

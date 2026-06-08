@@ -1,7 +1,8 @@
-from datetime import timezone as dt_timezone
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from app.modules.common import as_naive_datetime
 
 
 class ApiModel(BaseModel):
@@ -32,8 +33,4 @@ JsonList = List[Any]
 
 def as_utc_aware(value):
     """Treat naive datetimes as UTC and return aware UTC datetime."""
-
-    if value.tzinfo is None:
-        return value.replace(tzinfo=dt_timezone.utc)
-
-    return value.astimezone(dt_timezone.utc)
+    return as_naive_datetime(value)
