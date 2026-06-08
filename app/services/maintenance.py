@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dateutil.rrule import rrulestr
 
@@ -185,6 +186,15 @@ def _get_user_or_raise(user_id):
     return user
 
 
+def _local_now(timezone_name):
+    try:
+        zone = ZoneInfo(timezone_name or "UTC")
+    except ZoneInfoNotFoundError:
+        zone = ZoneInfo("UTC")
+
+    return datetime.now(zone).replace(tzinfo=None)
+
+
 def normalize_rrule(value, starts_at):
     text = str(value or "").strip()
 
@@ -263,17 +273,14 @@ def normalize_window_payload(payload, *, existing_window=None, partial=False):
         raise ValueError("request body must be a JSON object")
 
     name = payload.get("name")
-
     if name is None and partial and existing_window is not None:
         name = existing_window.name
 
     name = str(name or "").strip()
-
     if not name:
         raise ValueError("name is required")
 
     description = payload.get("description")
-
     if description is None and partial and existing_window is not None:
         description = existing_window.description
 
@@ -281,21 +288,22 @@ def normalize_window_payload(payload, *, existing_window=None, partial=False):
         description = str(description).strip() or None
 
     behavior = payload.get("behavior")
-
     if behavior is None and partial and existing_window is not None:
         behavior = existing_window.behavior
 
     behavior = str(behavior or "suppress_notifications").strip()
-
     if behavior not in VALID_BEHAVIORS:
         raise ValueError("behavior is invalid")
 
     timezone_name = payload.get("timezone")
-
     if timezone_name is None and partial and existing_window is not None:
         timezone_name = existing_window.timezone
 
     timezone_name = str(timezone_name or "UTC").strip() or "UTC"
+
+    starts_at_changed = "starts_at" in payload
+    ends_at_changed = "ends_at" in payload
+    timezone_changed = "timezone" in payload
 
     starts_at = get_payload_datetime(
         payload,
@@ -316,6 +324,16 @@ def normalize_window_payload(payload, *, existing_window=None, partial=False):
     if ends_at <= starts_at:
         raise ValueError("ends_at must be greater than starts_at")
 
+    should_validate_future = (
+        not partial
+        or starts_at_changed
+        or ends_at_changed
+        or timezone_changed
+    )
+
+    if should_validate_future and ends_at <= _local_now(timezone_name):
+        raise ValueError("ends_at must be in the future")
+
     if "rrule" in payload:
         rrule = normalize_rrule(payload.get("rrule"), starts_at)
     elif partial and existing_window is not None:
@@ -327,7 +345,6 @@ def normalize_window_payload(payload, *, existing_window=None, partial=False):
         rrule = normalize_rrule(rrule, starts_at)
 
     enabled = payload.get("enabled")
-
     if enabled is None and partial and existing_window is not None:
         enabled = existing_window.enabled
 

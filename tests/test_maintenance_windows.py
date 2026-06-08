@@ -16,6 +16,7 @@ from tests.factories import (
     create_user,
 )
 from app.modules.db.models import AuditLog
+from app.modules.common import as_naive_datetime, as_utc_aware
 
 
 def response_items(response):
@@ -860,6 +861,7 @@ def test_update_maintenance_window_writes_audit(client, db):
     assert audit.data["name"] == "Updated deploy"
     assert audit.data["payload"]["description"] == "Audit update"
 
+
 def test_cancel_maintenance_window_writes_audit(client, db):
     group, team, route, service, user, headers = create_manager_context()
 
@@ -1524,3 +1526,219 @@ def test_create_maintenance_window_rejects_past_end_time(
 
     assert MaintenanceWindow.select().count() == windows_before
     assert AuditLog.select().count() == audit_before
+
+
+def test_update_maintenance_window_allows_partial_ends_at_update(client, auth_headers):
+    group = create_group()
+    team = create_team(group=group)
+
+    timezone_name = "UTC"
+    starts_at, ends_at = future_window_times(timezone_name)
+    window = create_window_for_team(
+        group=group,
+        team=team,
+        timezone=timezone_name,
+        starts_at=starts_at,
+        ends_at=ends_at,
+    )
+
+    new_ends_at = (
+        datetime.fromisoformat(ends_at) + timedelta(hours=1)
+    ).isoformat()
+
+    response = client.put(
+        f"/api/maintenance-windows/{window.id}",
+        json={"ends_at": new_ends_at},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200, response.get_json()
+    data = response.get_json()
+    assert data["ends_at"] == new_ends_at
+    assert data["starts_at"] == starts_at
+
+
+def create_window_for_team(
+    group,
+    team,
+    *,
+    name="Payments deploy",
+    timezone="UTC",
+    starts_at=None,
+    ends_at=None,
+    behavior="suppress_notifications",
+    enabled=True,
+):
+    if starts_at is None or ends_at is None:
+        starts_at, ends_at = future_window_times(timezone)
+
+    window = maintenance_repo.create_maintenance_window(
+        group=group,
+        team=team,
+        name=name,
+        description="Planned deployment",
+        starts_at=starts_at,
+        ends_at=ends_at,
+        behavior=behavior,
+        timezone=timezone,
+        enabled=enabled,
+    )
+
+    maintenance_repo.replace_maintenance_window_scopes(
+        window.id,
+        [
+            {
+                "scope_type": "team",
+                "team_id": team.id,
+            },
+        ],
+    )
+
+    return window
+
+
+def test_update_maintenance_window_rejects_past_ends_at_in_existing_timezone(
+    client,
+    auth_headers,
+):
+    group = create_group()
+    team = create_team(group=group)
+
+    timezone_name = "Europe/Moscow"
+    zone = ZoneInfo(timezone_name)
+
+    local_now = datetime.now(zone).replace(tzinfo=None, microsecond=0)
+
+    starts_at = (local_now - timedelta(minutes=10)).isoformat()
+    ends_at = (local_now + timedelta(hours=1)).isoformat()
+
+    window = create_window_for_team(
+        group=group,
+        team=team,
+        timezone=timezone_name,
+        starts_at=starts_at,
+        ends_at=ends_at,
+    )
+
+    past_but_after_start = (local_now - timedelta(minutes=5)).isoformat()
+
+    response = client.put(
+        f"/api/maintenance-windows/{window.id}",
+        json={"ends_at": past_but_after_start},
+        headers=auth_headers,
+    )
+
+    data = response.get_json()
+
+    assert response.status_code == 400
+    assert data["error"] == "validation_error"
+    assert data["message"] == "ends_at must be in the future"
+
+
+def test_maintenance_window_serializes_wall_clock_times_without_utc_conversion(
+    client,
+    auth_headers,
+):
+    group = create_group()
+    team = create_team(group=group)
+
+    timezone_name = "Europe/Moscow"
+    starts_at, ends_at = future_window_times(timezone_name)
+
+    payload = {
+        "name": "Moscow deploy",
+        "behavior": "suppress_notifications",
+        "timezone": timezone_name,
+        "starts_at": starts_at,
+        "ends_at": ends_at,
+        "enabled": True,
+        "scopes": [
+            {
+                "scope_type": "team",
+                "team_id": team.id,
+            },
+        ],
+    }
+
+    response = client.post(
+        "/api/maintenance-windows",
+        json=payload,
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 201, response.get_json()
+
+    data = response.get_json()
+
+    assert data["starts_at"] == starts_at
+    assert data["ends_at"] == ends_at
+    assert not data["starts_at"].endswith("Z")
+    assert not data["ends_at"].endswith("Z")
+
+
+def test_create_maintenance_window_rejects_service_scope_without_service_id(
+    client,
+    auth_headers,
+):
+    timezone_name = "UTC"
+    starts_at, ends_at = future_window_times(timezone_name)
+
+    payload = {
+        "name": "Bad service scope",
+        "behavior": "suppress_notifications",
+        "timezone": timezone_name,
+        "starts_at": starts_at,
+        "ends_at": ends_at,
+        "enabled": True,
+        "scopes": [{"scope_type": "service"}],
+    }
+
+    response = client.post(
+        "/api/maintenance-windows",
+        json=payload,
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data["error"] == "validation_error"
+    assert any(
+        "service_id" in detail.get("message", "")
+        for detail in data.get("details", [])
+    )
+
+
+def test_datetime_helpers_keep_utc_and_wall_clock_semantics_separate():
+    aware = as_utc_aware("2026-06-08T09:00:00+03:00")
+    naive = as_naive_datetime("2026-06-08T09:00:00+03:00")
+
+    assert aware.isoformat() == "2026-06-08T06:00:00+00:00"
+    assert naive.isoformat() == "2026-06-08T09:00:00"
+    assert aware.tzinfo is not None
+    assert naive.tzinfo is None
+
+
+def test_cancel_maintenance_window_allows_empty_body(client, auth_headers):
+    group = create_group()
+    team = create_team(group=group)
+
+    timezone_name = "UTC"
+    starts_at, ends_at = future_window_times(timezone_name)
+    window = create_window_for_team(
+        group=group,
+        team=team,
+        timezone=timezone_name,
+        starts_at=starts_at,
+        ends_at=ends_at,
+    )
+
+    response = client.post(
+        f"/api/maintenance-windows/{window.id}/cancel",
+        data=b"",
+        headers=auth_headers,
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200, response.get_json()
+    assert response.get_json()["status"] == "cancelled"
+
