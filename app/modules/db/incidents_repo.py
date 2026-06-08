@@ -12,8 +12,71 @@ from app.modules.db import alerts_repo
 
 DEFAULT_PRIORITY_SLUG = "p3"
 
+DEFAULT_INCIDENT_PRIORITIES = [
+    {
+        "slug": "p1",
+        "name": "P1 Critical",
+        "description": "Critical incident requiring immediate response",
+        "level": 1,
+        "color": "#dc2626",
+        "enabled": True,
+        "default": False,
+    },
+    {
+        "slug": "p2",
+        "name": "P2 High",
+        "description": "High priority incident requiring urgent response",
+        "level": 2,
+        "color": "#ea580c",
+        "enabled": True,
+        "default": False,
+    },
+    {
+        "slug": "p3",
+        "name": "P3 Medium",
+        "description": "Default priority incident",
+        "level": 3,
+        "color": "#d97706",
+        "enabled": True,
+        "default": True,
+    },
+    {
+        "slug": "p4",
+        "name": "P4 Low",
+        "description": "Low priority incident",
+        "level": 4,
+        "color": "#2563eb",
+        "enabled": True,
+        "default": False,
+    },
+    {
+        "slug": "p5",
+        "name": "P5 Informational",
+        "description": "Informational incident",
+        "level": 5,
+        "color": "#64748b",
+        "enabled": True,
+        "default": False,
+    },
+]
+
+
+def ensure_default_priorities():
+    """Create built-in incident priorities when they are missing.
+
+    Existing rows are not overwritten, because priorities are configurable.
+    This only restores missing built-in rows, which also keeps tests stable
+    after the database cleanup fixture deletes IncidentPriority rows.
+    """
+    for data in DEFAULT_INCIDENT_PRIORITIES:
+        IncidentPriority.get_or_create(
+            slug=data["slug"],
+            defaults=data,
+        )
+
 
 def list_priorities(*, include_disabled=False):
+    ensure_default_priorities()
     query = IncidentPriority.select().order_by(IncidentPriority.level.asc())
 
     if not include_disabled:
@@ -23,6 +86,7 @@ def list_priorities(*, include_disabled=False):
 
 
 def get_priority_by_slug(slug):
+    ensure_default_priorities()
     return IncidentPriority.get_or_none(
         IncidentPriority.slug == slug,
         IncidentPriority.enabled == True,  # noqa: E712
@@ -30,6 +94,7 @@ def get_priority_by_slug(slug):
 
 
 def get_default_priority():
+    ensure_default_priorities()
     priority = IncidentPriority.get_or_none(
         IncidentPriority.default == True,  # noqa: E712
         IncidentPriority.enabled == True,  # noqa: E712
