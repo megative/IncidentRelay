@@ -8,3 +8,4 @@ This section describes common day-to-day workflows:
 - [Profile and Personal API Tokens](profile-and-tokens.md)
 - [Browser Push](browser-push.md)
 - [Rotation Overrides](rotation-overrides.md)
+- [Maintenance Windows](../concepts/maintenance-windows.md)

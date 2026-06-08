@@ -8,8 +8,8 @@ class SafeFormatDict(dict):
         return "{" + key + "}"
 
 
-def as_naive_datetime(value):
-    """Return aware UTC datetime from datetime or ISO string."""
+def parse_datetime(value):
+    """Parse datetime or ISO datetime string."""
     if value is None:
         return None
 
@@ -23,14 +23,41 @@ def as_naive_datetime(value):
             text = f"{text[:-1]}+00:00"
 
         try:
-            value = datetime.fromisoformat(text)
+            return datetime.fromisoformat(text)
         except ValueError as exc:
             raise ValueError("datetime must be ISO datetime") from exc
 
-    if not isinstance(value, datetime):
-        raise ValueError("datetime must be ISO datetime")
+    if isinstance(value, datetime):
+        return value
+
+    raise ValueError("datetime must be ISO datetime")
+
+
+def as_utc_aware(value):
+    """Return aware UTC datetime from datetime or ISO string."""
+    value = parse_datetime(value)
+
+    if value is None:
+        return None
 
     if value.tzinfo is None:
         return value.replace(tzinfo=dt_timezone.utc)
 
     return value.astimezone(dt_timezone.utc)
+
+
+def as_naive_datetime(value):
+    """Return naive wall-clock datetime.
+
+    Used by Maintenance Windows where starts_at/ends_at are interpreted
+    in the window.timezone, not as UTC instants.
+    """
+    value = parse_datetime(value)
+
+    if value is None:
+        return None
+
+    if value.tzinfo is not None:
+        return value.replace(tzinfo=None)
+
+    return value

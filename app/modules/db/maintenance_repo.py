@@ -203,10 +203,6 @@ def get_effective_window_status(window, now=None):
     starts_at = as_naive_datetime(window.starts_at)
     ends_at = as_naive_datetime(window.ends_at)
     local_now = _window_local_now(window, now=now)
-    print('starts_at',starts_at)
-    print('ends_at',ends_at)
-    print('local_now',local_now)
-    print('now',now)
 
     if starts_at and local_now < starts_at:
         return "scheduled"

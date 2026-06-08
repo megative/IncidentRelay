@@ -1,9 +1,9 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 
 from app.modules.sso.saml_security import get_saml_security
 from app.modules.db import maintenance_repo
-from app.modules.common import as_naive_datetime
+from app.modules.common import as_naive_datetime, as_utc_aware
 
 
 def extract_alert_event_link(alert):
@@ -30,17 +30,22 @@ def extract_alert_event_link(alert):
 
 def serialize_utc_datetime(value):
     """Serialize a datetime/string value as an explicit UTC ISO-8601 string."""
+    value = as_utc_aware(value)
+
+    if not value:
+        return None
+
+    return value.isoformat().replace("+00:00", "Z")
+
+
+def serialize_local_datetime(value):
+    """Serialize a local wall-clock datetime without timezone conversion."""
     value = as_naive_datetime(value)
 
     if not value:
         return None
 
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
-    else:
-        value = value.astimezone(timezone.utc)
-
-    return value.isoformat().replace("+00:00", "Z")
+    return value.isoformat()
 
 
 def attach_group_permissions(data, group_id, current_user=None):
@@ -1236,8 +1241,8 @@ def serialize_maintenance_window(window, include_scopes=True):
         "behavior": window.behavior,
         "timezone": window.timezone,
         "rrule": window.rrule,
-        "starts_at": serialize_utc_datetime(window.starts_at),
-        "ends_at": serialize_utc_datetime(window.ends_at),
+        "starts_at": serialize_local_datetime(window.starts_at),
+        "ends_at": serialize_local_datetime(window.ends_at),
         "occurrence": serialize_maintenance_window_occurrence(window),
         "enabled": window.enabled,
         "deleted": window.deleted,
@@ -1389,8 +1394,8 @@ def serialize_maintenance_window_ref(window):
         "status": maintenance_repo.get_effective_window_status(window),
         "behavior": window.behavior,
         "timezone": window.timezone,
-        "starts_at": serialize_utc_datetime(window.starts_at),
-        "ends_at": serialize_utc_datetime(window.ends_at),
+        "starts_at": serialize_local_datetime(window.starts_at),
+        "ends_at": serialize_local_datetime(window.ends_at),
         "occurrence": serialize_maintenance_window_occurrence(window),
     }
 

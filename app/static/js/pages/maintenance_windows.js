@@ -99,34 +99,12 @@ function countMaintenanceByStatus(status) {
         return item.status === status;
     }).length;
 }
-function renderMaintenanceStatusBadge(item) {
-    const status = getMaintenanceEffectiveStatus(item);
-    const label = formatMaintenanceStatus(status);
-
-    let className = "status-neutral";
-
-    if (status === "active") {
-        className = "status-active";
-    } else if (status === "scheduled") {
-        className = "status-scheduled";
-    } else if (status === "finished") {
-        className = "status-inactive";
-    } else if (status === "cancelled") {
-        className = "status-inactive";
-    }
-
-    return $("<span>")
-        .addClass("status-pill")
-        .addClass(className)
-        .text(label);
-}
 function getFilteredMaintenanceWindows() {
     const query = String($("#maintenance-window-search").val() || "").trim().toLowerCase();
     const status = String($("#maintenance-window-status-filter").val() || "");
     const behavior = String($("#maintenance-window-behavior-filter").val() || "");
 
     return maintenanceWindowsCache.filter(function (item) {
-        console.log(item.status)
         if (status && item.status !== status) {
             return false;
         }
@@ -1143,7 +1121,6 @@ function normalizeMaintenanceScopesForPayload(scopes) {
         return false;
     });
 }
-$(document).on("change", "#maintenance-window-active-only", renderMaintenanceWindowsTable);
 
 $(document).on(
     "change input",

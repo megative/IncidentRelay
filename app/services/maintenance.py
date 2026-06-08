@@ -6,7 +6,7 @@ from dateutil.rrule import rrulestr
 from app.modules.db import maintenance_repo
 from app.modules.db.models import AlertRoute, Group, Service, Team, User
 from app.services import rbac
-from app.api.schemas.base import as_utc_aware
+from app.modules.common import as_naive_datetime
 
 VALID_BEHAVIORS = {
     "suppress_notifications",
@@ -212,23 +212,10 @@ def parse_iso_datetime(value, field_name):
     if not value:
         raise ValueError(f"{field_name} is required")
 
-    if isinstance(value, datetime):
-        parsed = value
-    else:
-        text = str(value).strip()
-
-        if text.endswith("Z"):
-            text = f"{text[:-1]}+00:00"
-
-        try:
-            parsed = datetime.fromisoformat(text)
-        except ValueError as exc:
-            raise ValueError(f"{field_name} must be ISO datetime") from exc
-
-    if parsed.tzinfo is not None:
-        return parsed.replace(tzinfo=None)
-
-    return parsed
+    try:
+        return as_naive_datetime(value)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be ISO datetime") from exc
 
 
 def get_payload_datetime(payload, field_name, *, existing_window=None, partial=False):
@@ -323,8 +310,8 @@ def normalize_window_payload(payload, *, existing_window=None, partial=False):
         partial=partial,
     )
 
-    starts_at = as_utc_aware(starts_at)
-    ends_at = as_utc_aware(ends_at)
+    starts_at = as_naive_datetime(starts_at)
+    ends_at = as_naive_datetime(ends_at)
 
     if ends_at <= starts_at:
         raise ValueError("ends_at must be greater than starts_at")

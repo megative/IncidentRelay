@@ -1,5 +1,6 @@
 from uuid import uuid4
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from app.modules.db.models import MaintenanceWindow, MaintenanceWindowScope
 from app.api.schemas.roles import GROUP_USER_ADMIN_ROLE
@@ -755,12 +756,38 @@ def test_create_maintenance_window_rejects_invalid_rrule(client, db):
         },
     )
 
+    data = response.get_json()
+
     assert response.status_code == 400
-    assert "rrule" in response.get_json()["message"]
+    assert data["error"] == "validation_error"
+    assert data["message"] == "Request validation failed"
+    assert any(
+        detail.get("field") == "rrule"
+        and "rrule" in detail.get("message", "")
+        for detail in data["details"]
+    )
+
+
+def future_window_times(
+    timezone_name="UTC",
+    start_days=2,
+    duration_hours=1,
+):
+    zone = ZoneInfo(timezone_name)
+
+    starts_at = (
+        datetime.now(zone)
+        .replace(tzinfo=None, microsecond=0)
+        + timedelta(days=start_days)
+    )
+    ends_at = starts_at + timedelta(hours=duration_hours)
+
+    return starts_at.isoformat(), ends_at.isoformat()
 
 
 def test_create_maintenance_window_writes_audit(client, db):
     group, team, route, service, user, headers = create_manager_context()
+    starts_at, ends_at = future_window_times("Europe/Moscow")
 
     response = client.post(
         "/api/maintenance-windows",
@@ -770,8 +797,8 @@ def test_create_maintenance_window_writes_audit(client, db):
             "description": "Audit create",
             "behavior": "suppress_notifications",
             "timezone": "Europe/Moscow",
-            "starts_at": "2026-06-01T07:00:00",
-            "ends_at": "2026-06-01T08:00:00",
+            "starts_at": starts_at,
+            "ends_at": ends_at,
             "enabled": True,
             "scopes": [
                 {
@@ -1147,13 +1174,14 @@ def test_route_serializer_does_not_return_cancelled_maintenance(client, db):
 
 
 def maintenance_window_payload_for_service(service, **overrides):
+    starts_at, ends_at = future_window_times("Europe/Moscow")
     payload = {
         "name": unique_slug("pytest-maintenance"),
         "description": "RBAC regression test",
         "behavior": "suppress_notifications",
         "timezone": "UTC",
-        "starts_at": "2026-06-01T07:00:00",
-        "ends_at": "2026-06-01T08:00:00",
+        "starts_at": starts_at,
+        "ends_at": ends_at,
         "enabled": True,
         "scopes": [
             {
@@ -1430,3 +1458,69 @@ def test_maintenance_suppress_incident_does_not_create_alert_group(client, db):
         .where(AlertGroup.group_key == f"pytest-maintenance-{suffix}")
         .count()
     ) == 0
+
+
+def past_window_times(
+    timezone_name="UTC",
+    start_hours_ago=2,
+    duration_hours=1,
+):
+    zone = ZoneInfo(timezone_name)
+
+    starts_at = (
+        datetime.now(zone)
+        .replace(tzinfo=None, microsecond=0)
+        - timedelta(hours=start_hours_ago)
+    )
+    ends_at = starts_at + timedelta(hours=duration_hours)
+
+    return starts_at.isoformat(), ends_at.isoformat()
+
+
+def test_create_maintenance_window_rejects_past_end_time(
+    client,
+    auth_headers,
+):
+    group = create_group()
+    team = create_team(group=group)
+
+    timezone_name = "UTC"
+    starts_at, ends_at = past_window_times(timezone_name)
+
+    windows_before = MaintenanceWindow.select().count()
+    audit_before = AuditLog.select().count()
+
+    payload = {
+        "name": "Past maintenance window",
+        "description": "Must be rejected by backend validation",
+        "behavior": "suppress_notifications",
+        "timezone": timezone_name,
+        "starts_at": starts_at,
+        "ends_at": ends_at,
+        "enabled": True,
+        "scopes": [
+            {
+                "scope_type": "team",
+                "team_id": team.id,
+            },
+        ],
+    }
+
+    response = client.post(
+        "/api/maintenance-windows",
+        json=payload,
+        headers=auth_headers,
+    )
+
+    data = response.get_json()
+
+    assert response.status_code == 400
+    assert data["error"] == "validation_error"
+    assert data["message"] == "Request validation failed"
+    assert any(
+        "future" in detail.get("message", "")
+        for detail in data.get("details", [])
+    )
+
+    assert MaintenanceWindow.select().count() == windows_before
+    assert AuditLog.select().count() == audit_before

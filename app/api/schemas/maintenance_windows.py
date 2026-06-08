@@ -1,13 +1,12 @@
-from __future__ import annotations
-
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dateutil.rrule import rrulestr
 from pydantic import Field, field_validator, model_validator
 
-from app.api.schemas.base import ApiModel, as_utc_aware
+from app.api.schemas.base import ApiModel
+from app.modules.common import as_naive_datetime
 
 
 MAINTENANCE_WINDOW_NAME_MAX_LENGTH = 255
@@ -42,6 +41,26 @@ MaintenanceScopeType = Literal[
     "service",
     "route",
 ]
+
+
+def validate_rrule_value(value):
+    text = str(value or "").strip()
+
+    if not text:
+        return None
+
+    if "\n" in text or "\r" in text:
+        raise ValueError("rrule must be a single RRULE value")
+
+    if text.upper().startswith("RRULE:"):
+        text = text.split(":", 1)[1].strip()
+
+    try:
+        rrulestr(text)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("rrule must be a valid RFC5545 RRULE") from exc
+
+    return text
 
 
 class MaintenanceWindowScopeSchema(ApiModel):
@@ -106,37 +125,23 @@ class MaintenanceWindowBaseSchema(ApiModel):
     @field_validator("starts_at", "ends_at")
     @classmethod
     def normalize_datetimes(cls, value: datetime) -> datetime:
-        return as_utc_aware(value)
+        return as_naive_datetime(value)
 
     @field_validator("rrule")
     @classmethod
-    def normalize_rrule(cls, value: str | None) -> str | None:
-        text = str(value or "").strip()
-
-        if not text:
-            return None
-
-        if "\n" in text or "\r" in text:
-            raise ValueError("rrule must be a single RRULE value")
-
-        if text.upper().startswith("RRULE:"):
-            text = text.split(":", 1)[1].strip()
-
-        return text or None
+    def normalize_rrule(cls, value):
+        return validate_rrule_value(value)
 
     @model_validator(mode="after")
     def validate_time_range_and_rrule(self):
         if self.ends_at <= self.starts_at:
             raise ValueError("ends_at must be greater than starts_at")
 
-        if self.ends_at <= datetime.now(timezone.utc):
-            raise ValueError("ends_at must be in the future")
+        zone = ZoneInfo(self.timezone or "UTC")
+        local_now = datetime.now(zone).replace(tzinfo=None)
 
-        if self.rrule:
-            try:
-                rrulestr(self.rrule, dtstart=self.starts_at)
-            except (TypeError, ValueError) as exc:
-                raise ValueError("rrule must be a valid RFC5545 RRULE") from exc
+        if self.ends_at <= local_now:
+            raise ValueError("ends_at must be in the future")
 
         return self
 
@@ -161,7 +166,12 @@ class MaintenanceWindowUpdateSchema(ApiModel):
     def normalize_datetimes(cls, value):
         if value is None:
             return None
-        return as_utc_aware(value)
+        return as_naive_datetime(value)
+
+    @field_validator("rrule")
+    @classmethod
+    def normalize_rrule(cls, value):
+        return validate_rrule_value(value)
 
     @model_validator(mode="after")
     def validate_update_payload(self):
@@ -172,8 +182,18 @@ class MaintenanceWindowUpdateSchema(ApiModel):
             if self.ends_at <= self.starts_at:
                 raise ValueError("ends_at must be greater than starts_at")
 
-        if self.ends_at is not None and self.ends_at <= datetime.now(timezone.utc):
-            raise ValueError("ends_at must be in the future")
+        if self.ends_at is not None:
+            zone_name = self.timezone or "UTC"
+
+            try:
+                zone = ZoneInfo(zone_name)
+            except ZoneInfoNotFoundError:
+                zone = ZoneInfo("UTC")
+
+            local_now = datetime.now(zone).replace(tzinfo=None)
+
+            if self.ends_at <= local_now:
+                raise ValueError("ends_at must be in the future")
 
         return self
 
@@ -186,11 +206,11 @@ class MaintenanceWindowExtendSchema(ApiModel):
     @field_validator("ends_at")
     @classmethod
     def normalize_ends_at(cls, value: datetime) -> datetime:
-        return as_utc_aware(value)
+        return as_naive_datetime(value)
 
     @model_validator(mode="after")
     def validate_ends_at(self):
-        if self.ends_at <= datetime.now(timezone.utc):
+        if self.ends_at <= datetime.utcnow():
             raise ValueError("ends_at must be in the future")
 
         return self

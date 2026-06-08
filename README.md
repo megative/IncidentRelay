@@ -19,6 +19,7 @@ It provides the core building blocks of an on-call system:
 - reminders and escalation to the next on-call user;
 - rotation overrides;
 - alert silences;
+- maintenance windows for planned work and alert behavior control;
 - calendar view for on-call schedules;
 - personal API tokens;
 - Swagger/OpenAPI documentation.
@@ -445,6 +446,8 @@ OpenAPI JSON is available at:
 | Groups and RBAC | [docs/concepts/groups-and-rbac.md](docs/concepts/groups-and-rbac.md) |
 | Teams, rotations, routes | [docs/concepts/teams-rotations-routes.md](docs/concepts/teams-rotations-routes.md) |
 | Route intake tokens | [docs/concepts/route-intake-tokens.md](docs/concepts/route-intake-tokens.md) |
+| Maintenance Windows | [docs/concepts/maintenance-windows.md](docs/concepts/maintenance-windows.md) |
+| Services | [docs/concepts/services.md](docs/concepts/services.md) |
 | Channels | [docs/concepts/channels.md](docs/concepts/channels.md) |
 | Alertmanager | [docs/integrations/alertmanager.md](docs/integrations/alertmanager.md) |
 | Zabbix | [docs/integrations/zabbix.md](docs/integrations/zabbix.md) |
