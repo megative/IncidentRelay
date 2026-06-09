@@ -389,7 +389,9 @@ function openTeamMembers(teamId, teamName) {
     }
 
     RbacRoles.fillTeamSelect(TEAM_VIEWER_ROLE);
-    fillUserSelect("#team-member-user", null, "/api/users?all=1");
+    fillUserSelect("#team-member-user", function () {
+        resetTeamMemberForm();
+    }, "/api/users?all=1");
     loadTeamMembers(teamId, teamName);
     openTeamMembersModal();
 }
@@ -509,7 +511,8 @@ function editTeamMember(member) {
     }
 
     $("#team-member-id").val(member.id);
-    $("#team-member-user").val(String(member.user_id)).prop("disabled", true);
+    setSelectValue("#team-member-user", member.user_id);
+    setEnhancedSelectDisabled("#team-member-user", true);
     RbacRoles.fillTeamSelect(member.role);
     $("#team-member-active").prop("checked", !!member.active);
 }
@@ -519,7 +522,8 @@ function resetTeamMemberForm() {
      * Reset team member form without changing selected team.
      */
     $("#team-member-id").val("");
-    $("#team-member-user").prop("disabled", false);
+    setEnhancedSelectDisabled("#team-member-user", false);
+    setSelectValue("#team-member-user", "");
     RbacRoles.fillTeamSelect(TEAM_VIEWER_ROLE);
     $("#team-member-active").prop("checked", true);
 }

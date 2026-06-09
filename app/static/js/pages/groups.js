@@ -341,7 +341,7 @@ function fillGroupMemberUserSelect() {
 }
 
 function setGroupMemberControlsEnabled(enabled) {
-    $("#group-member-user").prop("disabled", !enabled);
+   setEnhancedSelectDisabled("#group-member-user", !enabled);
     $("#group-member-role").prop("disabled", !enabled);
     $("#group-member-active").prop("disabled", !enabled);
     $("#save-group-member").prop("disabled", !enabled);
@@ -472,26 +472,28 @@ function renderGroupMemberActions(member) {
 }
 
 function editGroupMember(member) {
-  /*
-   * Load membership data into the group member form.
-   */
-  $("#group-member-form-title").text("Edit group membership #" + member.id);
-  $("#group-membership-id").val(member.id);
-  $("#group-member-user").val(String(member.user_id)).prop("disabled", true);
-  fillAssignableGroupRoleSelect("#group-member-role", member.role);
-  $("#group-member-active").prop("checked", !!member.active);
+    /*
+     * Load membership data into the group member form.
+     */
+    $("#group-member-form-title").text("Edit group membership #" + member.id);
+    $("#group-membership-id").val(member.id);
+    setSelectValue("#group-member-user", member.user_id);
+    setEnhancedSelectDisabled("#group-member-user", true);
+    fillAssignableGroupRoleSelect("#group-member-role", member.role);
+    $("#group-member-active").prop("checked", !!member.active);
 }
 
 function resetGroupMemberForm() {
-  /*
-   * Reset group member form.
-   */
-  $("#group-member-form-title").text("Add existing user to group");
-  $("#group-membership-id").val("");
-  $("#group-member-user").prop("disabled", !selectedGroupForMembers);
-  fillAssignableGroupRoleSelect("#group-member-role", GROUP_VIEWER_ROLE);
-  $("#group-member-active").prop("checked", true);
-  setGroupMemberControlsEnabled(!!selectedGroupForMembers);
+    /*
+     * Reset group member form.
+     */
+    $("#group-member-form-title").text("Add existing user to group");
+    $("#group-membership-id").val("");
+    setSelectValue("#group-member-user", "");
+    setEnhancedSelectDisabled("#group-member-user", !selectedGroupForMembers);
+    fillAssignableGroupRoleSelect("#group-member-role", GROUP_VIEWER_ROLE);
+    $("#group-member-active").prop("checked", true);
+    setGroupMemberControlsEnabled(!!selectedGroupForMembers);
 }
 
 function saveGroupMember() {

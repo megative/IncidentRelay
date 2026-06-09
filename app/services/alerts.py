@@ -17,7 +17,6 @@ from app.services.service_resolution import (
     get_effective_route_rotation,
     resolve_alert_service,
 )
-from app.services.incident_features import apply_maintenance_to_incoming_alert
 from app.services.maintenance import get_maintenance_decision
 
 

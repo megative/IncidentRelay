@@ -5,6 +5,7 @@ from app.login import hash_password
 from app.modules.db import rotations_repo
 from app.modules.db.models import (
     Alert,
+    AlertGroup,
     AlertRoute,
     AlertRouteChannel,
     Group,
@@ -18,7 +19,8 @@ from app.modules.db.models import (
     UserGroup,
     EscalationPolicy,
     EscalationPolicyRule,
-    Service
+    Service,
+    ServiceDependency,
 )
 
 _counter = 0
@@ -316,4 +318,112 @@ def create_service(
         enabled=enabled,
         public=False,
         public_order=100,
+    )
+
+
+def create_impact_alert_group(
+    *,
+    team,
+    service,
+    route=None,
+    fingerprint=None,
+    status="firing",
+    severity="critical",
+    alertname=None,
+    summary=None,
+):
+    now = datetime.utcnow()
+    alertname = alertname or (service.slug + "-alert")
+    summary = summary or (service.name + " alert")
+    fingerprint = fingerprint or unique(service.slug + "-alert-group")
+
+    labels = {
+        "alertname": alertname,
+        "severity": severity,
+        "service": service.slug,
+    }
+
+    return AlertGroup.create(
+        team=team,
+        route=route,
+        service=service,
+        source="pytest",
+        group_key_hash=fingerprint,
+        group_key=fingerprint,
+        title=alertname,
+        message=summary,
+        severity=severity,
+        common_labels=labels,
+        label_values=labels,
+        payload_summary={
+            "summary": summary,
+            "alertname": alertname,
+            "severity": severity,
+        },
+        status=status,
+        first_seen_at=now,
+        last_seen_at=now,
+        alert_count=1,
+        firing_count=1 if status == "firing" else 0,
+        acknowledged_count=1 if status == "acknowledged" else 0,
+        resolved_count=1 if status == "resolved" else 0,
+        silenced_count=1 if status == "silenced" else 0,
+    )
+
+
+def create_service_alert(
+    *,
+    team,
+    route,
+    service,
+    fingerprint,
+    status="firing",
+    severity="critical",
+    alertname="TestAlert",
+    summary="Test alert",
+):
+    labels = {
+        "alertname": alertname,
+        "severity": severity,
+    }
+    annotations = {
+        "summary": summary,
+    }
+
+    return Alert.create(
+        route=route,
+        team=team,
+        service=service,
+        source=getattr(route, "source", None) or "alertmanager",
+        external_id=fingerprint,
+        dedup_key=fingerprint,
+        group_key=fingerprint,
+        title=summary,
+        message=summary,
+        severity=severity,
+        labels=labels,
+        payload={
+            "status": status,
+            "labels": labels,
+            "annotations": annotations,
+            "fingerprint": fingerprint,
+        },
+        status=status,
+    )
+
+
+def create_service_dependency(
+    *,
+    service,
+    depends_on_service,
+    dependency_type="hard",
+    criticality="required",
+    enabled=True,
+):
+    return ServiceDependency.create(
+        service=service,
+        depends_on_service=depends_on_service,
+        dependency_type=dependency_type,
+        criticality=criticality,
+        enabled=enabled,
     )

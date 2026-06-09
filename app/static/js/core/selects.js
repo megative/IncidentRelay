@@ -40,13 +40,53 @@ function fillTeamSelect(selector, includeAll, callback) {
     });
 }
 
-function fillUserSelect(selector, callback, url) {
-    /* Fill a select element with users ordered by id. */
+function fillUserSelect(selector, callback, url, options) {
+    /*
+     * Fill a select element with users ordered by id.
+     * If select has .js-user-select and Tom Select is loaded,
+     * it becomes searchable.
+     */
     apiGet(url || "/api/users", function (users) {
-        const select = $(selector); select.empty();
+        const selectElement = getSelectElement(selector);
+
+        if (!selectElement) {
+            if (typeof callback === "function") {
+                callback([]);
+            }
+            return;
+        }
+
+        const wasDisabled = $(selectElement).prop("disabled");
+
+        destroyTomSelectIfExists(selectElement);
+
+        const select = $(selectElement);
+        const isMultiple = selectElement.hasAttribute("multiple");
+
+        select.empty();
+
         users = asArray(users);
-        users.forEach(function (user) { select.append($("<option>").val(user.id).text("#" + user.id + " " + user.username)); });
-        if (typeof callback === "function") { callback(users); }
+
+        users.forEach(function (user) {
+            const userId = getUserIdValue(user);
+
+            if (!userId) {
+                return;
+            }
+
+            select.append(
+                $("<option>")
+                    .val(String(userId))
+                    .text(getUserOptionText(user))
+            );
+        });
+
+        initUserTomSelectIfNeeded(selectElement, options);
+        setEnhancedSelectDisabled(selectElement, wasDisabled);
+
+        if (typeof callback === "function") {
+            callback(users);
+        }
     });
 }
 
@@ -70,5 +110,148 @@ function fillActiveGroupSelect() {
 
     if (currentUser.active_group_id) {
         select.val(String(currentUser.active_group_id));
+    }
+}
+function getSelectElement(selector) {
+    if (!selector) {
+        return null;
+    }
+
+    if (selector instanceof HTMLElement) {
+        return selector;
+    }
+
+    if (selector.jquery) {
+        return selector.get(0) || null;
+    }
+
+    return $(selector).get(0) || null;
+}
+
+function isTomSelectLoaded() {
+    return typeof window.TomSelect !== "undefined";
+}
+
+function destroyTomSelectIfExists(selectElement) {
+    if (selectElement && selectElement.tomselect) {
+        selectElement.tomselect.destroy();
+    }
+}
+
+function shouldUseTomSelect(selectElement) {
+    return (
+        selectElement &&
+        selectElement.classList &&
+        selectElement.classList.contains("js-user-select") &&
+        isTomSelectLoaded()
+    );
+}
+
+function getUserIdValue(user) {
+    return user.user_id || user.id;
+}
+
+function getUserOptionText(user) {
+    const userId = getUserIdValue(user);
+
+    const primary =
+        user.display_name ||
+        user.full_name ||
+        user.name ||
+        user.username ||
+        user.email ||
+        ("User #" + userId);
+
+    const secondary = [];
+
+    if (user.username && user.username !== primary) {
+        secondary.push(user.username);
+    }
+
+    if (user.email && user.email !== primary) {
+        secondary.push(user.email);
+    }
+
+    return "#" + userId + " " + primary + (
+        secondary.length ? " (" + secondary.join(", ") + ")" : ""
+    );
+}
+
+function initUserTomSelectIfNeeded(selectElement, options) {
+    selectElement = getSelectElement(selectElement);
+
+    if (!shouldUseTomSelect(selectElement)) {
+        return null;
+    }
+
+    if (selectElement.tomselect) {
+        return selectElement.tomselect;
+    }
+
+    const isMultiple = selectElement.hasAttribute("multiple");
+
+    return new TomSelect(selectElement, Object.assign({
+        create: false,
+        persist: false,
+        allowEmptyOption: true,
+        maxOptions: 300,
+        placeholder: selectElement.dataset.placeholder || "Select user...",
+        searchField: ["text"],
+        sortField: {
+            field: "text",
+            direction: "asc"
+        },
+        plugins: isMultiple ? ["remove_button"] : ["clear_button"],
+        render: {
+            no_results: function () {
+                return '<div class="no-results">No users found</div>';
+            }
+        }
+    }, options || {}));
+}
+
+function initUserTomSelects(root, options) {
+    const container = root ? $(root) : $(document);
+
+    container.find("select.js-user-select").each(function () {
+        initUserTomSelectIfNeeded(this, options);
+    });
+}
+
+function setSelectValue(selector, value) {
+    const selectElement = getSelectElement(selector);
+
+    if (!selectElement) {
+        return;
+    }
+
+    const normalizedValue =
+        value === undefined || value === null ? "" : String(value);
+
+    if (selectElement.tomselect) {
+        selectElement.tomselect.setValue(normalizedValue, true);
+        return;
+    }
+
+    $(selectElement).val(normalizedValue);
+}
+
+function setEnhancedSelectDisabled(selector, disabled) {
+    const selectElement = getSelectElement(selector);
+
+    if (!selectElement) {
+        return;
+    }
+
+    $(selectElement).prop("disabled", !!disabled);
+
+    if (!selectElement.tomselect) {
+        return;
+    }
+
+    if (disabled) {
+        selectElement.tomselect.disable();
+    } else {
+        selectElement.tomselect.enable();
     }
 }

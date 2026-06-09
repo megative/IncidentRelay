@@ -17,7 +17,7 @@ from app.services.alert_comments import (
     update_group_comment,
     delete_group_comment,
 )
-from app.services.incident_features import (
+from app.services.incidents import (
     create_incident_responder,
     create_incident_stakeholder,
     set_incident_priority,

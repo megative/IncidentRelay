@@ -21,9 +21,98 @@ const maintenanceStatusLabels = {
     cancelled: "Cancelled",
 };
 
+function getMaintenanceCreateParamsFromUrl() {
+    const params = new URLSearchParams(window.location.search || "");
+
+    return {
+        serviceId: parsePositiveInt(params.get("service_id")),
+        teamId: parsePositiveInt(params.get("team_id")),
+        routeId: parsePositiveInt(params.get("route_id")),
+        groupId: parsePositiveInt(params.get("group_id")),
+    };
+}
+
+
+function openMaintenanceCreateModalFromUrl() {
+    const params = getMaintenanceCreateParamsFromUrl();
+
+    if (!params.serviceId && !params.teamId && !params.routeId && !params.groupId) {
+        return;
+    }
+
+    openMaintenanceCreateModal();
+
+    if (params.serviceId) {
+        prefillMaintenanceScope("service", params.serviceId);
+    } else if (params.routeId) {
+        prefillMaintenanceScope("route", params.routeId);
+    } else if (params.teamId) {
+        prefillMaintenanceScope("team", params.teamId);
+    } else if (params.groupId) {
+        prefillMaintenanceScope("group", params.groupId);
+    }
+
+    prefillMaintenanceDefaultTimes();
+    removeMaintenanceCreateParamsFromUrl();
+}
+
+
+function prefillMaintenanceScope(scopeType, targetId) {
+    $("#maintenance-scope-type").val(scopeType);
+    updateMaintenanceScopeTargetSelect();
+    $("#maintenance-scope-target").val(String(targetId));
+}
+
+
+function prefillMaintenanceDefaultTimes() {
+    if ($("#maintenance-starts-at").val() || $("#maintenance-ends-at").val()) {
+        return;
+    }
+
+    const now = new Date();
+    now.setMinutes(0, 0, 0);
+    now.setHours(now.getHours() + 1);
+
+    const end = new Date(now.getTime());
+    end.setHours(end.getHours() + 1);
+
+    $("#maintenance-starts-at").val(formatMaintenanceLocalInput(now));
+    $("#maintenance-ends-at").val(formatMaintenanceLocalInput(end));
+    updateMaintenanceTimeWarning();
+}
+
+
+function formatMaintenanceLocalInput(date) {
+    return [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, "0"),
+        String(date.getDate()).padStart(2, "0"),
+    ].join("-") + "T" + [
+        String(date.getHours()).padStart(2, "0"),
+        String(date.getMinutes()).padStart(2, "0"),
+    ].join(":");
+}
+
+
+function removeMaintenanceCreateParamsFromUrl() {
+    if (!window.history || !window.history.replaceState) {
+        return;
+    }
+
+    const url = new URL(window.location.href);
+
+    url.searchParams.delete("service_id");
+    url.searchParams.delete("team_id");
+    url.searchParams.delete("route_id");
+    url.searchParams.delete("group_id");
+
+    window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+}
+
 function loadMaintenanceWindows() {
     fillMaintenanceReferences(function () {
         refreshMaintenanceWindows();
+        openMaintenanceCreateModalFromUrl();
     });
 }
 

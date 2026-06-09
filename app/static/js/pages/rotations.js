@@ -215,6 +215,10 @@ function loadOneLayerCardDetails(layerId, callback) {
 function renderRotationLayerCards() {
     const container = $("#rotation-layer-cards");
 
+    container.find("select.js-user-select").each(function () {
+        destroyTomSelectIfExists(this);
+    });
+
     container.empty();
 
     if (!rotationLayersCache.length) {
@@ -231,6 +235,7 @@ function renderRotationLayerCards() {
         updateLayerCadenceVisibility(layer.id);
     });
 
+    initUserTomSelects(container);
     initLayerTimezoneSelects();
 }
 
@@ -632,8 +637,9 @@ function renderLayerMembersEditor(layer) {
     const addRow = $("<div>").addClass("layer-member-add-grid");
 
     const userSelect = $("<select>")
-        .addClass("input")
-        .attr("data-layer-member-user", layer.id);
+        .addClass("input js-user-select")
+        .attr("data-layer-member-user", layer.id)
+        .attr("data-placeholder", "Select user...");
 
     if (!availableUsers.length) {
         userSelect.append(
@@ -641,12 +647,18 @@ function renderLayerMembersEditor(layer) {
                 .val("")
                 .text(currentMembers.length ? "All active users are already in this layer" : "No active team members")
         );
-    } else {
+    }else {
+        userSelect.append(
+            $("<option>")
+                .val("")
+                .text("")
+        );
+
         availableUsers.forEach(function (user) {
             userSelect.append(
                 $("<option>")
-                    .val(user.user_id)
-                    .text("#" + user.user_id + " " + (user.display_name || user.username || "user"))
+                    .val(String(user.user_id))
+                    .text(getUserOptionText(user))
             );
         });
     }

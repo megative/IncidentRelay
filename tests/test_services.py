@@ -1,13 +1,17 @@
 import pytest
+from datetime import datetime
+
 from pydantic import ValidationError
 
+from app.login import create_access_token
+from tests.factories import create_user, unique
 from app.api.schemas.services import (
     ServiceCreateSchema,
     ServiceDependencyCreateSchema,
     ServiceMatchRuleCreateSchema,
 )
 from app.modules.db.models import (
-    Alert,
+    AlertGroup,
     ServiceDependency,
     ServiceLink,
     ServiceMatchRule,
@@ -18,48 +22,9 @@ from tests.factories import (
     create_route,
     create_service,
     create_team,
+    create_impact_alert_group,
+    create_service_dependency,
 )
-
-
-def create_service_alert(
-    *,
-    team,
-    route,
-    service,
-    fingerprint,
-    status="firing",
-    severity="critical",
-    alertname="TestAlert",
-    summary="Test alert",
-):
-    labels = {
-        "alertname": alertname,
-        "severity": severity,
-    }
-    annotations = {
-        "summary": summary,
-    }
-
-    return Alert.create(
-        route=route,
-        team=team,
-        service=service,
-        source=getattr(route, "source", None) or "alertmanager",
-        external_id=fingerprint,
-        dedup_key=fingerprint,
-        group_key=fingerprint,
-        title=summary,
-        message=summary,
-        severity=severity,
-        labels=labels,
-        payload={
-            "status": status,
-            "labels": labels,
-            "annotations": annotations,
-            "fingerprint": fingerprint,
-        },
-        status=status,
-    )
 
 
 def service_payload(team, **overrides):
@@ -591,93 +556,116 @@ def test_service_aggregate_links_runbooks_and_dependencies_api(client, admin_hea
     assert len(response.get_json()) == 1
 
 
-def test_service_analytics_counts_alerts_by_service(client, admin_headers):
-    group = create_group()
-    team = create_team(group)
-    service = create_service(team, slug="rabbitmq-cloud", name="RabbitMQ Cloud")
-    route = create_route(team, service=service)
+def create_service_alert_group(
+    *,
+    team,
+    route,
+    service,
+    fingerprint="service-alert-group",
+    status="firing",
+    severity="critical",
+    alertname="ServiceAlert",
+    summary="Service alert",
+):
+    now = datetime.utcnow()
 
-    create_service_alert(
-        team=team,
-        route=route,
-        service=service,
-        fingerprint="rabbitmq-cloud-critical-1",
-        status="firing",
-        severity="critical",
-        alertname="RabbitMQClusterPartition",
-        summary="RabbitMQ cluster partition",
-    )
-
-    response = client.get(
-        f"/api/services/analytics?service_id={service.id}&days=30",
-        headers=admin_headers,
-    )
-
-    assert response.status_code == 200
-    rows = response.get_json()
-    assert len(rows) == 1
-    assert rows[0]["service_id"] == service.id
-    assert rows[0]["total_alerts"] == 1
-    assert rows[0]["open_alerts"] == 1
-    assert rows[0]["critical_open_alerts"] == 1
-
-
-def test_service_impact_reports_alert_impact(client, admin_headers):
-    group = create_group()
-    team = create_team(group)
-    service = create_service(team, slug="rabbitmq-cloud", name="RabbitMQ Cloud")
-    route = create_route(team, service=service)
-
-    create_service_alert(
-        team=team,
-        route=route,
-        service=service,
-        fingerprint="rabbitmq-cloud-critical-impact",
-        status="firing",
-        severity="critical",
-        alertname="RabbitMQClusterPartition",
-        summary="RabbitMQ cluster partition",
-    )
-
-    response = client.get(
-        f"/api/services/impact?service_id={service.id}&days=30",
-        headers=admin_headers,
-    )
-
-    assert response.status_code == 200
-    rows = response.get_json()
-    assert len(rows) == 1
-    assert rows[0]["service_id"] == service.id
-    assert rows[0]["has_alert_impact"] is True
-    assert rows[0]["critical_open_alerts"] == 1
-    assert rows[0]["effective_status"] in {
-        "degraded",
-        "partial_outage",
-        "major_outage",
+    labels = {
+        "alertname": alertname,
+        "severity": severity,
+        "service": service.slug,
     }
 
+    return AlertGroup.create(
+        team=team,
+        route=route,
+        service=service,
+        source="pytest",
+        group_key_hash=fingerprint,
+        group_key=fingerprint,
+        title=alertname,
+        message=summary,
+        severity=severity,
+        common_labels=labels,
+        label_values=labels,
+        payload_summary={
+            "summary": summary,
+            "alertname": alertname,
+            "severity": severity,
+        },
+        status=status,
+        first_seen_at=now,
+        last_seen_at=now,
+        alert_count=1,
+        firing_count=1 if status == "firing" else 0,
+        acknowledged_count=1 if status == "acknowledged" else 0,
+        resolved_count=1 if status == "resolved" else 0,
+        silenced_count=1 if status == "silenced" else 0,
+    )
 
-def test_service_impact_reports_dependency_impact(client, admin_headers):
+
+def test_service_details_returns_aggregated_context(client, admin_headers):
     group = create_group()
     team = create_team(group)
 
-    frontend = create_service(team, slug="frontend-web", name="Frontend Web")
-    api = create_service(team, slug="billing-api", name="Billing API")
-    route = create_route(team, service=api)
+    service = create_service(
+        team,
+        slug="billing-api",
+        name="Billing API",
+        status="degraded",
+        criticality="critical",
+        environment="production",
+    )
+    upstream = create_service(
+        team,
+        slug="postgresql-prod",
+        name="PostgreSQL Prod",
+    )
+    downstream = create_service(
+        team,
+        slug="frontend-web",
+        name="Frontend Web",
+    )
+    route = create_route(team, service=service)
+
+    ServiceLink.create(
+        service=service,
+        link_type="dashboard",
+        label="Grafana",
+        url="https://grafana.example.com/d/billing-api",
+        priority=10,
+        enabled=True,
+    )
+
+    ServiceRunbook.create(
+        service=service,
+        title="Billing API runbook",
+        url="https://docs.example.com/runbooks/billing-api",
+        priority=10,
+        enabled=True,
+        matchers={},
+    )
 
     ServiceDependency.create(
-        service=frontend,
-        depends_on_service=api,
+        service=service,
+        depends_on_service=upstream,
         dependency_type="hard",
         criticality="required",
         enabled=True,
     )
 
-    create_service_alert(
+    ServiceDependency.create(
+        service=downstream,
+        depends_on_service=service,
+        dependency_type="soft",
+        criticality="important",
+        enabled=True,
+    )
+
+    create_service_alert_group(
         team=team,
         route=route,
-        service=api,
-        fingerprint="billing-api-critical-impact",
+        service=service,
+        fingerprint="billing-api-critical-details",
         status="firing",
         severity="critical",
         alertname="BillingApiDown",
@@ -685,113 +673,225 @@ def test_service_impact_reports_dependency_impact(client, admin_headers):
     )
 
     response = client.get(
-        f"/api/services/impact?service_id={frontend.id}&days=30",
+        f"/api/services/{service.id}/details?days=30",
         headers=admin_headers,
     )
 
-    assert response.status_code == 200
-    rows = response.get_json()
-    assert len(rows) == 1
-    assert rows[0]["service_id"] == frontend.id
-    assert rows[0]["has_dependency_impact"] is True
-    assert rows[0]["upstream_issues_count"] >= 1
-    assert rows[0]["dependency_impact_status"] == "major_outage"
-    assert rows[0]["effective_status"] == "major_outage"
+    assert response.status_code == 200, response.get_json()
 
-    issue = rows[0]["upstream_issues"][0]
-    assert issue["service_id"] == api.id
-    assert issue["service_name"] == api.name
-    assert issue["service_slug"] == api.slug
-    assert issue["status"] == "major_outage"
-    assert issue["impact_status"] == "major_outage"
-    assert issue["contributes_to_impact"] is True
+    data = response.get_json()
+
+    assert data["service"]["id"] == service.id
+    assert data["service"]["slug"] == "billing-api"
+
+    assert data["summary"]["links"] == 1
+    assert data["summary"]["runbooks"] == 1
+    assert data["summary"]["upstream_dependencies"] == 1
+    assert data["summary"]["downstream_dependencies"] == 1
+
+    assert data["summary"]["alerts"]["total"] == 1
+    assert data["summary"]["alerts"]["recent"] == 1
+    assert data["summary"]["alerts"]["open"] == 1
+    assert data["summary"]["alerts"]["firing"] == 1
+    assert data["summary"]["alerts"]["critical_open"] == 1
+
+    assert data["summary"]["alerts"]["by_status"]["firing"] == 1
+    assert data["summary"]["alerts"]["by_status"]["acknowledged"] == 0
+    assert data["summary"]["alerts"]["by_status"]["resolved"] == 0
+
+    assert data["summary"]["alerts"]["by_severity"]["critical"] == 1
+    assert data["summary"]["alerts"]["by_severity"]["high"] == 0
+    assert data["summary"]["alerts"]["by_severity"]["warning"] == 0
+    assert data["summary"]["alerts"]["by_severity"]["info"] == 0
+
+    assert len(data["links"]) == 1
+    assert data["links"][0]["label"] == "Grafana"
+    assert data["links"][0]["link_type"] == "dashboard"
+
+    assert len(data["runbooks"]) == 1
+    assert data["runbooks"][0]["title"] == "Billing API runbook"
+
+    assert len(data["dependencies"]["upstream"]) == 1
+    assert data["dependencies"]["upstream"][0]["service_id"] == service.id
+    assert data["dependencies"]["upstream"][0]["depends_on_service_id"] == upstream.id
+
+    assert len(data["dependencies"]["downstream"]) == 1
+    assert data["dependencies"]["downstream"][0]["service_id"] == downstream.id
+    assert data["dependencies"]["downstream"][0]["depends_on_service_id"] == service.id
+
+    assert data["analytics"]["version"] == 1
+    assert data["analytics"]["window"]["days"] == 30
+    assert data["analytics"]["widgets"]["alert_volume"]["total"] == 1
+    assert data["analytics"]["widgets"]["alert_volume"]["recent"] == 1
+    assert data["analytics"]["widgets"]["alert_volume"]["open"] == 1
+    assert data["analytics"]["widgets"]["alert_volume"]["critical_open"] == 1
+    assert data["analytics"]["breakdowns"]["alerts_by_status"]["firing"] == 1
+    assert data["analytics"]["breakdowns"]["alerts_by_severity"]["critical"] == 1
 
 
-def test_service_impact_informational_dependency_is_visible_but_does_not_change_status(
+def make_headers(user):
+    token, _ = create_access_token(user)
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_service_details_requires_team_read(client, db):
+    private_group = create_group(slug=unique("private-group"))
+    private_team = create_team(
+        group=private_group,
+        slug=unique("private-team"),
+        name="Private Team",
+    )
+    service = create_service(
+        private_team,
+        slug=unique("private-service"),
+        name="Private Service",
+    )
+
+    other_group = create_group(slug=unique("other-group"))
+    other_user = create_user(
+        username=unique("service-reader"),
+        group=other_group,
+    )
+
+    response = client.get(
+        f"/api/services/{service.id}/details",
+        headers=make_headers(other_user),
+    )
+
+    assert response.status_code in {403, 404}
+
+
+def test_service_details_clamps_analytics_days(client, admin_headers):
+    group = create_group()
+    team = create_team(group)
+    service = create_service(team, slug="billing-api", name="Billing API")
+
+    response = client.get(
+        f"/api/services/{service.id}/details?days=9999",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200, response.get_json()
+
+    data = response.get_json()
+
+    assert data["analytics"]["version"] == 1
+    assert data["analytics"]["window"]["days"] == 365
+    assert data["summary"]["alerts"]["window_days"] == 365
+
+
+def test_service_impact_rejects_invalid_max_depth(client, admin_headers):
+    response = client.get(
+        "/api/services/impact?max_depth=999",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 400
+
+    data = response.get_json()
+
+    assert data["error"] == "validation_error"
+    assert data["message"] == "Request validation failed"
+    assert any(
+        detail["field"] == "max_depth"
+        for detail in data["details"]
+    )
+
+
+def test_service_impact_rejects_invalid_sort(client, admin_headers):
+    response = client.get(
+        "/api/services/impact?sort=created_at",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 400
+
+    data = response.get_json()
+
+    assert data["error"] == "validation_error"
+    assert any(
+        detail["field"] == "sort"
+        for detail in data["details"]
+    )
+
+
+def test_service_impact_accepts_valid_query(client, admin_headers):
+    group = create_group()
+    team = create_team(group)
+    create_service(
+        team,
+        slug=unique("billing-api"),
+        name="Billing API",
+    )
+
+    response = client.get(
+        "/api/services/impact"
+        "?team_id={team_id}"
+        "&include_disabled=false"
+        "&include_operational=true"
+        "&include_explanation=true"
+        "&include_root_causes=true"
+        "&include_blast_radius=true"
+        "&include_paths=true"
+        "&max_depth=5"
+        "&limit=100"
+        "&sort=effective_status"
+        "&order=desc".format(team_id=team.id),
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200, response.get_json()
+
+
+def find_impact_item(payload, service):
+    for item in payload["items"]:
+        if item["service_id"] == service.id:
+            return item
+
+    raise AssertionError(
+        "Impact item for service {0} was not found in payload: {1}".format(
+            service.slug,
+            payload,
+        )
+    )
+
+
+def impact_path_slugs(path):
+    return [node["service_slug"] for node in path]
+
+
+def test_service_impact_v2_propagates_direct_upstream_critical_alert(
     client,
     admin_headers,
 ):
     group = create_group()
     team = create_team(group)
 
-    frontend = create_service(team, slug="frontend-web", name="Frontend Web")
-    api = create_service(team, slug="billing-api", name="Billing API")
-    route = create_route(team, service=api)
-
-    ServiceDependency.create(
-        service=frontend,
-        depends_on_service=api,
-        dependency_type="informational",
-        criticality="important",
-        enabled=True,
+    database = create_service(
+        team,
+        slug=unique("postgresql-prod"),
+        name="PostgreSQL Prod",
+        criticality="critical",
+        tier="tier_1",
+    )
+    billing = create_service(
+        team,
+        slug=unique("billing-api"),
+        name="Billing API",
+        criticality="critical",
+        tier="tier_1",
     )
 
-    create_service_alert(
-        team=team,
-        route=route,
-        service=api,
-        fingerprint="billing-api-critical-informational-impact",
-        status="firing",
-        severity="critical",
-        alertname="BillingApiDown",
-        summary="Billing API is down",
-    )
-
-    response = client.get(
-        f"/api/services/impact?service_id={frontend.id}&days=30",
-        headers=admin_headers,
-    )
-
-    assert response.status_code == 200
-
-    rows = response.get_json()
-    assert len(rows) == 1
-
-    row = rows[0]
-    assert row["service_id"] == frontend.id
-    assert row["has_dependency_impact"] is False
-    assert row["dependency_impact_status"] == "operational"
-    assert row["effective_status"] == "operational"
-    assert row["upstream_issues_count"] == 1
-
-    issue = row["upstream_issues"][0]
-    assert issue["service_id"] == api.id
-    assert issue["status"] == "major_outage"
-    assert issue["impact_status"] == "operational"
-    assert issue["contributes_to_impact"] is False
-
-
-def test_service_impact_reports_transitive_dependency_impact(client, admin_headers):
-    group = create_group()
-    team = create_team(group)
-
-    frontend = create_service(team, slug="frontend-web", name="Frontend Web")
-    api = create_service(team, slug="billing-api", name="Billing API")
-    postgres = create_service(team, slug="postgresql-prod", name="PostgreSQL Prod")
-
-    postgres_route = create_route(team, service=postgres)
-
-    ServiceDependency.create(
-        service=frontend,
-        depends_on_service=api,
+    create_service_dependency(
+        service=billing,
+        depends_on_service=database,
         dependency_type="hard",
         criticality="required",
-        enabled=True,
     )
 
-    ServiceDependency.create(
-        service=api,
-        depends_on_service=postgres,
-        dependency_type="hard",
-        criticality="required",
-        enabled=True,
-    )
-
-    create_service_alert(
+    create_impact_alert_group(
         team=team,
-        route=postgres_route,
-        service=postgres,
-        fingerprint="postgresql-prod-critical-transitive-impact",
+        service=database,
         status="firing",
         severity="critical",
         alertname="PostgreSQLDown",
@@ -799,341 +899,232 @@ def test_service_impact_reports_transitive_dependency_impact(client, admin_heade
     )
 
     response = client.get(
-        f"/api/services/impact?service_id={frontend.id}&days=30",
+        f"/api/services/impact?team_id={team.id}&include_operational=true",
         headers=admin_headers,
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 200, response.get_json()
 
-    rows = response.get_json()
-    assert len(rows) == 1
+    payload = response.get_json()
+    billing_item = find_impact_item(payload, billing)
+    database_item = find_impact_item(payload, database)
 
-    row = rows[0]
-    assert row["service_id"] == frontend.id
-    assert row["has_dependency_impact"] is True
-    assert row["dependency_impact_status"] == "major_outage"
-    assert row["effective_status"] == "major_outage"
-    assert row["upstream_issues_count"] >= 1
+    assert payload["version"] == 2
 
-    issue = row["upstream_issues"][0]
-    assert issue["service_id"] == api.id
-    assert issue["service_name"] == api.name
-    assert issue["service_slug"] == api.slug
-    assert issue["status"] == "major_outage"
-    assert issue["impact_status"] == "major_outage"
-    assert issue["contributes_to_impact"] is True
+    assert database_item["effective_status"] == "major_outage"
+    assert database_item["primary_reason"] == "alert_group"
+    assert database_item["open_alert_groups"] == 1
+    assert database_item["critical_open_alert_groups"] == 1
 
+    assert billing_item["effective_status"] == "major_outage"
+    assert billing_item["dependency_impact_status"] == "major_outage"
+    assert billing_item["primary_reason"] == "upstream_dependency"
+    assert billing_item["upstream_issues_count"] == 1
 
-def test_service_impact_ignores_resolved_alerts(client, admin_headers):
-    group = create_group()
-    team = create_team(group)
-    service = create_service(team, slug="rabbitmq-cloud", name="RabbitMQ Cloud")
-    route = create_route(team, service=service)
+    assert billing_item["root_causes"]
+    assert billing_item["root_causes"][0]["service_id"] == database.id
+    assert billing_item["root_causes"][0]["reason"] == "alert_group"
+    assert billing_item["root_causes"][0]["effective_status"] == "major_outage"
 
-    create_service_alert(
-        team=team,
-        route=route,
-        service=service,
-        fingerprint="rabbitmq-cloud-resolved-impact",
-        status="resolved",
-        severity="critical",
-        alertname="RabbitMQDown",
-        summary="RabbitMQ was down",
-    )
+    assert billing_item["explanation"]["primary_reason"] == "upstream_dependency"
+    assert billing_item["explanation"]["primary_source_service_id"] == database.id
+    assert billing_item["explanation"]["paths"]
 
-    response = client.get(
-        f"/api/services/impact?service_id={service.id}&days=30",
-        headers=admin_headers,
-    )
-
-    assert response.status_code == 200
-
-    rows = response.get_json()
-    assert len(rows) == 1
-
-    row = rows[0]
-    assert row["service_id"] == service.id
-    assert row["has_alert_impact"] is False
-    assert row["alert_impact_status"] == "operational"
-    assert row["effective_status"] == "operational"
-    assert row["open_alerts"] == 0
-    assert row["critical_open_alerts"] == 0
+    first_path = billing_item["explanation"]["paths"][0]
+    assert impact_path_slugs(first_path) == [billing.slug, database.slug]
 
 
-def test_service_impact_ignores_silenced_alerts(client, admin_headers):
-    group = create_group()
-    team = create_team(group)
-    service = create_service(team, slug="rabbitmq-cloud", name="RabbitMQ Cloud")
-    route = create_route(team, service=service)
-
-    create_service_alert(
-        team=team,
-        route=route,
-        service=service,
-        fingerprint="rabbitmq-cloud-silenced-impact",
-        status="silenced",
-        severity="critical",
-        alertname="RabbitMQDown",
-        summary="RabbitMQ is silenced",
-    )
-
-    response = client.get(
-        f"/api/services/impact?service_id={service.id}&days=30",
-        headers=admin_headers,
-    )
-
-    assert response.status_code == 200
-
-    rows = response.get_json()
-    assert len(rows) == 1
-
-    row = rows[0]
-    assert row["service_id"] == service.id
-    assert row["has_alert_impact"] is False
-    assert row["alert_impact_status"] == "operational"
-    assert row["effective_status"] == "operational"
-    assert row["open_alerts"] == 0
-    assert row["critical_open_alerts"] == 0
-
-
-def test_service_impact_ignores_disabled_dependency(client, admin_headers):
+def test_service_impact_v2_builds_transitive_root_cause_path(
+    client,
+    admin_headers,
+):
     group = create_group()
     team = create_team(group)
 
-    frontend = create_service(team, slug="frontend-web", name="Frontend Web")
-    api = create_service(team, slug="billing-api", name="Billing API")
-    route = create_route(team, service=api)
-
-    ServiceDependency.create(
-        service=frontend,
-        depends_on_service=api,
-        dependency_type="hard",
-        criticality="required",
-        enabled=False,
-    )
-
-    create_service_alert(
-        team=team,
-        route=route,
-        service=api,
-        fingerprint="billing-api-critical-disabled-dependency",
-        status="firing",
-        severity="critical",
-        alertname="BillingApiDown",
-        summary="Billing API is down",
-    )
-
-    response = client.get(
-        f"/api/services/impact?service_id={frontend.id}&days=30",
-        headers=admin_headers,
-    )
-
-    assert response.status_code == 200
-
-    rows = response.get_json()
-    assert len(rows) == 1
-
-    row = rows[0]
-    assert row["service_id"] == frontend.id
-    assert row["has_dependency_impact"] is False
-    assert row["dependency_impact_status"] == "operational"
-    assert row["effective_status"] == "operational"
-    assert row["upstream_issues_count"] == 0
-    assert row["upstream_issues"] == []
-
-
-def test_service_impact_ignores_disabled_upstream_service(client, admin_headers):
-    group = create_group()
-    team = create_team(group)
-
-    frontend = create_service(team, slug="frontend-web", name="Frontend Web")
-    api = create_service(
+    database = create_service(
         team,
-        slug="billing-api",
+        slug=unique("postgresql-prod"),
+        name="PostgreSQL Prod",
+        criticality="critical",
+        tier="tier_1",
+    )
+    billing = create_service(
+        team,
+        slug=unique("billing-api"),
         name="Billing API",
-        enabled=False,
+        criticality="critical",
+        tier="tier_1",
     )
-    route = create_route(team, service=api)
+    frontend = create_service(
+        team,
+        slug=unique("frontend-web"),
+        name="Frontend Web",
+        criticality="high",
+        tier="tier_1",
+    )
 
-    ServiceDependency.create(
-        service=frontend,
-        depends_on_service=api,
+    create_service_dependency(
+        service=billing,
+        depends_on_service=database,
         dependency_type="hard",
         criticality="required",
-        enabled=True,
     )
-
-    create_service_alert(
-        team=team,
-        route=route,
-        service=api,
-        fingerprint="billing-api-critical-disabled-upstream",
-        status="firing",
-        severity="critical",
-        alertname="BillingApiDown",
-        summary="Billing API is down",
-    )
-
-    response = client.get(
-        f"/api/services/impact?service_id={frontend.id}&days=30",
-        headers=admin_headers,
-    )
-
-    assert response.status_code == 200
-
-    rows = response.get_json()
-    assert len(rows) == 1
-
-    row = rows[0]
-    assert row["service_id"] == frontend.id
-    assert row["has_dependency_impact"] is False
-    assert row["dependency_impact_status"] == "operational"
-    assert row["effective_status"] == "operational"
-    assert row["upstream_issues_count"] == 0
-    assert row["upstream_issues"] == []
-
-
-def test_service_impact_optional_dependency_downgrades_major_to_degraded(
-    client,
-    admin_headers,
-):
-    group = create_group()
-    team = create_team(group)
-
-    frontend = create_service(team, slug="frontend-web", name="Frontend Web")
-    search = create_service(team, slug="search-api", name="Search API")
-    route = create_route(team, service=search)
-
-    ServiceDependency.create(
+    create_service_dependency(
         service=frontend,
-        depends_on_service=search,
-        dependency_type="hard",
-        criticality="optional",
-        enabled=True,
-    )
-
-    create_service_alert(
-        team=team,
-        route=route,
-        service=search,
-        fingerprint="search-api-critical-optional-impact",
-        status="firing",
-        severity="critical",
-        alertname="SearchApiDown",
-        summary="Search API is down",
-    )
-
-    response = client.get(
-        f"/api/services/impact?service_id={frontend.id}&days=30",
-        headers=admin_headers,
-    )
-
-    assert response.status_code == 200
-
-    rows = response.get_json()
-    assert len(rows) == 1
-
-    row = rows[0]
-    assert row["service_id"] == frontend.id
-    assert row["has_dependency_impact"] is True
-    assert row["dependency_impact_status"] == "degraded"
-    assert row["effective_status"] == "degraded"
-    assert row["upstream_issues_count"] == 1
-
-    issue = row["upstream_issues"][0]
-    assert issue["service_id"] == search.id
-    assert issue["status"] == "major_outage"
-    assert issue["impact_status"] == "degraded"
-    assert issue["contributes_to_impact"] is True
-
-
-def test_service_impact_soft_dependency_reduces_major_outage(
-    client,
-    admin_headers,
-):
-    group = create_group()
-    team = create_team(group)
-
-    frontend = create_service(team, slug="frontend-web", name="Frontend Web")
-    recommendations = create_service(
-        team,
-        slug="recommendations-api",
-        name="Recommendations API",
-    )
-    route = create_route(team, service=recommendations)
-
-    ServiceDependency.create(
-        service=frontend,
-        depends_on_service=recommendations,
+        depends_on_service=billing,
         dependency_type="soft",
         criticality="important",
-        enabled=True,
     )
 
-    create_service_alert(
+    create_impact_alert_group(
         team=team,
-        route=route,
-        service=recommendations,
-        fingerprint="recommendations-critical-soft-impact",
+        service=database,
         status="firing",
         severity="critical",
-        alertname="RecommendationsDown",
-        summary="Recommendations API is down",
+        alertname="PostgreSQLDown",
+        summary="PostgreSQL is down",
     )
 
     response = client.get(
-        f"/api/services/impact?service_id={frontend.id}&days=30",
+        f"/api/services/impact?team_id={team.id}&include_operational=true&max_depth=5",
         headers=admin_headers,
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 200, response.get_json()
 
-    rows = response.get_json()
-    assert len(rows) == 1
+    payload = response.get_json()
+    frontend_item = find_impact_item(payload, frontend)
 
-    row = rows[0]
-    assert row["service_id"] == frontend.id
-    assert row["has_dependency_impact"] is True
-    assert row["dependency_impact_status"] == "partial_outage"
-    assert row["effective_status"] == "partial_outage"
+    assert frontend_item["primary_reason"] == "upstream_dependency"
+    assert frontend_item["effective_status"] == "partial_outage"
+    assert frontend_item["dependency_impact_status"] == "partial_outage"
+    assert frontend_item["upstream_issues_count"] == 1
 
-    issue = row["upstream_issues"][0]
-    assert issue["status"] == "major_outage"
-    assert issue["impact_status"] == "partial_outage"
-    assert issue["contributes_to_impact"] is True
+    assert frontend_item["root_causes"]
+    assert frontend_item["root_causes"][0]["service_id"] == database.id
+    assert frontend_item["root_causes"][0]["effective_status"] == "major_outage"
 
-def test_service_impact_dependency_cycle_does_not_loop_forever(
+    assert frontend_item["explanation"]["paths"]
+    first_path = frontend_item["explanation"]["paths"][0]
+
+    assert impact_path_slugs(first_path) == [
+        frontend.slug,
+        billing.slug,
+        database.slug,
+    ]
+
+    assert first_path[1]["dependency_type"] == "soft"
+    assert first_path[1]["dependency_criticality"] == "important"
+    assert first_path[2]["dependency_type"] == "hard"
+    assert first_path[2]["dependency_criticality"] == "required"
+
+
+def test_service_impact_v2_calculates_blast_radius(
     client,
     admin_headers,
 ):
     group = create_group()
     team = create_team(group)
 
-    service_a = create_service(team, slug="service-a", name="Service A")
-    service_b = create_service(team, slug="service-b", name="Service B")
-    route_b = create_route(team, service=service_b)
+    database = create_service(
+        team,
+        slug=unique("postgresql-prod"),
+        name="PostgreSQL Prod",
+        criticality="critical",
+        tier="tier_1",
+    )
+    billing = create_service(
+        team,
+        slug=unique("billing-api"),
+        name="Billing API",
+        criticality="critical",
+        tier="tier_1",
+    )
+    frontend = create_service(
+        team,
+        slug=unique("frontend-web"),
+        name="Frontend Web",
+        criticality="high",
+        tier="tier_1",
+    )
 
-    ServiceDependency.create(
+    create_service_dependency(
+        service=billing,
+        depends_on_service=database,
+        dependency_type="hard",
+        criticality="required",
+    )
+    create_service_dependency(
+        service=frontend,
+        depends_on_service=billing,
+        dependency_type="soft",
+        criticality="important",
+    )
+
+    response = client.get(
+        f"/api/services/impact?team_id={team.id}&include_operational=true&max_depth=5",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200, response.get_json()
+
+    payload = response.get_json()
+    database_item = find_impact_item(payload, database)
+
+    blast_radius = database_item["blast_radius"]
+
+    assert blast_radius["direct_downstream"] == 1
+    assert blast_radius["transitive_downstream"] == 2
+    assert blast_radius["critical_downstream"] == 2
+    assert blast_radius["tier_1_downstream"] == 2
+    assert blast_radius["affected_downstream"] == 2
+    assert blast_radius["cycle_detected"] is False
+    assert blast_radius["depth_limited"] is False
+
+    paths = [
+        impact_path_slugs(path)
+        for path in blast_radius["paths"]
+    ]
+
+    assert [database.slug, billing.slug] in paths
+    assert [database.slug, billing.slug, frontend.slug] in paths
+
+
+
+def test_service_impact_v2_detects_dependency_cycles(
+    client,
+    admin_headers,
+):
+    group = create_group()
+    team = create_team(group)
+
+    service_a = create_service(
+        team,
+        slug=unique("service-a"),
+        name="Service A",
+    )
+    service_b = create_service(
+        team,
+        slug=unique("service-b"),
+        name="Service B",
+    )
+
+    create_service_dependency(
         service=service_a,
         depends_on_service=service_b,
         dependency_type="hard",
         criticality="required",
-        enabled=True,
     )
-
-    ServiceDependency.create(
+    create_service_dependency(
         service=service_b,
         depends_on_service=service_a,
         dependency_type="hard",
         criticality="required",
-        enabled=True,
     )
 
-    create_service_alert(
+    create_impact_alert_group(
         team=team,
-        route=route_b,
         service=service_b,
-        fingerprint="service-b-cycle-critical-impact",
         status="firing",
         severity="critical",
         alertname="ServiceBDown",
@@ -1141,176 +1132,417 @@ def test_service_impact_dependency_cycle_does_not_loop_forever(
     )
 
     response = client.get(
-        f"/api/services/impact?service_id={service_a.id}&days=30",
+        f"/api/services/impact?team_id={team.id}&include_operational=true&max_depth=5",
         headers=admin_headers,
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 200, response.get_json()
 
-    rows = response.get_json()
-    assert len(rows) == 1
+    payload = response.get_json()
+    service_a_item = find_impact_item(payload, service_a)
+    service_b_item = find_impact_item(payload, service_b)
 
-    row = rows[0]
-    assert row["service_id"] == service_a.id
-    assert row["has_dependency_impact"] is True
-    assert row["dependency_impact_status"] == "major_outage"
-    assert row["effective_status"] == "major_outage"
+    assert service_a_item["cycle_detected"] is True
+    assert service_b_item["cycle_detected"] is True
+    assert payload["summary"]["cycle_detected"] >= 1
+
+    assert service_a_item["explanation"]["paths"]
 
 
-def test_service_impact_does_not_propagate_beyond_max_depth(
+def test_service_impact_v2_marks_depth_limited_paths(
     client,
     admin_headers,
 ):
     group = create_group()
     team = create_team(group)
 
-    frontend = create_service(team, slug="frontend-web", name="Frontend Web")
-    api = create_service(team, slug="billing-api", name="Billing API")
-    worker = create_service(team, slug="billing-worker", name="Billing Worker")
-    database = create_service(team, slug="billing-db", name="Billing DB")
-    storage = create_service(team, slug="storage-prod", name="Storage Prod")
-
-    storage_route = create_route(team, service=storage)
-
-    ServiceDependency.create(
-        service=frontend,
-        depends_on_service=api,
-        dependency_type="hard",
-        criticality="required",
-        enabled=True,
+    database = create_service(
+        team,
+        slug=unique("postgresql-prod"),
+        name="PostgreSQL Prod",
     )
-    ServiceDependency.create(
-        service=api,
-        depends_on_service=worker,
-        dependency_type="hard",
-        criticality="required",
-        enabled=True,
+    billing = create_service(
+        team,
+        slug=unique("billing-api"),
+        name="Billing API",
     )
-    ServiceDependency.create(
-        service=worker,
+    frontend = create_service(
+        team,
+        slug=unique("frontend-web"),
+        name="Frontend Web",
+    )
+
+    create_service_dependency(
+        service=billing,
         depends_on_service=database,
         dependency_type="hard",
         criticality="required",
-        enabled=True,
     )
-    ServiceDependency.create(
-        service=database,
-        depends_on_service=storage,
-        dependency_type="hard",
-        criticality="required",
-        enabled=True,
-    )
-
-    create_service_alert(
-        team=team,
-        route=storage_route,
-        service=storage,
-        fingerprint="storage-prod-critical-beyond-depth",
-        status="firing",
-        severity="critical",
-        alertname="StorageDown",
-        summary="Storage is down",
-    )
-
-    response = client.get(
-        f"/api/services/impact?service_id={frontend.id}&days=30",
-        headers=admin_headers,
-    )
-
-    assert response.status_code == 200
-
-    rows = response.get_json()
-    assert len(rows) == 1
-
-    row = rows[0]
-    assert row["service_id"] == frontend.id
-    assert row["has_dependency_impact"] is False
-    assert row["dependency_impact_status"] == "operational"
-    assert row["effective_status"] == "operational"
-
-
-def test_service_impact_reports_multiple_dependency_paths_for_one_upstream(
-    client,
-    admin_headers,
-):
-    group = create_group()
-    team = create_team(group)
-
-    frontend = create_service(team, slug="frontend-web", name="Frontend Web")
-    api = create_service(team, slug="billing-api", name="Billing API")
-    postgres = create_service(team, slug="postgresql-prod", name="PostgreSQL Prod")
-    redis = create_service(team, slug="redis-prod", name="Redis Prod")
-
-    postgres_route = create_route(team, service=postgres)
-    redis_route = create_route(team, service=redis)
-
-    ServiceDependency.create(
+    create_service_dependency(
         service=frontend,
-        depends_on_service=api,
+        depends_on_service=billing,
         dependency_type="hard",
         criticality="required",
-        enabled=True,
-    )
-    ServiceDependency.create(
-        service=api,
-        depends_on_service=postgres,
-        dependency_type="hard",
-        criticality="required",
-        enabled=True,
-    )
-    ServiceDependency.create(
-        service=api,
-        depends_on_service=redis,
-        dependency_type="hard",
-        criticality="required",
-        enabled=True,
     )
 
-    create_service_alert(
+    create_impact_alert_group(
         team=team,
-        route=postgres_route,
-        service=postgres,
-        fingerprint="postgres-critical-multi-path",
+        service=database,
         status="firing",
         severity="critical",
         alertname="PostgreSQLDown",
         summary="PostgreSQL is down",
     )
-    create_service_alert(
-        team=team,
-        route=redis_route,
-        service=redis,
-        fingerprint="redis-critical-multi-path",
-        status="firing",
-        severity="critical",
-        alertname="RedisDown",
-        summary="Redis is down",
-    )
 
     response = client.get(
-        f"/api/services/impact?service_id={frontend.id}&days=30",
+        f"/api/services/impact?team_id={team.id}&include_operational=true&max_depth=1",
         headers=admin_headers,
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 200, response.get_json()
 
-    row = response.get_json()[0]
-    assert row["service_id"] == frontend.id
-    assert row["has_dependency_impact"] is True
-    assert row["effective_status"] == "major_outage"
+    payload = response.get_json()
+    frontend_item = find_impact_item(payload, frontend)
 
-    root_ids = {
-        issue["root_cause_service_id"]
-        for issue in row["upstream_issues"]
-    }
+    assert frontend_item["depth_limited"] is True
+    assert payload["summary"]["depth_limited"] >= 1
 
-    assert root_ids == {postgres.id, redis.id}
 
-    paths = {
-        tuple(node["service_id"] for node in issue["path"])
-        for issue in row["upstream_issues"]
-    }
+def test_service_impact_v2_optional_dependency_downgrades_major_to_degraded(
+    client,
+    admin_headers,
+):
+    group = create_group()
+    team = create_team(group)
 
-    assert (api.id, postgres.id) in paths
-    assert (api.id, redis.id) in paths
+    external_api = create_service(
+        team,
+        slug=unique("external-api"),
+        name="External API",
+    )
+    billing = create_service(
+        team,
+        slug=unique("billing-api"),
+        name="Billing API",
+    )
 
+    create_service_dependency(
+        service=billing,
+        depends_on_service=external_api,
+        dependency_type="external",
+        criticality="optional",
+    )
+
+    create_impact_alert_group(
+        team=team,
+        service=external_api,
+        status="firing",
+        severity="critical",
+        alertname="ExternalApiDown",
+        summary="External API is down",
+    )
+
+    response = client.get(
+        f"/api/services/impact?team_id={team.id}&include_operational=true",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200, response.get_json()
+
+    payload = response.get_json()
+    billing_item = find_impact_item(payload, billing)
+
+    assert billing_item["primary_reason"] == "upstream_dependency"
+    assert billing_item["dependency_impact_status"] == "degraded"
+    assert billing_item["effective_status"] == "degraded"
+    assert billing_item["root_causes"][0]["effective_status"] == "major_outage"
+
+
+def test_service_impact_v2_soft_dependency_reduces_major_outage(
+    client,
+    admin_headers,
+):
+    group = create_group()
+    team = create_team(group)
+
+    database = create_service(
+        team,
+        slug=unique("postgresql-prod"),
+        name="PostgreSQL Prod",
+    )
+    billing = create_service(
+        team,
+        slug=unique("billing-api"),
+        name="Billing API",
+    )
+
+    create_service_dependency(
+        service=billing,
+        depends_on_service=database,
+        dependency_type="soft",
+        criticality="important",
+    )
+
+    create_impact_alert_group(
+        team=team,
+        service=database,
+        status="firing",
+        severity="critical",
+        alertname="PostgreSQLDown",
+        summary="PostgreSQL is down",
+    )
+
+    response = client.get(
+        f"/api/services/impact?team_id={team.id}&include_operational=true",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200, response.get_json()
+
+    payload = response.get_json()
+    billing_item = find_impact_item(payload, billing)
+
+    assert billing_item["primary_reason"] == "upstream_dependency"
+    assert billing_item["dependency_impact_status"] == "partial_outage"
+    assert billing_item["effective_status"] == "partial_outage"
+    assert billing_item["root_causes"][0]["effective_status"] == "major_outage"
+
+
+def test_service_impact_v2_ignores_disabled_upstream_service(
+    client,
+    admin_headers,
+):
+    group = create_group()
+    team = create_team(group)
+
+    database = create_service(
+        team,
+        slug=unique("postgresql-prod"),
+        name="PostgreSQL Prod",
+    )
+    database.enabled = False
+    database.save()
+
+    billing = create_service(
+        team,
+        slug=unique("billing-api"),
+        name="Billing API",
+    )
+
+    create_service_dependency(
+        service=billing,
+        depends_on_service=database,
+        dependency_type="hard",
+        criticality="required",
+    )
+
+    response = client.get(
+        f"/api/services/impact?team_id={team.id}&include_operational=true",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200, response.get_json()
+
+    payload = response.get_json()
+    billing_item = find_impact_item(payload, billing)
+
+    assert billing_item["effective_status"] == "operational"
+    assert billing_item["dependency_impact_status"] == "operational"
+    assert billing_item["primary_reason"] == "none"
+    assert billing_item["upstream_issues_count"] == 0
+
+
+def test_service_impact_v2_ignores_disabled_dependency(
+    client,
+    admin_headers,
+):
+    group = create_group()
+    team = create_team(group)
+
+    database = create_service(
+        team,
+        slug=unique("postgresql-prod"),
+        name="PostgreSQL Prod",
+    )
+    billing = create_service(
+        team,
+        slug=unique("billing-api"),
+        name="Billing API",
+    )
+
+    create_service_dependency(
+        service=billing,
+        depends_on_service=database,
+        dependency_type="hard",
+        criticality="required",
+        enabled=False,
+    )
+
+    create_impact_alert_group(
+        team=team,
+        service=database,
+        status="firing",
+        severity="critical",
+        alertname="PostgreSQLDown",
+        summary="PostgreSQL is down",
+    )
+
+    response = client.get(
+        f"/api/services/impact?team_id={team.id}&include_operational=true",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200, response.get_json()
+
+    payload = response.get_json()
+    billing_item = find_impact_item(payload, billing)
+    database_item = find_impact_item(payload, database)
+
+    assert database_item["effective_status"] == "major_outage"
+
+    assert billing_item["effective_status"] == "operational"
+    assert billing_item["dependency_impact_status"] == "operational"
+    assert billing_item["primary_reason"] == "none"
+    assert billing_item["upstream_issues_count"] == 0
+    assert billing_item["root_causes"] == []
+
+
+def test_service_impact_v2_ignores_silenced_alert_groups(
+    client,
+    admin_headers,
+):
+    group = create_group()
+    team = create_team(group)
+
+    service = create_service(
+        team,
+        slug=unique("billing-api"),
+        name="Billing API",
+    )
+
+    create_impact_alert_group(
+        team=team,
+        service=service,
+        status="silenced",
+        severity="critical",
+        alertname="BillingApiSilenced",
+        summary="Silenced alert should not affect impact",
+    )
+
+    response = client.get(
+        f"/api/services/impact?team_id={team.id}&include_operational=true",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200, response.get_json()
+
+    payload = response.get_json()
+    item = find_impact_item(payload, service)
+
+    assert item["effective_status"] == "operational"
+    assert item["primary_reason"] == "none"
+    assert item["open_alert_groups"] == 0
+    assert item["critical_open_alert_groups"] == 0
+
+
+def test_service_impact_v2_ignores_resolved_alert_groups(
+    client,
+    admin_headers,
+):
+    group = create_group()
+    team = create_team(group)
+
+    service = create_service(
+        team,
+        slug=unique("billing-api"),
+        name="Billing API",
+    )
+
+    create_impact_alert_group(
+        team=team,
+        service=service,
+        status="resolved",
+        severity="critical",
+        alertname="BillingApiResolved",
+        summary="Resolved alert should not affect impact",
+    )
+
+    response = client.get(
+        f"/api/services/impact?team_id={team.id}&include_operational=true",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200, response.get_json()
+
+    payload = response.get_json()
+    item = find_impact_item(payload, service)
+
+    assert item["effective_status"] == "operational"
+    assert item["primary_reason"] == "none"
+    assert item["open_alert_groups"] == 0
+    assert item["critical_open_alert_groups"] == 0
+
+
+def test_service_details_includes_impact_v2_block(client, admin_headers):
+    group = create_group()
+    team = create_team(group)
+
+    database = create_service(
+        team,
+        slug=unique("postgresql-prod"),
+        name="PostgreSQL Prod",
+        criticality="critical",
+        tier="tier_1",
+    )
+    billing = create_service(
+        team,
+        slug=unique("billing-api"),
+        name="Billing API",
+        criticality="critical",
+        tier="tier_1",
+    )
+
+    create_service_dependency(
+        service=billing,
+        depends_on_service=database,
+        dependency_type="hard",
+        criticality="required",
+    )
+
+    create_impact_alert_group(
+        team=team,
+        service=database,
+        status="firing",
+        severity="critical",
+        alertname="PostgreSQLDown",
+        summary="PostgreSQL is down",
+    )
+
+    response = client.get(
+        f"/api/services/{billing.id}/details?days=30",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200, response.get_json()
+
+    data = response.get_json()
+    impact = data["impact"]
+
+    assert impact["service_id"] == billing.id
+    assert impact["effective_status"] == "major_outage"
+    assert impact["primary_reason"] == "upstream_dependency"
+    assert impact["upstream_issues_count"] == 1
+
+    assert impact["root_causes"]
+    assert impact["root_causes"][0]["service_id"] == database.id
+    assert impact["root_causes"][0]["effective_status"] == "major_outage"
+
+    assert impact["explanation"]["primary_reason"] == "upstream_dependency"
+    assert impact["explanation"]["primary_source_service_id"] == database.id
+    assert impact["explanation"]["paths"]
+
+    assert impact["blast_radius"]["direct_downstream"] == 0
+    assert impact["blast_radius"]["transitive_downstream"] == 0
+
+    assert data["analytics"]["widgets"]["impact"]["effective_status"] == "major_outage"
+    assert data["analytics"]["widgets"]["impact"]["primary_reason"] == "upstream_dependency"

@@ -716,6 +716,10 @@ function loadEscalationRuleCards(policyId, callback) {
 function renderEscalationRuleCards() {
     const container = $("#escalation-rule-cards");
 
+    container.find("select.js-user-select").each(function () {
+        destroyTomSelectIfExists(this);
+    });
+
     container.empty();
 
     if (!escalationPolicyRulesCache.length) {
@@ -729,6 +733,11 @@ function renderEscalationRuleCards() {
 
     escalationPolicyRulesCache.forEach(function (rule, index) {
         container.append(renderEscalationRuleCard(rule, index + 1));
+    });
+
+    initUserTomSelects(container);
+
+    escalationPolicyRulesCache.forEach(function (rule) {
         updateEscalationRuleTargetTypeUi(rule.id);
     });
 }
@@ -962,18 +971,29 @@ function ruleUserTargetField(rule) {
         .attr("id", ruleFieldId(rule.id, "user-target-group"));
     const select = $("<select>")
         .attr("id", ruleFieldId(rule.id, "target-user"))
-        .addClass("input");
+        .addClass("input js-user-select")
+        .attr("data-placeholder", "Select user...");
 
-    escalationRuleTargetUsersCache.forEach(function (member) {
+    if (!escalationRuleTargetUsersCache.length) {
         select.append(
             $("<option>")
-                .val(String(member.user_id))
-                .text(member.display_name || member.username || ("User #" + member.user_id))
+                .val("")
+                .text("No active users")
         );
-    });
+    } else {
+        select.append(
+            $("<option>")
+                .val("")
+                .text("")
+        );
 
-    if (!select.children().length) {
-        select.append($("<option>").val("").text("No active users"));
+        escalationRuleTargetUsersCache.forEach(function (member) {
+            select.append(
+                $("<option>")
+                    .val(String(member.user_id))
+                    .text(getUserOptionText(member))
+            );
+        });
     }
 
     if (rule.target_type === "user") {
@@ -993,7 +1013,7 @@ function updateEscalationRuleTargetTypeUi(ruleId) {
     $("#" + ruleFieldId(ruleId, "rotation-target-group")).toggleClass("is-hidden", useUser);
     $("#" + ruleFieldId(ruleId, "user-target-group")).toggleClass("is-hidden", !useUser);
     $("#" + ruleFieldId(ruleId, "target-rotation")).prop("disabled", useUser);
-    $("#" + ruleFieldId(ruleId, "target-user")).prop("disabled", !useUser);
+    setEnhancedSelectDisabled("#" + ruleFieldId(ruleId, "target-user"), !useUser);
 }
 
 function formatRuleTargetSummary(rule) {

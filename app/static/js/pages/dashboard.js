@@ -418,7 +418,7 @@ function dashboardImpactIssuePath(issue) {
 }
 
 function dashboardBestImpactIssue(row) {
-    const issues = dashboardAsArray(row.upstream_issues);
+    const issues = dashboardImpactIssues(row);
 
     if (!issues.length) {
         return null;
@@ -522,11 +522,11 @@ function renderDashboardServiceImpactItem(row) {
 
     const subtitleParts = [
         teamName,
-        "open " + Number(row.open_alerts || 0),
+        "open " + Number(row.open_alert_groups || 0),
     ];
 
-    if (Number(row.critical_open_alerts || 0) > 0) {
-        subtitleParts.push("critical " + Number(row.critical_open_alerts || 0));
+    if (Number(row.critical_open_alert_groups || 0) > 0) {
+        subtitleParts.push("critical " + Number(row.critical_open_alert_groups || 0));
     }
 
     main.append(
@@ -546,7 +546,7 @@ function renderDashboardServiceImpactItem(row) {
                     + dashboardImpactIssuePath(issue)
                 )
         );
-    } else if (row.has_alert_impact) {
+    } else if (dashboardHasAlertImpact(row)) {
         main.append(
             $("<div>")
                 .addClass("dashboard-impact-root")
@@ -563,4 +563,141 @@ function renderDashboardServiceImpactItem(row) {
     );
 
     return item;
+}
+function dashboardHasAlertImpact(row) {
+    return !!(
+        row &&
+        row.alert_impact_status &&
+        row.alert_impact_status !== "operational"
+    );
+}
+
+
+function dashboardHasDependencyImpact(row) {
+    return !!(
+        row &&
+        row.dependency_impact_status &&
+        row.dependency_impact_status !== "operational"
+    );
+}
+
+
+function dashboardImpactIssues(row) {
+    const rootCauses = dashboardAsArray(row.root_causes);
+    const paths = row.explanation ? dashboardAsArray(row.explanation.paths) : [];
+
+    if (paths.length) {
+        return paths.map(function (path, index) {
+            const nodes = dashboardNormalizeImpactPath(path);
+            const rootCause = dashboardFindRootCauseForPath(rootCauses, nodes) ||
+                rootCauses[index] ||
+                rootCauses[0] ||
+                {};
+
+            return dashboardBuildImpactIssue(row, rootCause, nodes, index);
+        });
+    }
+
+    return rootCauses.map(function (rootCause, index) {
+        const path = dashboardNormalizeImpactPath(rootCause.path);
+
+        return dashboardBuildImpactIssue(
+            row,
+            rootCause,
+            path.length ? path : [dashboardRootCauseToPathNode(rootCause)],
+            index
+        );
+    });
+}
+
+
+function dashboardNormalizeImpactPath(path) {
+    return dashboardAsArray(path).map(function (node) {
+        node = node || {};
+
+        return {
+            service_id: node.service_id,
+            service_name: node.service_name,
+            service_slug: node.service_slug,
+            service_display: node.service_name || node.service_slug,
+            status: node.effective_status || node.status || "unknown",
+            dependency_type: node.dependency_type || null,
+            criticality: node.dependency_criticality || node.criticality || null,
+        };
+    });
+}
+
+
+function dashboardFindRootCauseForPath(rootCauses, nodes) {
+    if (!rootCauses.length || !nodes.length) {
+        return null;
+    }
+
+    const lastNode = nodes[nodes.length - 1];
+
+    return rootCauses.find(function (cause) {
+        return Number(cause.service_id) === Number(lastNode.service_id);
+    }) || null;
+}
+
+
+function dashboardRootCauseToPathNode(rootCause) {
+    rootCause = rootCause || {};
+
+    return {
+        service_id: rootCause.service_id,
+        service_name: rootCause.service_name,
+        service_slug: rootCause.service_slug,
+        service_display: rootCause.service_name || rootCause.service_slug,
+        status: rootCause.effective_status || rootCause.status || "unknown",
+        dependency_type: null,
+        criticality: null,
+    };
+}
+
+
+function dashboardBuildImpactIssue(row, rootCause, path, index) {
+    path = dashboardNormalizeImpactPath(path);
+    rootCause = rootCause || {};
+
+    const directNode = path.length ? path[0] : dashboardRootCauseToPathNode(rootCause);
+
+    return {
+        service_id: directNode.service_id || rootCause.service_id || row.service_id,
+        service_name: directNode.service_name || rootCause.service_name || row.service_name,
+        service_slug: directNode.service_slug || rootCause.service_slug || row.service_slug,
+        service_display: directNode.service_display ||
+            directNode.service_name ||
+            directNode.service_slug ||
+            rootCause.service_name ||
+            rootCause.service_slug,
+
+        status: rootCause.effective_status ||
+            rootCause.status ||
+            directNode.status ||
+            row.effective_status ||
+            "unknown",
+
+        impact_status: row.dependency_impact_status ||
+            row.effective_status ||
+            "unknown",
+
+        dependency_type: directNode.dependency_type || "dependency",
+        criticality: directNode.criticality || "important",
+
+        root_cause_service_id: rootCause.service_id || directNode.service_id || row.service_id,
+        root_cause_service_name: rootCause.service_name || directNode.service_name || row.service_name,
+        root_cause_service_slug: rootCause.service_slug || directNode.service_slug || row.service_slug,
+        root_cause_service_display: rootCause.service_name || rootCause.service_slug,
+
+        path: path,
+        depth: Math.max(path.length - 1, 0),
+
+        cycle_detected: !!row.cycle_detected,
+        depth_limited: !!row.depth_limited,
+        contributes_to_impact: row.primary_reason !== "none",
+
+        description: row.explanation ? row.explanation.message : null,
+        _index: index,
+    };
 }

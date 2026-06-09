@@ -86,6 +86,41 @@ SERVICE_DEPENDENCY_CRITICALITIES = [
     "optional",
 ]
 
+SERVICE_IMPACT_REASONS = [
+    "none",
+    "own_status",
+    "alert_group",
+    "upstream_dependency",
+    "maintenance",
+    "disabled",
+    "unknown",
+]
+
+SERVICE_IMPACT_SORTS = [
+    "service",
+    "status",
+    "effective_status",
+    "blast_radius",
+    "criticality",
+    "tier",
+]
+
+SERVICE_ANALYTICS_SORTS = [
+    "service",
+    "open_alert_groups",
+    "critical_open_alert_groups",
+    "raw_alerts",
+    "dedup_ratio",
+    "mtta",
+    "mttr",
+    "blast_radius",
+]
+
+
+# ---------------------------------------------------------------------------
+# Shared OpenAPI helpers
+# ---------------------------------------------------------------------------
+
 
 def path_param(name, description):
     """Build an integer path parameter."""
@@ -125,12 +160,14 @@ def json_body(description, schema, required=True):
 def response(description, schema=None):
     """Build a JSON response."""
     item = {"description": description}
+
     if schema:
         item["content"] = {
             "application/json": {
                 "schema": schema,
             },
         }
+
     return item
 
 
@@ -139,9 +176,9 @@ ERROR_SCHEMA = {
     "properties": {
         "error": {"type": "string", "example": "validation_error"},
         "message": {"type": "string", "nullable": True},
+        "details": {"type": "array", "items": {"type": "object"}},
     },
 }
-
 
 DELETE_RESPONSE_SCHEMA = {
     "type": "object",
@@ -151,6 +188,10 @@ DELETE_RESPONSE_SCHEMA = {
     },
 }
 
+
+# ---------------------------------------------------------------------------
+# Core service schemas
+# ---------------------------------------------------------------------------
 
 SERVICE_SCHEMA = {
     "type": "object",
@@ -239,6 +280,8 @@ SERVICE_SCHEMA = {
             "minimum": 1,
             "description": "Default escalation policy for this service. Must belong to service team.",
         },
+        "default_rotation_name": {"type": "string", "nullable": True, "readOnly": True},
+        "default_escalation_policy_name": {"type": "string", "nullable": True, "readOnly": True},
         "labels": {
             "type": "object",
             "additionalProperties": True,
@@ -278,9 +321,13 @@ SERVICE_SCHEMA = {
             "minimum": 0,
             "default": 100,
         },
+        "permissions": {
+            "type": "object",
+            "additionalProperties": True,
+            "readOnly": True,
+        },
     },
 }
-
 
 SERVICE_MATCH_RULE_SCHEMA = {
     "type": "object",
@@ -333,7 +380,6 @@ SERVICE_MATCH_RULE_SCHEMA = {
     },
 }
 
-
 SERVICE_LINK_SCHEMA = {
     "type": "object",
     "required": ["label", "url"],
@@ -341,6 +387,11 @@ SERVICE_LINK_SCHEMA = {
     "properties": {
         "id": {"type": "integer", "readOnly": True},
         "service_id": {"type": "integer", "readOnly": True},
+        "service_name": {"type": "string", "nullable": True, "readOnly": True},
+        "service_slug": {"type": "string", "nullable": True, "readOnly": True},
+        "team_id": {"type": "integer", "nullable": True, "readOnly": True},
+        "team_name": {"type": "string", "nullable": True, "readOnly": True},
+        "team_slug": {"type": "string", "nullable": True, "readOnly": True},
         "link_type": {
             "type": "string",
             "enum": SERVICE_LINK_TYPES,
@@ -369,7 +420,6 @@ SERVICE_LINK_SCHEMA = {
     },
 }
 
-
 SERVICE_RUNBOOK_SCHEMA = {
     "type": "object",
     "required": ["title", "url"],
@@ -377,6 +427,11 @@ SERVICE_RUNBOOK_SCHEMA = {
     "properties": {
         "id": {"type": "integer", "readOnly": True},
         "service_id": {"type": "integer", "readOnly": True},
+        "service_name": {"type": "string", "nullable": True, "readOnly": True},
+        "service_slug": {"type": "string", "nullable": True, "readOnly": True},
+        "team_id": {"type": "integer", "nullable": True, "readOnly": True},
+        "team_name": {"type": "string", "nullable": True, "readOnly": True},
+        "team_slug": {"type": "string", "nullable": True, "readOnly": True},
         "title": {
             "type": "string",
             "minLength": NAME_MIN_LENGTH,
@@ -412,7 +467,6 @@ SERVICE_RUNBOOK_SCHEMA = {
     },
 }
 
-
 SERVICE_DEPENDENCY_SCHEMA = {
     "type": "object",
     "required": ["depends_on_service_id"],
@@ -420,21 +474,22 @@ SERVICE_DEPENDENCY_SCHEMA = {
     "properties": {
         "id": {"type": "integer", "readOnly": True},
         "service_id": {"type": "integer", "readOnly": True},
+        "service_name": {"type": "string", "nullable": True, "readOnly": True},
+        "service_slug": {"type": "string", "nullable": True, "readOnly": True},
+        "team_id": {"type": "integer", "nullable": True, "readOnly": True},
+        "team_name": {"type": "string", "nullable": True, "readOnly": True},
+        "team_slug": {"type": "string", "nullable": True, "readOnly": True},
         "depends_on_service_id": {
             "type": "integer",
             "minimum": 1,
             "description": "Upstream service id.",
         },
-        "depends_on_service_name": {
-            "type": "string",
-            "nullable": True,
-            "readOnly": True,
-        },
-        "depends_on_service_slug": {
-            "type": "string",
-            "nullable": True,
-            "readOnly": True,
-        },
+        "depends_on_service_name": {"type": "string", "nullable": True, "readOnly": True},
+        "depends_on_service_slug": {"type": "string", "nullable": True, "readOnly": True},
+        "depends_on_service_status": {"type": "string", "nullable": True, "enum": SERVICE_STATUSES},
+        "depends_on_team_id": {"type": "integer", "nullable": True, "readOnly": True},
+        "depends_on_team_name": {"type": "string", "nullable": True, "readOnly": True},
+        "depends_on_team_slug": {"type": "string", "nullable": True, "readOnly": True},
         "dependency_type": {
             "type": "string",
             "enum": SERVICE_DEPENDENCY_TYPES,
@@ -455,159 +510,463 @@ SERVICE_DEPENDENCY_SCHEMA = {
 }
 
 
-SERVICE_ANALYTICS_SCHEMA = {
+# ---------------------------------------------------------------------------
+# Impact v2 schemas
+# ---------------------------------------------------------------------------
+
+SERVICE_IMPACT_PATH_NODE_SCHEMA = {
     "type": "object",
     "properties": {
-        "service_id": {"type": "integer"},
-        "service_name": {"type": "string"},
+        "service_id": {"type": "integer", "minimum": 1},
+        "service_slug": {"type": "string", "nullable": True},
+        "service_name": {"type": "string", "nullable": True},
+        "status": {"type": "string", "enum": SERVICE_STATUSES},
+        "effective_status": {"type": "string", "enum": SERVICE_STATUSES},
+        "dependency_type": {
+            "type": "string",
+            "nullable": True,
+            "enum": SERVICE_DEPENDENCY_TYPES,
+        },
+        "dependency_criticality": {
+            "type": "string",
+            "nullable": True,
+            "enum": SERVICE_DEPENDENCY_CRITICALITIES,
+        },
+    },
+}
+
+SERVICE_IMPACT_ROOT_CAUSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "service_id": {"type": "integer", "minimum": 1},
+        "service_slug": {"type": "string", "nullable": True},
+        "service_name": {"type": "string", "nullable": True},
+        "reason": {"type": "string", "enum": SERVICE_IMPACT_REASONS},
+        "status": {"type": "string", "enum": SERVICE_STATUSES},
+        "effective_status": {"type": "string", "enum": SERVICE_STATUSES},
+        "severity": {"type": "string", "nullable": True},
+        "open_alert_groups": {"type": "integer", "minimum": 0},
+        "critical_open_alert_groups": {"type": "integer", "minimum": 0},
+        "path": {
+            "type": "array",
+            "items": SERVICE_IMPACT_PATH_NODE_SCHEMA,
+        },
+    },
+}
+
+SERVICE_IMPACT_EXPLANATION_SCHEMA = {
+    "type": "object",
+    "nullable": True,
+    "properties": {
+        "primary_reason": {"type": "string", "enum": SERVICE_IMPACT_REASONS},
+        "primary_source_service_id": {"type": "integer", "nullable": True},
+        "primary_source_service_slug": {"type": "string", "nullable": True},
+        "primary_source_service_name": {"type": "string", "nullable": True},
+        "title": {"type": "string"},
+        "message": {"type": "string"},
+        "rules": {"type": "array", "items": {"type": "string"}},
+        "paths": {
+            "type": "array",
+            "items": {
+                "type": "array",
+                "items": SERVICE_IMPACT_PATH_NODE_SCHEMA,
+            },
+        },
+    },
+}
+
+SERVICE_BLAST_RADIUS_SCHEMA = {
+    "type": "object",
+    "nullable": True,
+    "properties": {
+        "direct_downstream": {"type": "integer", "minimum": 0},
+        "transitive_downstream": {"type": "integer", "minimum": 0},
+        "critical_downstream": {"type": "integer", "minimum": 0},
+        "tier_1_downstream": {"type": "integer", "minimum": 0},
+        "affected_downstream": {"type": "integer", "minimum": 0},
+        "paths": {
+            "type": "array",
+            "items": {
+                "type": "array",
+                "items": SERVICE_IMPACT_PATH_NODE_SCHEMA,
+            },
+        },
+        "cycle_detected": {"type": "boolean"},
+        "depth_limited": {"type": "boolean"},
+    },
+}
+
+SERVICE_IMPACT_ITEM_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "service_id": {"type": "integer", "minimum": 1},
         "service_slug": {"type": "string"},
-        "team_id": {"type": "integer"},
-        "team_name": {"type": "string", "nullable": True},
+        "service_name": {"type": "string"},
+        "team_id": {"type": "integer", "minimum": 1},
         "team_slug": {"type": "string", "nullable": True},
+        "team_name": {"type": "string", "nullable": True},
+        "criticality": {"type": "string", "enum": SERVICE_CRITICALITIES},
+        "tier": {"type": "string", "enum": SERVICE_TIERS},
+        "own_status": {"type": "string", "enum": SERVICE_STATUSES},
+        "alert_impact_status": {"type": "string", "enum": SERVICE_STATUSES},
+        "dependency_impact_status": {"type": "string", "enum": SERVICE_STATUSES},
+        "effective_status": {"type": "string", "enum": SERVICE_STATUSES},
+        "primary_reason": {"type": "string", "enum": SERVICE_IMPACT_REASONS},
+        "open_alert_groups": {"type": "integer", "minimum": 0},
+        "critical_open_alert_groups": {"type": "integer", "minimum": 0},
+        "upstream_issues_count": {"type": "integer", "minimum": 0},
+        "root_causes": {
+            "type": "array",
+            "items": SERVICE_IMPACT_ROOT_CAUSE_SCHEMA,
+        },
+        "explanation": SERVICE_IMPACT_EXPLANATION_SCHEMA,
+        "blast_radius": SERVICE_BLAST_RADIUS_SCHEMA,
+        "cycle_detected": {"type": "boolean"},
+        "depth_limited": {"type": "boolean"},
+    },
+}
+
+SERVICE_IMPACT_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "version": {"type": "integer", "example": 2},
+        "items": {
+            "type": "array",
+            "items": SERVICE_IMPACT_ITEM_SCHEMA,
+        },
+        "summary": {
+            "type": "object",
+            "properties": {
+                "total": {"type": "integer", "minimum": 0},
+                "affected": {"type": "integer", "minimum": 0},
+                "critical": {"type": "integer", "minimum": 0},
+                "by_effective_status": {
+                    "type": "object",
+                    "additionalProperties": {"type": "integer"},
+                },
+                "cycle_detected": {"type": "integer", "minimum": 0},
+                "depth_limited": {"type": "integer", "minimum": 0},
+            },
+        },
+        "filters": {"type": "object", "additionalProperties": True},
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# Service details v2 schemas
+# ---------------------------------------------------------------------------
+
+SERVICE_ALERT_SUMMARY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "window_days": {"type": "integer", "minimum": 1},
+        "total": {"type": "integer", "minimum": 0},
+        "recent": {"type": "integer", "minimum": 0},
+        "open": {"type": "integer", "minimum": 0},
+        "firing": {"type": "integer", "minimum": 0},
+        "acknowledged": {"type": "integer", "minimum": 0},
+        "resolved": {"type": "integer", "minimum": 0},
+        "critical_open": {"type": "integer", "minimum": 0},
+        "last_seen_at": {"type": "string", "format": "date-time", "nullable": True},
+        "by_status": {"type": "object", "additionalProperties": {"type": "integer"}},
+        "by_severity": {"type": "object", "additionalProperties": {"type": "integer"}},
+    },
+}
+
+SERVICE_STATUS_HISTORY_ITEM_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "integer"},
+        "old_status": {"type": "string", "nullable": True, "enum": SERVICE_STATUSES},
+        "new_status": {"type": "string", "nullable": True, "enum": SERVICE_STATUSES},
+        "source": {"type": "string", "nullable": True},
+        "message": {"type": "string", "nullable": True},
+        "alert_id": {"type": "integer", "nullable": True},
+        "maintenance_window_id": {"type": "integer", "nullable": True},
+        "changed_by_id": {"type": "integer", "nullable": True},
+        "created_at": {"type": "string", "format": "date-time", "nullable": True},
+    },
+}
+
+SERVICE_DETAILS_ANALYTICS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "version": {"type": "integer", "example": 1},
+        "window": {"type": "object", "additionalProperties": True},
+        "widgets": {"type": "object", "additionalProperties": True},
+        "breakdowns": {"type": "object", "additionalProperties": True},
+        "series": {"type": "array", "items": {"type": "object"}},
+        "extensions": {"type": "object", "additionalProperties": True},
+    },
+}
+
+MAINTENANCE_WINDOW_REFERENCE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": True,
+    "description": "Serialized maintenance window. Full schema is documented in the maintenance windows API.",
+}
+
+SERVICE_DETAILS_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "service": SERVICE_SCHEMA,
+        "summary": {
+            "type": "object",
+            "properties": {
+                "alerts": SERVICE_ALERT_SUMMARY_SCHEMA,
+                "maintenance_windows": {"type": "integer", "minimum": 0},
+                "links": {"type": "integer", "minimum": 0},
+                "runbooks": {"type": "integer", "minimum": 0},
+                "upstream_dependencies": {"type": "integer", "minimum": 0},
+                "downstream_dependencies": {"type": "integer", "minimum": 0},
+                "status_history": {"type": "integer", "minimum": 0},
+            },
+        },
+        "maintenance_windows": {
+            "type": "array",
+            "items": MAINTENANCE_WINDOW_REFERENCE_SCHEMA,
+        },
+        "links": {"type": "array", "items": SERVICE_LINK_SCHEMA},
+        "runbooks": {"type": "array", "items": SERVICE_RUNBOOK_SCHEMA},
+        "dependencies": {
+            "type": "object",
+            "properties": {
+                "upstream": {"type": "array", "items": SERVICE_DEPENDENCY_SCHEMA},
+                "downstream": {"type": "array", "items": SERVICE_DEPENDENCY_SCHEMA},
+            },
+        },
+        "status_history": {
+            "type": "array",
+            "items": SERVICE_STATUS_HISTORY_ITEM_SCHEMA,
+        },
+        "impact": SERVICE_IMPACT_ITEM_SCHEMA,
+        "analytics": SERVICE_DETAILS_ANALYTICS_SCHEMA,
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# Analytics v2 schemas
+# ---------------------------------------------------------------------------
+
+SERVICE_ANALYTICS_ALERT_GROUPS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "total": {"type": "integer", "minimum": 0},
+        "open": {"type": "integer", "minimum": 0},
+        "firing": {"type": "integer", "minimum": 0},
+        "acknowledged": {"type": "integer", "minimum": 0},
+        "resolved": {"type": "integer", "minimum": 0},
+        "silenced": {"type": "integer", "minimum": 0},
+        "critical_open": {"type": "integer", "minimum": 0},
+        "by_status": {"type": "object", "additionalProperties": {"type": "integer"}},
+        "by_severity": {"type": "object", "additionalProperties": {"type": "integer"}},
+        "first_seen_at": {"type": "string", "format": "date-time", "nullable": True},
+        "last_seen_at": {"type": "string", "format": "date-time", "nullable": True},
+    },
+}
+
+SERVICE_ANALYTICS_NOISE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "raw_alerts": {"type": "integer", "minimum": 0},
+        "alert_groups": {"type": "integer", "minimum": 0},
+        "dedup_ratio": {"type": "number", "format": "float", "minimum": 0},
+        "top_alertnames": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "alertname": {"type": "string"},
+                    "count": {"type": "integer", "minimum": 0},
+                },
+            },
+        },
+    },
+}
+
+SERVICE_ANALYTICS_RESPONSE_METRICS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "acknowledged_groups": {"type": "integer", "minimum": 0},
+        "resolved_groups": {"type": "integer", "minimum": 0},
+        "mtta_seconds_avg": {"type": "integer", "nullable": True, "minimum": 0},
+        "mtta_seconds_p50": {"type": "integer", "nullable": True, "minimum": 0},
+        "mtta_seconds_p95": {"type": "integer", "nullable": True, "minimum": 0},
+        "mttr_seconds_avg": {"type": "integer", "nullable": True, "minimum": 0},
+        "mttr_seconds_p50": {"type": "integer", "nullable": True, "minimum": 0},
+        "mttr_seconds_p95": {"type": "integer", "nullable": True, "minimum": 0},
+    },
+}
+
+SERVICE_ANALYTICS_MAINTENANCE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "windows": {"type": "integer", "minimum": 0},
+        "suppressed_alert_groups": {"type": "integer", "minimum": 0},
+    },
+}
+
+SERVICE_ANALYTICS_IMPACT_WIDGET_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "effective_status": {"type": "string", "enum": SERVICE_STATUSES},
+        "primary_reason": {"type": "string", "nullable": True, "enum": SERVICE_IMPACT_REASONS},
+        "upstream_issues_count": {"type": "integer", "minimum": 0},
+        "root_causes": {"type": "integer", "minimum": 0},
+        "blast_radius": {
+            "type": "object",
+            "properties": {
+                "direct_downstream": {"type": "integer", "minimum": 0},
+                "transitive_downstream": {"type": "integer", "minimum": 0},
+                "critical_downstream": {"type": "integer", "minimum": 0},
+                "tier_1_downstream": {"type": "integer", "minimum": 0},
+            },
+        },
+    },
+}
+
+SERVICE_ANALYTICS_ITEM_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "service_id": {"type": "integer", "minimum": 1},
+        "service_slug": {"type": "string"},
+        "service_name": {"type": "string"},
+        "team_id": {"type": "integer", "minimum": 1},
+        "team_slug": {"type": "string", "nullable": True},
+        "team_name": {"type": "string", "nullable": True},
         "service_status": {"type": "string", "enum": SERVICE_STATUSES},
         "service_criticality": {"type": "string", "enum": SERVICE_CRITICALITIES},
         "service_environment": {"type": "string", "enum": SERVICE_ENVIRONMENTS},
         "service_tier": {"type": "string", "enum": SERVICE_TIERS},
-        "total_alerts": {"type": "integer"},
-        "open_alerts": {"type": "integer"},
-        "firing_alerts": {"type": "integer"},
-        "acknowledged_alerts": {"type": "integer"},
-        "resolved_alerts": {"type": "integer"},
-        "silenced_alerts": {"type": "integer"},
-        "critical_open_alerts": {"type": "integer"},
-        "warning_open_alerts": {"type": "integer"},
-        "last_alert_at": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": True,
-        },
-    },
-}
-
-SERVICE_UPSTREAM_ISSUE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "dependency_id": {"type": "integer"},
-        "dependency_type": {
-            "type": "string",
-            "enum": SERVICE_DEPENDENCY_TYPES,
-        },
-        "criticality": {
-            "type": "string",
-            "enum": SERVICE_DEPENDENCY_CRITICALITIES,
-        },
-        "description": {"type": "string", "nullable": True},
-
-        "service_id": {"type": "integer"},
-        "service_name": {"type": "string", "nullable": True},
-        "service_slug": {"type": "string", "nullable": True},
-
-        "team_id": {"type": "integer"},
-        "team_name": {"type": "string", "nullable": True},
-        "team_slug": {"type": "string", "nullable": True},
-
-        "status": {"type": "string", "enum": SERVICE_STATUSES},
-        "impact_status": {"type": "string", "enum": SERVICE_STATUSES},
-        "contributes_to_impact": {"type": "boolean"},
-    },
-    "path": {
-    "type": "array",
-    "description": (
-        "Dependency path from direct upstream service to root cause. "
-        "The current affected service is not included in this array."
-    ),
-    "items": {
-        "type": "object",
-        "properties": {
-            "service_id": {"type": "integer", "nullable": True},
-            "service_name": {"type": "string", "nullable": True},
-            "service_slug": {"type": "string", "nullable": True},
-            "service_display": {"type": "string"},
-            "team_id": {"type": "integer", "nullable": True},
-            "team_name": {"type": "string", "nullable": True},
-            "team_slug": {"type": "string", "nullable": True},
-            "team_display": {"type": "string"},
-            "status": {"type": "string", "enum": SERVICE_STATUSES},
-            "dependency_id": {"type": "integer", "nullable": True},
-            "dependency_type": {
-                "type": "string",
-                "nullable": True,
-                "enum": SERVICE_DEPENDENCY_TYPES,
-            },
-            "criticality": {
-                "type": "string",
-                "nullable": True,
-                "enum": SERVICE_DEPENDENCY_CRITICALITIES,
-            },
-            "cycle": {"type": "boolean"},
-        },
-    },
-},
-    "depth": {
-    "type": "integer",
-    "description": "Number of dependency hops represented by path.",
-},
-    "cycle_detected": {
-    "type": "boolean",
-    "description": "Whether this path includes a dependency cycle.",
-},
-    "depth_limited": {
-    "type": "boolean",
-    "description": "Whether dependency traversal stopped at configured impact depth.",
-},
-    "root_cause_service_id": {"type": "integer", "nullable": True},
-    "root_cause_service_name": {"type": "string", "nullable": True},
-    "root_cause_service_slug": {"type": "string", "nullable": True},
-    "root_cause_service_display": {"type": "string", "nullable": True},
-    "root_cause_status": {"type": "string", "enum": SERVICE_STATUSES},
-}
-
-
-SERVICE_IMPACT_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "service_id": {"type": "integer"},
-        "service_name": {"type": "string"},
-        "service_slug": {"type": "string"},
-        "team_id": {"type": "integer"},
-        "team_name": {"type": "string", "nullable": True},
-        "team_slug": {"type": "string", "nullable": True},
-        "own_status": {
-            "type": "string",
-            "enum": SERVICE_STATUSES,
-            "description": "Manual/current status stored on the service.",
-        },
-        "alert_impact_status": {
-            "type": "string",
-            "enum": SERVICE_STATUSES,
-            "description": "Computed impact from open firing or acknowledged alerts.",
-        },
-        "dependency_impact_status": {
-            "type": "string",
-            "enum": SERVICE_STATUSES,
-            "description": "Computed impact from upstream dependencies.",
-        },
-        "effective_status": {
-            "type": "string",
-            "enum": SERVICE_STATUSES,
-            "description": "Worst status from own_status, alert_impact_status and dependency_impact_status.",
-        },
-        "has_alert_impact": {"type": "boolean"},
-        "has_dependency_impact": {"type": "boolean"},
-        "open_alerts": {"type": "integer"},
-        "critical_open_alerts": {"type": "integer"},
-        "warning_open_alerts": {"type": "integer"},
-        "upstream_issues_count": {"type": "integer"},
-        "upstream_issues": {
-            "type": "array",
-            "items": SERVICE_UPSTREAM_ISSUE_SCHEMA,
-        },
-        "criticality": {"type": "string", "enum": SERVICE_CRITICALITIES},
-        "environment": {"type": "string", "enum": SERVICE_ENVIRONMENTS},
-        "tier": {"type": "string", "enum": SERVICE_TIERS},
         "enabled": {"type": "boolean"},
+        "window": {"type": "object", "additionalProperties": True},
+        "alert_groups": SERVICE_ANALYTICS_ALERT_GROUPS_SCHEMA,
+        "noise": SERVICE_ANALYTICS_NOISE_SCHEMA,
+        "response": SERVICE_ANALYTICS_RESPONSE_METRICS_SCHEMA,
+        "maintenance": SERVICE_ANALYTICS_MAINTENANCE_SCHEMA,
+        "impact": SERVICE_ANALYTICS_IMPACT_WIDGET_SCHEMA,
+        "last_alert_at": {"type": "string", "format": "date-time", "nullable": True},
     },
 }
+
+SERVICE_ANALYTICS_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "version": {"type": "integer", "example": 2},
+        "window": {
+            "type": "object",
+            "properties": {
+                "days": {"type": "integer", "minimum": 1, "maximum": 365},
+                "since": {"type": "string", "format": "date-time"},
+                "until": {"type": "string", "format": "date-time"},
+            },
+        },
+        "items": {
+            "type": "array",
+            "items": SERVICE_ANALYTICS_ITEM_SCHEMA,
+        },
+        "summary": {
+            "type": "object",
+            "properties": {
+                "services": {"type": "integer", "minimum": 0},
+                "affected_services": {"type": "integer", "minimum": 0},
+                "open_alert_groups": {"type": "integer", "minimum": 0},
+                "critical_open_alert_groups": {"type": "integer", "minimum": 0},
+                "raw_alerts": {"type": "integer", "minimum": 0},
+                "by_effective_status": {
+                    "type": "object",
+                    "additionalProperties": {"type": "integer"},
+                },
+                "top_noisy_services": {
+                    "type": "array",
+                    "items": {"type": "object", "additionalProperties": True},
+                },
+            },
+        },
+        "series": {
+            "type": "object",
+            "properties": {
+                "alert_groups_by_day": {
+                    "type": "array",
+                    "items": {"type": "object", "additionalProperties": True},
+                },
+                "raw_alerts_by_day": {
+                    "type": "array",
+                    "items": {"type": "object", "additionalProperties": True},
+                },
+                "impact_by_day": {
+                    "type": "array",
+                    "items": {"type": "object", "additionalProperties": True},
+                },
+            },
+        },
+        "filters": {"type": "object", "additionalProperties": True},
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# Query parameter sets
+# ---------------------------------------------------------------------------
+
+SERVICE_IMPACT_QUERY_PARAMS = [
+    query_param("team_id", "Filter by team id.", {"type": "integer", "minimum": 1}),
+    query_param(
+        "service_id",
+        "Return one service item while still calculating the readable dependency graph.",
+        {"type": "integer", "minimum": 1},
+    ),
+    query_param("include_disabled", "Include disabled services.", {"type": "boolean", "default": False}),
+    query_param("include_operational", "Include operational services.", {"type": "boolean", "default": True}),
+    query_param("include_explanation", "Include human-readable explanation blocks.", {"type": "boolean", "default": True}),
+    query_param("include_root_causes", "Include root cause services.", {"type": "boolean", "default": True}),
+    query_param("include_blast_radius", "Include downstream blast radius.", {"type": "boolean", "default": True}),
+    query_param("include_paths", "Include dependency paths.", {"type": "boolean", "default": True}),
+    query_param("max_depth", "Dependency traversal depth.", {"type": "integer", "minimum": 1, "maximum": 10, "default": 5}),
+    query_param("limit", "Maximum returned items.", {"type": "integer", "minimum": 1, "maximum": 500, "default": 100}),
+    query_param("sort", "Sort field.", {"type": "string", "enum": SERVICE_IMPACT_SORTS, "default": "effective_status"}),
+    query_param("order", "Sort order.", {"type": "string", "enum": ["asc", "desc"], "default": "desc"}),
+]
+
+SERVICE_SINGLE_IMPACT_QUERY_PARAMS = [
+    query_param("include_disabled", "Include disabled service result.", {"type": "boolean", "default": False}),
+    query_param("include_explanation", "Include human-readable explanation blocks.", {"type": "boolean", "default": True}),
+    query_param("include_root_causes", "Include root cause services.", {"type": "boolean", "default": True}),
+    query_param("include_blast_radius", "Include downstream blast radius.", {"type": "boolean", "default": True}),
+    query_param("include_paths", "Include dependency paths.", {"type": "boolean", "default": True}),
+    query_param("max_depth", "Dependency traversal depth.", {"type": "integer", "minimum": 1, "maximum": 10, "default": 5}),
+]
+
+SERVICE_ANALYTICS_QUERY_PARAMS = [
+    query_param("team_id", "Filter by team id.", {"type": "integer", "minimum": 1}),
+    query_param(
+        "service_id",
+        "Return analytics for one service while still calculating impact using the readable dependency graph.",
+        {"type": "integer", "minimum": 1},
+    ),
+    query_param("days", "Analytics window in days.", {"type": "integer", "minimum": 1, "maximum": 365, "default": 30}),
+    query_param("include_disabled", "Include disabled services.", {"type": "boolean", "default": False}),
+    query_param("include_operational", "Include operational services.", {"type": "boolean", "default": True}),
+    query_param("include_series", "Include daily time series.", {"type": "boolean", "default": True}),
+    query_param("include_noise", "Include raw alert/noise metrics.", {"type": "boolean", "default": True}),
+    query_param("include_response", "Include response-time metrics when available.", {"type": "boolean", "default": True}),
+    query_param("include_maintenance", "Include maintenance suppression counters.", {"type": "boolean", "default": True}),
+    query_param("include_impact", "Include current Impact v2 widget per service.", {"type": "boolean", "default": True}),
+    query_param("limit", "Maximum returned items.", {"type": "integer", "minimum": 1, "maximum": 500, "default": 100}),
+    query_param("sort", "Sort field.", {"type": "string", "enum": SERVICE_ANALYTICS_SORTS, "default": "open_alert_groups"}),
+    query_param("order", "Sort order.", {"type": "string", "enum": ["asc", "desc"], "default": "desc"}),
+]
+
+SERVICE_DETAILS_QUERY_PARAMS = [
+    query_param("days", "Analytics window in days.", {"type": "integer", "minimum": 1, "maximum": 365, "default": 30}),
+]
+
+
+# ---------------------------------------------------------------------------
+# OpenAPI endpoint module interface
+# ---------------------------------------------------------------------------
 
 
 def tags():
@@ -645,20 +1004,14 @@ def paths():
                     )
                 ],
                 "responses": {
-                    "200": response(
-                        "List of services.",
-                        {"type": "array", "items": SERVICE_SCHEMA},
-                    ),
+                    "200": response("List of services.", {"type": "array", "items": SERVICE_SCHEMA}),
                     "403": response("Access denied.", ERROR_SCHEMA),
                 },
             },
             "post": {
                 "tags": ["services"],
                 "summary": "Create service",
-                "description": (
-                    "Creates a logical service under a team. "
-                    "Team write access is required."
-                ),
+                "description": "Creates a logical service under a team. Team write access is required.",
                 "operationId": "createService",
                 "requestBody": json_body("Service properties.", SERVICE_SCHEMA),
                 "responses": {
@@ -684,10 +1037,7 @@ def paths():
             "put": {
                 "tags": ["services"],
                 "summary": "Update service",
-                "description": (
-                    "Updates service properties. "
-                    "Team write access is required for both old and new team."
-                ),
+                "description": "Updates service properties. Team write access is required for both old and new team.",
                 "operationId": "updateService",
                 "parameters": [path_param("service_id", "Service id.")],
                 "requestBody": json_body("Updated service properties.", SERVICE_SCHEMA),
@@ -701,9 +1051,7 @@ def paths():
             "delete": {
                 "tags": ["services"],
                 "summary": "Delete service",
-                "description": (
-                    "Soft-deletes a service. Existing alerts keep their service reference."
-                ),
+                "description": "Soft-deletes a service. Existing alerts keep their service reference.",
                 "operationId": "deleteService",
                 "parameters": [path_param("service_id", "Service id.")],
                 "responses": {
@@ -713,37 +1061,42 @@ def paths():
                 },
             },
         },
+        "/api/services/{service_id}/details": {
+            "get": {
+                "tags": ["services"],
+                "summary": "Get expanded service details",
+                "description": (
+                    "Returns the Service details v2 payload used by the UI details panel. "
+                    "It contains service metadata, alert summary, maintenance windows, links, "
+                    "runbooks, dependencies, status history, current Impact v2 item and a "
+                    "small analytics widget block."
+                ),
+                "operationId": "getServiceDetails",
+                "parameters": [
+                    path_param("service_id", "Service id."),
+                    *SERVICE_DETAILS_QUERY_PARAMS,
+                ],
+                "responses": {
+                    "200": response("Expanded service details.", SERVICE_DETAILS_RESPONSE_SCHEMA),
+                    "400": response("Validation error.", ERROR_SCHEMA),
+                    "403": response("Access denied.", ERROR_SCHEMA),
+                    "404": response("Service not found.", ERROR_SCHEMA),
+                },
+            },
+        },
         "/api/services/match-rules": {
             "get": {
                 "tags": ["services"],
                 "summary": "List service match rules",
-                "description": (
-                    "Returns service match rules filtered by team_id, route_id or service_id. "
-                    "At least one filter is required."
-                ),
+                "description": "Returns service match rules filtered by team_id, route_id or service_id. At least one filter is required.",
                 "operationId": "listServiceMatchRules",
                 "parameters": [
-                    query_param(
-                        "team_id",
-                        "Filter by team id.",
-                        {"type": "integer", "minimum": 1},
-                    ),
-                    query_param(
-                        "route_id",
-                        "Filter by route id.",
-                        {"type": "integer", "minimum": 1},
-                    ),
-                    query_param(
-                        "service_id",
-                        "Filter by service id.",
-                        {"type": "integer", "minimum": 1},
-                    ),
+                    query_param("team_id", "Filter by team id.", {"type": "integer", "minimum": 1}),
+                    query_param("route_id", "Filter by route id.", {"type": "integer", "minimum": 1}),
+                    query_param("service_id", "Filter by service id.", {"type": "integer", "minimum": 1}),
                 ],
                 "responses": {
-                    "200": response(
-                        "List of service match rules.",
-                        {"type": "array", "items": SERVICE_MATCH_RULE_SCHEMA},
-                    ),
+                    "200": response("List of service match rules.", {"type": "array", "items": SERVICE_MATCH_RULE_SCHEMA}),
                     "400": response("Missing or invalid filter.", ERROR_SCHEMA),
                     "403": response("Access denied.", ERROR_SCHEMA),
                 },
@@ -757,10 +1110,7 @@ def paths():
                 "operationId": "listMatchRulesByService",
                 "parameters": [path_param("service_id", "Service id.")],
                 "responses": {
-                    "200": response(
-                        "List of service match rules.",
-                        {"type": "array", "items": SERVICE_MATCH_RULE_SCHEMA},
-                    ),
+                    "200": response("List of service match rules.", {"type": "array", "items": SERVICE_MATCH_RULE_SCHEMA}),
                     "403": response("Access denied.", ERROR_SCHEMA),
                     "404": response("Service not found.", ERROR_SCHEMA),
                 },
@@ -768,16 +1118,10 @@ def paths():
             "post": {
                 "tags": ["services"],
                 "summary": "Create service match rule",
-                "description": (
-                    "Creates a rule that resolves incoming alerts to a service. "
-                    "The service_id in URL and request body must match."
-                ),
+                "description": "Creates a rule that resolves incoming alerts to a service. The service_id in URL and request body must match.",
                 "operationId": "createServiceMatchRule",
                 "parameters": [path_param("service_id", "Service id.")],
-                "requestBody": json_body(
-                    "Service match rule properties.",
-                    SERVICE_MATCH_RULE_SCHEMA,
-                ),
+                "requestBody": json_body("Service match rule properties.", SERVICE_MATCH_RULE_SCHEMA),
                 "responses": {
                     "201": response("Service match rule created.", SERVICE_MATCH_RULE_SCHEMA),
                     "400": response("Validation error.", ERROR_SCHEMA),
@@ -793,10 +1137,7 @@ def paths():
                 "description": "Updates one service match rule.",
                 "operationId": "updateServiceMatchRule",
                 "parameters": [path_param("rule_id", "Service match rule id.")],
-                "requestBody": json_body(
-                    "Updated service match rule properties.",
-                    SERVICE_MATCH_RULE_SCHEMA,
-                ),
+                "requestBody": json_body("Updated service match rule properties.", SERVICE_MATCH_RULE_SCHEMA),
                 "responses": {
                     "200": response("Service match rule updated.", SERVICE_MATCH_RULE_SCHEMA),
                     "400": response("Validation error.", ERROR_SCHEMA),
@@ -825,10 +1166,7 @@ def paths():
                 "operationId": "listServiceLinks",
                 "parameters": [path_param("service_id", "Service id.")],
                 "responses": {
-                    "200": response(
-                        "List of service links.",
-                        {"type": "array", "items": SERVICE_LINK_SCHEMA},
-                    ),
+                    "200": response("List of service links.", {"type": "array", "items": SERVICE_LINK_SCHEMA}),
                     "403": response("Access denied.", ERROR_SCHEMA),
                     "404": response("Service not found.", ERROR_SCHEMA),
                 },
@@ -852,20 +1190,14 @@ def paths():
             "get": {
                 "tags": ["services"],
                 "summary": "List links for readable services",
-                "description": (
-                    "Returns links for all readable services in the current scope. "
-                    "Use team_id or service_id to narrow the result."
-                ),
+                "description": "Returns links for all readable services in the current scope. Use team_id or service_id to narrow the result.",
                 "operationId": "listAllServiceLinks",
                 "parameters": [
                     query_param("team_id", "Filter by team id.", {"type": "integer", "minimum": 1}),
                     query_param("service_id", "Filter by service id.", {"type": "integer", "minimum": 1}),
                 ],
                 "responses": {
-                    "200": response(
-                        "List of service links.",
-                        {"type": "array", "items": SERVICE_LINK_SCHEMA},
-                    ),
+                    "200": response("List of service links.", {"type": "array", "items": SERVICE_LINK_SCHEMA}),
                     "403": response("Access denied.", ERROR_SCHEMA),
                 },
             },
@@ -906,10 +1238,7 @@ def paths():
                 "operationId": "listServiceRunbooks",
                 "parameters": [path_param("service_id", "Service id.")],
                 "responses": {
-                    "200": response(
-                        "List of service runbooks.",
-                        {"type": "array", "items": SERVICE_RUNBOOK_SCHEMA},
-                    ),
+                    "200": response("List of service runbooks.", {"type": "array", "items": SERVICE_RUNBOOK_SCHEMA}),
                     "403": response("Access denied.", ERROR_SCHEMA),
                     "404": response("Service not found.", ERROR_SCHEMA),
                 },
@@ -933,20 +1262,14 @@ def paths():
             "get": {
                 "tags": ["services"],
                 "summary": "List runbooks for readable services",
-                "description": (
-                    "Returns runbooks for all readable services in the current scope. "
-                    "Use team_id or service_id to narrow the result."
-                ),
+                "description": "Returns runbooks for all readable services in the current scope. Use team_id or service_id to narrow the result.",
                 "operationId": "listAllServiceRunbooks",
                 "parameters": [
                     query_param("team_id", "Filter by team id.", {"type": "integer", "minimum": 1}),
                     query_param("service_id", "Filter by service id.", {"type": "integer", "minimum": 1}),
                 ],
                 "responses": {
-                    "200": response(
-                        "List of service runbooks.",
-                        {"type": "array", "items": SERVICE_RUNBOOK_SCHEMA},
-                    ),
+                    "200": response("List of service runbooks.", {"type": "array", "items": SERVICE_RUNBOOK_SCHEMA}),
                     "403": response("Access denied.", ERROR_SCHEMA),
                 },
             },
@@ -987,10 +1310,7 @@ def paths():
                 "operationId": "listServiceDependencies",
                 "parameters": [path_param("service_id", "Service id.")],
                 "responses": {
-                    "200": response(
-                        "List of service dependencies.",
-                        {"type": "array", "items": SERVICE_DEPENDENCY_SCHEMA},
-                    ),
+                    "200": response("List of service dependencies.", {"type": "array", "items": SERVICE_DEPENDENCY_SCHEMA}),
                     "403": response("Access denied.", ERROR_SCHEMA),
                     "404": response("Service not found.", ERROR_SCHEMA),
                 },
@@ -998,17 +1318,10 @@ def paths():
             "post": {
                 "tags": ["services"],
                 "summary": "Create service dependency",
-                "description": (
-                    "Creates a dependency from this service to another service. "
-                    "Cross-team dependencies are allowed when the user can edit the source "
-                    "service and read the target service."
-                ),
+                "description": "Creates a dependency from this service to another service. Cross-team dependencies are allowed when the user can edit the source service and read the target service.",
                 "operationId": "createServiceDependency",
                 "parameters": [path_param("service_id", "Service id.")],
-                "requestBody": json_body(
-                    "Service dependency properties.",
-                    SERVICE_DEPENDENCY_SCHEMA,
-                ),
+                "requestBody": json_body("Service dependency properties.", SERVICE_DEPENDENCY_SCHEMA),
                 "responses": {
                     "201": response("Service dependency created.", SERVICE_DEPENDENCY_SCHEMA),
                     "400": response("Validation error.", ERROR_SCHEMA),
@@ -1021,20 +1334,14 @@ def paths():
             "get": {
                 "tags": ["services"],
                 "summary": "List dependencies for readable services",
-                "description": (
-                    "Returns dependencies for all readable services in the current scope. "
-                    "Use team_id or service_id to narrow the result."
-                ),
+                "description": "Returns dependencies for all readable services in the current scope. Use team_id or service_id to narrow the result.",
                 "operationId": "listAllServiceDependencies",
                 "parameters": [
                     query_param("team_id", "Filter by team id.", {"type": "integer", "minimum": 1}),
                     query_param("service_id", "Filter by service id.", {"type": "integer", "minimum": 1}),
                 ],
                 "responses": {
-                    "200": response(
-                        "List of service dependencies.",
-                        {"type": "array", "items": SERVICE_DEPENDENCY_SCHEMA},
-                    ),
+                    "200": response("List of service dependencies.", {"type": "array", "items": SERVICE_DEPENDENCY_SCHEMA}),
                     "403": response("Access denied.", ERROR_SCHEMA),
                 },
             },
@@ -1046,10 +1353,7 @@ def paths():
                 "description": "Updates one service dependency.",
                 "operationId": "updateServiceDependency",
                 "parameters": [path_param("dependency_id", "Service dependency id.")],
-                "requestBody": json_body(
-                    "Updated service dependency.",
-                    SERVICE_DEPENDENCY_SCHEMA,
-                ),
+                "requestBody": json_body("Updated service dependency.", SERVICE_DEPENDENCY_SCHEMA),
                 "responses": {
                     "200": response("Service dependency updated.", SERVICE_DEPENDENCY_SCHEMA),
                     "400": response("Validation error.", ERROR_SCHEMA),
@@ -1070,49 +1374,61 @@ def paths():
                 },
             },
         },
-        "/api/services/analytics": {
+        "/api/services/impact": {
             "get": {
                 "tags": ["services"],
-                "summary": "Service alert analytics",
+                "summary": "Service impact v2",
                 "description": (
-                    "Returns alert counters grouped by affected service. "
-                    "Defaults to the last 30 days; days is clamped to 1..365."
+                    "Returns the current computed service impact v2 payload. "
+                    "Impact combines service own status, open grouped alert impact, "
+                    "upstream dependency impact, root causes, explanation paths and "
+                    "downstream blast radius. Impact is based on AlertGroup, not raw Alert events."
                 ),
-                "operationId": "getServiceAnalytics",
-                "parameters": [
-                    query_param("team_id", "Filter by team id.", {"type": "integer", "minimum": 1}),
-                    query_param("service_id", "Filter by service id.", {"type": "integer", "minimum": 1}),
-                    query_param("days", "Time range in days.", {"type": "integer", "minimum": 1, "maximum": 365, "default": 30}),
-                ],
+                "operationId": "listServiceImpactV2",
+                "parameters": SERVICE_IMPACT_QUERY_PARAMS,
                 "responses": {
-                    "200": response(
-                        "Service analytics.",
-                        {"type": "array", "items": SERVICE_ANALYTICS_SCHEMA},
-                    ),
+                    "200": response("Service Impact v2 payload.", SERVICE_IMPACT_RESPONSE_SCHEMA),
+                    "400": response("Validation error.", ERROR_SCHEMA),
                     "403": response("Access denied.", ERROR_SCHEMA),
                     "404": response("Service not found.", ERROR_SCHEMA),
                 },
             },
         },
-        "/api/services/impact": {
+        "/api/services/{service_id}/impact": {
             "get": {
                 "tags": ["services"],
-                "summary": "Service impact status",
+                "summary": "Single service impact v2",
                 "description": (
-                    "Returns computed service impact based on manual service status, "
-                    "open alerts and upstream dependencies up to the configured impact depth."
+                    "Returns one Service Impact v2 item. The selected service is the result filter only; "
+                    "the readable dependency graph is still calculated so upstream root causes remain visible."
                 ),
-                "operationId": "getServiceImpact",
+                "operationId": "getServiceImpactV2",
                 "parameters": [
-                    query_param("team_id", "Filter by team id.", {"type": "integer", "minimum": 1}),
-                    query_param("service_id", "Filter by service id.", {"type": "integer", "minimum": 1}),
-                    query_param("days", "Alert lookback range in days.", {"type": "integer", "minimum": 1, "maximum": 365, "default": 30}),
+                    path_param("service_id", "Service id."),
+                    *SERVICE_SINGLE_IMPACT_QUERY_PARAMS,
                 ],
                 "responses": {
-                    "200": response(
-                        "Service impact rows.",
-                        {"type": "array", "items": SERVICE_IMPACT_SCHEMA},
-                    ),
+                    "200": response("Service Impact v2 item.", SERVICE_IMPACT_ITEM_SCHEMA),
+                    "400": response("Validation error.", ERROR_SCHEMA),
+                    "403": response("Access denied.", ERROR_SCHEMA),
+                    "404": response("Service not found.", ERROR_SCHEMA),
+                },
+            },
+        },
+        "/api/services/analytics": {
+            "get": {
+                "tags": ["services"],
+                "summary": "Service analytics v2",
+                "description": (
+                    "Returns historical service analytics v2 for a selected window. "
+                    "Analytics uses AlertGroup for grouped operational metrics and raw Alert for noise metrics. "
+                    "The impact widget is the current Impact v2 state, not historical impact."
+                ),
+                "operationId": "getServiceAnalyticsV2",
+                "parameters": SERVICE_ANALYTICS_QUERY_PARAMS,
+                "responses": {
+                    "200": response("Service Analytics v2 payload.", SERVICE_ANALYTICS_RESPONSE_SCHEMA),
+                    "400": response("Validation error.", ERROR_SCHEMA),
                     "403": response("Access denied.", ERROR_SCHEMA),
                     "404": response("Service not found.", ERROR_SCHEMA),
                 },

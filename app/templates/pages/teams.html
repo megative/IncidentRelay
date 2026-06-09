@@ -251,7 +251,14 @@
               >
 
               <label for="team-member-user">User</label>
-              <select id="team-member-user" class="input"></select>
+{#              <select id="team-member-user" class="input"></select>#}
+                <select
+                  id="team-member-user"
+                  name="team-member-user"
+                  class="form-control js-user-select"
+                  data-placeholder="Select user..."
+                >
+                </select>
 
               <label for="team-member-role">Role</label>
               <select id="team-member-role" class="input">
