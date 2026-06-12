@@ -9,7 +9,7 @@ from app.modules.db import (
     escalation_policies_repo,
     services_repo,
 )
-from app.services.auth import create_raw_token, hash_token
+from app.services.integrations.auth import create_raw_token, hash_token
 from app.services.audit import write_audit
 from app.services.rbac import (
     current_user,
@@ -22,6 +22,50 @@ from app.services.validation import validate_body
 
 
 routes_bp = Blueprint("routes_api", __name__)
+
+
+def mask_route_integration_config(config):
+    """Mask provider-specific secrets before audit/API output."""
+    config = dict(config or {})
+
+    sentry = dict(config.get("sentry") or {})
+    if sentry.get("webhook_secret"):
+        sentry["webhook_secret"] = "***"
+
+    if sentry:
+        config["sentry"] = sentry
+
+    return config
+
+
+def build_route_integration_config(payload, current_route=None):
+    """Build provider-specific route integration config.
+
+    Empty Sentry secret on update means: keep existing secret.
+    Empty Sentry secret on create is allowed so the route can be created
+    first and used as the Sentry webhook URL.
+    """
+    if payload.source != "sentry":
+        return {}
+
+    incoming = payload.integration_config or {}
+    incoming_sentry = dict(incoming.get("sentry") or {})
+
+    current_config = current_route.integration_config or {} if current_route else {}
+    current_sentry = dict(current_config.get("sentry") or {})
+
+    new_secret = str(incoming_sentry.get("webhook_secret") or "").strip()
+    current_secret = current_sentry.get("webhook_secret")
+
+    secret = new_secret or current_secret
+
+    sentry_config = {}
+    if secret:
+        sentry_config["webhook_secret"] = secret
+
+    return {
+        "sentry": sentry_config,
+    }
 
 
 def validate_route_service(team_id, service_id):
@@ -235,6 +279,7 @@ def create_route():
         return service_error
 
     raw_token = create_raw_token()
+    integration_config = build_route_integration_config(payload)
 
     route = routes_repo.create_route(
         team_id=payload.team_id,
@@ -248,17 +293,22 @@ def create_route():
         intake_token_prefix=raw_token[:12],
         intake_token_hash=hash_token(raw_token),
         service_id=payload.service_id,
+        integration_config=integration_config,
     )
 
     for channel_id in payload.channel_ids:
         routes_repo.link_route_channel(route.id, channel_id)
+
+    audit_data = payload.model_dump()
+    audit_data["integration_config"] = mask_route_integration_config(integration_config)
+    audit_data["intake_token"] = "***"
 
     write_audit(
         "route.create",
         object_type="route",
         object_id=route.id,
         team_id=route.team.id,
-        data={**payload.model_dump(), "intake_token": "***"},
+        data=audit_data,
     )
 
     response = serialize_route(route, current_user=current_user())
@@ -307,6 +357,11 @@ def update_route(route_id):
     if service_error:
         return service_error
 
+    integration_config = build_route_integration_config(
+        payload,
+        current_route=current_route,
+    )
+
     route = routes_repo.update_route(
         route_id,
         {
@@ -319,18 +374,22 @@ def update_route(route_id):
             "group_by": payload.group_by,
             "enabled": payload.enabled,
             "service": payload.service_id,
+            "integration_config": integration_config,
         },
     )
 
     routes_repo.replace_route_channels(route.id, payload.channel_ids)
     route = routes_repo.get_route(route_id)
 
+    audit_data = payload.model_dump()
+    audit_data["integration_config"] = mask_route_integration_config(integration_config)
+
     write_audit(
         "route.update",
         object_type="route",
         object_id=route.id,
         team_id=route.team.id,
-        data=payload.model_dump(),
+        data=audit_data,
     )
 
     return jsonify(serialize_route(route, current_user=current_user()))

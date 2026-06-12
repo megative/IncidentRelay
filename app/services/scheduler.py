@@ -14,7 +14,7 @@ from app.services.db_lock import acquire_db_lock, release_db_lock
 from app.services.oncall_shift_notifications import (
     send_due_oncall_shift_email_notifications,
 )
-from app.services.notification_rules import process_due_user_notifications
+from app.services.notifications.rules import process_due_user_notifications
 
 logger = logging.getLogger("oncall.scheduler")
 _scheduler = None

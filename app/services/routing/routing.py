@@ -1,5 +1,5 @@
 from app.modules.db import routes_repo, teams_repo
-from app.services.matchers import match_alert
+from app.services.routing.matchers import match_alert
 
 
 def get_active_team_by_slug(team_slug):

@@ -546,6 +546,7 @@ class AlertRoute(SoftDeleteModel):
     )
     matchers = JSONTextField(null=True)
     group_by = JSONTextField(null=True)
+    integration_config = JSONTextField(null=True)
     intake_token_prefix = CharField(null=True, index=True)
     intake_token_hash = CharField(null=True)
     enabled = BooleanField(default=True)

@@ -9,7 +9,7 @@ from app.login import hash_password
 from app.modules.db.models import User, UserGroup
 from app.modules.db.migrations import create_migration, list_migrations, migrate, rollback
 from app.modules.db import channels_repo, groups_repo, rotations_repo, routes_repo, teams_repo, tokens_repo, users_repo
-from app.services.auth import create_raw_token, hash_token
+from app.services.integrations.auth import create_raw_token, hash_token
 from app.version import get_service_version
 
 

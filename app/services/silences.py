@@ -1,5 +1,5 @@
 from app.modules.db import silences_repo
-from app.services.matchers import match_alert
+from app.services.routing.matchers import match_alert
 
 
 def find_active_silence(team_id, alert_data):

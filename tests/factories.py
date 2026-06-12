@@ -192,6 +192,7 @@ def create_route(
     matchers: dict | None = None,
     group_by: list[str] | None = None,
     service: Service | None = None,
+    integration_config: dict | None = None,
 ) -> AlertRoute:
     return AlertRoute.create(
         team=team,
@@ -205,6 +206,7 @@ def create_route(
         intake_token_prefix="test-prefix" if token_hash else None,
         intake_token_hash=token_hash,
         service=service,
+        integration_config=integration_config,
     )
 
 

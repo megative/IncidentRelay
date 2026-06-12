@@ -215,7 +215,7 @@ function renderRoutesSummary(routes) {
 function fillRouteSourceFilter(routes) {
     const filter = $("#routes-source-filter");
     const selected = filter.val();
-    const sources = { alertmanager: true, zabbix: true, webhook: true };
+    const sources = { alertmanager: true, zabbix: true, webhook: true, sentry: true };
 
     asArray(routes).forEach(function (route) {
         if (route.source) {
@@ -326,64 +326,69 @@ function renderRouteChannels(channels) {
 }
 
 function renderRouteActions(route) {
-    /*
-     * Render route row actions as a shared three-dots menu.
-     */
-    return makeActionMenu({
-        object: route,
-        items: [
-            {
-                label: "Edit",
-                icon: "fas fa-edit",
-                required: "write",
-                denyMessage: "Team manager or group editor/admin role is required to edit this route.",
-                onClick: function () {
-                    editRoute(route.id);
-                }
-            },
-            {
-                label: "Regenerate token",
-                icon: "fas fa-sync-alt",
-                required: "write",
-                denyMessage: "Team manager role is required to regenerate route tokens.",
-                onClick: function () {
-                    regenerateRouteToken(route.id);
-                }
-            },
-            {
-                label: "Service rules",
-                icon: "fas fa-project-diagram",
-                required: "write",
-                denyMessage: "Team manager role is required to manage service rules.",
-                onClick: function () {
-                    openRouteServiceRules(route.id);
-                }
-            },
-            {
-                label: route.enabled ? "Disable" : "Enable",
-                icon: route.enabled ? "fas fa-pause" : "fas fa-play",
-                required: "write",
-                danger: route.enabled,
-                denyMessage: "Team manager role is required to enable or disable this route.",
-                onClick: function () {
-                    if (route.enabled) {
-                        disableRoute(route);
-                    } else {
-                        enableRoute(route);
-                    }
-                }
-            },
-            {
-                label: "Delete",
-                icon: "fas fa-trash",
-                required: "delete",
-                danger: true,
-                denyMessage: "Delete permission is required to delete this route.",
-                onClick: function () {
-                    deleteRoute(route);
+    const items = [
+        {
+            label: "Edit",
+            icon: "fas fa-edit",
+            required: "write",
+            denyMessage: "Team manager or group editor/admin role is required to edit this route.",
+            onClick: function () {
+                editRoute(route.id);
+            }
+        }
+    ];
+
+    if (route.source !== "sentry") {
+        items.push({
+            label: "Regenerate token",
+            icon: "fas fa-sync-alt",
+            required: "write",
+            denyMessage: "Team manager role is required to regenerate route tokens.",
+            onClick: function () {
+                regenerateRouteToken(route.id);
+            }
+        });
+    }
+
+    items.push(
+        {
+            label: "Service rules",
+            icon: "fas fa-project-diagram",
+            required: "write",
+            denyMessage: "Team manager role is required to manage service rules.",
+            onClick: function () {
+                openRouteServiceRules(route.id);
+            }
+        },
+        {
+            label: route.enabled ? "Disable" : "Enable",
+            icon: route.enabled ? "fas fa-pause" : "fas fa-play",
+            required: "write",
+            danger: route.enabled,
+            denyMessage: "Team manager role is required to enable or disable this route.",
+            onClick: function () {
+                if (route.enabled) {
+                    disableRoute(route);
+                } else {
+                    enableRoute(route);
                 }
             }
-        ]
+        },
+        {
+            label: "Delete",
+            icon: "fas fa-trash",
+            required: "delete",
+            danger: true,
+            denyMessage: "Delete permission is required to delete this route.",
+            onClick: function () {
+                deleteRoute(route);
+            }
+        }
+    );
+
+    return makeActionMenu({
+        object: route,
+        items: items
     });
 }
 function getSelectedRouteForServiceRules() {
@@ -675,6 +680,22 @@ function renderRouteDetails(route) {
             .append(routeDetailsItem("Name", route.name))
             .append(routeDetailsItem("Team", getRouteTeamLabel(route)))
             .append(routeDetailsItem("Source", route.source))
+            .append(
+                    route.source === "sentry"
+                        ? routeDetailsItem("Sentry webhook URL", getSentryWebhookUrl(route))
+                        : $()
+                )
+                .append(
+                    route.source === "sentry"
+                        ? routeDetailsItem(
+                            "Sentry secret",
+                            getRouteSentryConfig(route).has_webhook_secret
+                                ? "Configured"
+                                : "Not configured"
+                        )
+                        : $()
+                )
+            .append(routeDetailsItem("Webhook URL", getRouteIntakeUrl(route)))
             .append(routeDetailsItem("Maintenance", window.AppMaintenanceBadges.text(route, "-")))
             .append(routeDetailsItem("Escalation", getRouteEscalationLabel(route)))
             .append(routeDetailsItem("Team escalation", getRouteTeamEscalationLabel(route)))
@@ -757,7 +778,75 @@ function restoreRouteDetails() {
 
     renderRouteDetails(routesCache[0]);
 }
+function getRouteSentryConfig(route) {
+    const integrationConfig = route && route.integration_config
+        ? route.integration_config
+        : {};
 
+    return integrationConfig.sentry || {};
+}
+
+function getSentryWebhookUrl(route) {
+    const sentryConfig = getRouteSentryConfig(route);
+    const path = sentryConfig.webhook_path;
+
+    if (!path) {
+        return "";
+    }
+
+    return window.location.origin + path;
+}
+
+function updateRouteSourceUi() {
+    const source = $("#route-source").val();
+
+    $("#route-sentry-settings").toggleClass("is-hidden", source !== "sentry");
+
+    if (source === "sentry" && !$("#route-id").val()) {
+        $("#route-group-by").val('["project_slug","issue_id"]');
+    }
+}
+
+function collectRouteIntegrationConfig() {
+    const source = $("#route-source").val();
+
+    if (source !== "sentry") {
+        return {};
+    }
+
+    const secret = String($("#route-sentry-webhook-secret").val() || "").trim();
+    const sentry = {};
+
+    if (secret) {
+        sentry.webhook_secret = secret;
+    }
+
+    return {
+        sentry: sentry
+    };
+}
+
+function updateSentrySecretHelp(route) {
+    const sentryConfig = getRouteSentryConfig(route);
+
+    if (route && sentryConfig.has_webhook_secret) {
+        $("#route-sentry-secret-help").text(
+            "Sentry webhook secret is configured. Leave empty to keep the existing secret."
+        );
+        return;
+    }
+
+    if (route && route.id) {
+        $("#route-sentry-secret-help").text(
+            "Paste Sentry Client Secret here. Until it is configured, Sentry webhooks will be rejected."
+        );
+        return;
+    }
+
+    $("#route-sentry-secret-help").text(
+        "Create the route first to get the Sentry webhook URL. Then create a Sentry Internal Integration and paste its Client Secret here."
+    );
+}
 function collectRoutePayload() {
     const selectedPolicyId = $("#route-escalation-policy").val();
     const selectedRotationId = $("#route-rotation").val();
@@ -792,13 +881,16 @@ function collectRoutePayload() {
         channel_ids: ($("#route-channels").val() || []).map(Number),
         matchers: parseJsonInput("#route-matchers", {}),
         group_by: parseJsonInput("#route-group-by", []),
+        integration_config: collectRouteIntegrationConfig(),
         enabled: $("#route-enabled").is(":checked"),
     };
 }
 
 function saveRoute() {
     const id = $("#route-id").val();
-    const existing = id ? routesCache.find(function (item) { return Number(item.id) === Number(id); }) : null;
+    const existing = id ? routesCache.find(function (item) {
+        return Number(item.id) === Number(id);
+    }) : null;
     if (existing && !canWriteObject(existing)) {
         showAppError("You do not have permission to edit this route.");
         return;
@@ -817,7 +909,7 @@ function saveRoute() {
         closeAppModal("#route-form-modal");
         resetRouteForm();
         refreshRoutes();
-        showRouteToken(response.intake_token);
+        showRouteIntakeDetails(response);
     });
 }
 
@@ -841,6 +933,9 @@ function editRoute(id) {
     $("#route-matchers").val(JSON.stringify(route.matchers || {}, null, 2));
     $("#route-group-by").val(JSON.stringify(route.group_by || [], null, 2));
     $("#route-enabled").prop("checked", !!route.enabled);
+    $("#route-sentry-webhook-secret").val("");
+    updateSentrySecretHelp(route);
+    updateRouteSourceUi();
 
     loadRouteDependencies(function () {
         const usePolicy = !!route.escalation_policy_id;
@@ -856,6 +951,7 @@ function editRoute(id) {
         $("#route-service").val(route.service_id || "");
 
         updateRouteEscalationModeUi();
+        updateRouteSourceUi();
     });
 
     openAppModal("#route-form-modal");
@@ -928,16 +1024,96 @@ function resetRouteForm() {
     $("#route-escalation-policy").val("");
     $("#route-service").val("");
     updateRouteEscalationModeUi();
+    $("#route-sentry-webhook-secret").val("");
+    updateSentrySecretHelp(null);
+    updateRouteSourceUi();
 }
 
-function showRouteToken(token) {
+function getRouteIntakePath(route) {
+    const source = String(route.source || "").toLowerCase();
+
+    if (source === "sentry") {
+        return "/api/integrations/sentry/" + route.id;
+    }
+
+    if (source === "alertmanager") {
+        return "/api/integrations/alertmanager";
+    }
+
+    if (source === "zabbix") {
+        return "/api/integrations/zabbix";
+    }
+
+    if (source === "webhook") {
+        return "/api/integrations/webhook";
+    }
+
+    return "/api/integrations/" + source;
+}
+
+function getRouteIntakeUrl(route) {
+    return window.location.origin + getRouteIntakePath(route);
+}
+
+function buildRouteIntakeCurl(route, token) {
+    const url = getRouteIntakeUrl(route);
+    const source = String(route.source || "").toLowerCase();
+
+    if (source === "sentry") {
+        return [
+            "curl -X POST '" + url + "' \\",
+            "  -H 'Content-Type: application/json' \\",
+            "  -H 'Sentry-Hook-Resource: event_alert' \\",
+            "  -H 'Sentry-Hook-Signature: <generated-by-sentry>' \\",
+            "  -d '{\"action\":\"triggered\",\"data\":{}}'"
+        ].join("\n");
+    }
+
+    return [
+        "curl -X POST '" + url + "' \\",
+        "  -H 'Content-Type: application/json' \\",
+        "  -H 'Authorization: Bearer " + (token || "<route-token>") + "' \\",
+        "  -d '{}'"
+    ].join("\n");
+}
+
+function showRouteIntakeDetails(route) {
+    const source = String(route.source || "").toLowerCase();
+    const token = route.intake_token || "";
+    const isSentry = source === "sentry";
+    const url = getRouteIntakeUrl(route);
+
+    $("#route-intake-title").text(
+        isSentry ? "Sentry webhook URL" : "Route intake details"
+    );
+
+    $("#route-intake-subtitle").text(
+        isSentry
+            ? "Copy this URL to Sentry Internal Integration. Then paste Sentry Client Secret into this route settings."
+            : "Copy this token now. It may not be shown again."
+    );
+
+    $("#route-intake-url").val(url);
+    $("#route-intake-token").val(token);
+    $("#route-intake-curl").val(buildRouteIntakeCurl(route, token));
+
+    $("#route-intake-token-group").toggleClass("is-hidden", isSentry);
+    $("#copy-route-intake-token").toggleClass("is-hidden", isSentry);
+
+    $("#route-intake-url-help").text(
+        isSentry
+            ? "Use this URL as Webhook URL in Sentry Internal Integration."
+            : "Send alerts to this URL and pass the token as Authorization: Bearer."
+    );
+
     openAppModal("#route-token-box");
-    $("#route-intake-token").val(token || "");
 }
 
 function closeRouteTokenModal() {
     closeAppModal("#route-token-box");
+    $("#route-intake-url").val("");
     $("#route-intake-token").val("");
+    $("#route-intake-curl").val("");
 }
 
 function regenerateRouteToken(routeId) {
@@ -956,7 +1132,7 @@ function regenerateRouteToken(routeId) {
         confirmClass: "btn-warning",
     }).done(function () {
         apiPost("/api/routes/" + routeId + "/intake-token", {}, function (response) {
-            showRouteToken(response.intake_token);
+            showRouteIntakeDetails(response);
             refreshRoutes();
         });
     });
@@ -968,20 +1144,32 @@ function openCreateRouteModal() {
     loadRouteDependencies();
     openAppModal("#route-form-modal");
 }
+function copyTextFromField(selector) {
+    const value = $(selector).val() || "";
 
-function copyRouteIntakeToken() {
-    const token = $("#route-intake-token").val() || "";
-    if (!token) {
+    if (!value) {
         return;
     }
+
     if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(token);
+        navigator.clipboard.writeText(value);
         return;
     }
 
-    const field = $("#route-intake-token");
+    const field = $(selector);
     field.trigger("select");
     document.execCommand("copy");
+}
+function copyRouteIntakeToken() {
+    copyTextFromField("#route-intake-token");
+}
+
+function copyRouteIntakeUrl() {
+    copyTextFromField("#route-intake-url");
+}
+
+function copyRouteIntakeCurl() {
+    copyTextFromField("#route-intake-curl");
 }
 
 function initRoutesTableSorting() {
@@ -1020,6 +1208,7 @@ function getFilteredRoutes() {
 $(document).on("change", "#route-team", function () {
     loadRouteDependencies();
 });
+$("#route-source").on("change", updateRouteSourceUi);
 $(document).on("change", "#route-escalation-mode", updateRouteEscalationModeUi);
 $(document).on("input", "#routes-search", renderRoutesTable);
 $(document).on("change", "#routes-source-filter, #routes-status-filter", renderRoutesTable);
@@ -1112,3 +1301,5 @@ $(document).on("click", "#route-service-rules-modal", function (event) {
 $(document).on("click", "#format-service-rule-matchers", function () {
     formatJsonTextarea("#service-rule-matchers", {}, "Matchers JSON");
 });
+$(document).on("click", "#copy-route-intake-url", copyRouteIntakeUrl);
+$(document).on("click", "#copy-route-intake-curl", copyRouteIntakeCurl);

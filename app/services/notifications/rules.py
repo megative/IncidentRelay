@@ -507,7 +507,7 @@ def send_delivery(delivery):
 
 
 def send_direct_notifier_delivery(delivery, group):
-    from app.services.notification_service import format_alert_message
+    from app.services.notifications.delivery import format_alert_message
 
     notifier = DIRECT_NOTIFIERS[delivery.method]
 

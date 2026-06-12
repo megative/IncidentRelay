@@ -59,6 +59,68 @@ def response(description, schema=None):
     return item
 
 
+SOURCE_SCHEMA_WITH_SENTRY = {
+    "type": "string",
+    "enum": ["alertmanager", "zabbix", "webhook", "sentry"],
+    "description": "Incoming alert source type.",
+}
+
+ROUTE_INTEGRATION_CONFIG_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Provider-specific route integration settings. "
+        "For source=sentry this stores the Sentry Client Secret write-only "
+        "and returns safe read-only status fields."
+    ),
+    "additionalProperties": True,
+    "properties": {
+        "sentry": {
+            "type": "object",
+            "description": "Sentry-specific route integration settings.",
+            "additionalProperties": False,
+            "properties": {
+                "webhook_secret": {
+                    "type": "string",
+                    "writeOnly": True,
+                    "nullable": True,
+                    "description": (
+                        "Sentry Internal Integration Client Secret. "
+                        "Only accepted on create/update. Never returned by the API. "
+                        "When updating an existing Sentry route, omit or send empty value "
+                        "to keep the current secret."
+                    ),
+                    "example": "sntrys_client_secret_value",
+                },
+                "has_webhook_secret": {
+                    "type": "boolean",
+                    "readOnly": True,
+                    "description": "Whether a Sentry webhook secret is configured for this route.",
+                    "example": True,
+                },
+                "webhook_path": {
+                    "type": "string",
+                    "readOnly": True,
+                    "description": "Route-scoped Sentry webhook path.",
+                    "example": "/api/integrations/sentry/42",
+                },
+            },
+        }
+    },
+    "example": {
+        "sentry": {
+            "webhook_secret": "sntrys_client_secret_value"
+        }
+    },
+}
+
+CREATE_ROUTE_DESCRIPTION = (
+    "Creates an alert route. Incoming alerts match routes by source and matchers. "
+    "When a route matches, the alert is assigned to the route rotation or escalation policy "
+    "and sent to route channels. For source=sentry, the response includes "
+    "integration_config.sentry.webhook_path; configure that URL in Sentry Internal Integration "
+    "and store the Sentry Client Secret in integration_config.sentry.webhook_secret."
+)
+
 ROUTE_SCHEMA = {
     "type": "object",
     "required": ["team_id", "name", "source"],
@@ -111,7 +173,7 @@ ROUTE_SCHEMA = {
         "intake_token": {
             "type": "string",
             "readOnly": True,
-            "description": "Returned only on route creation and token regeneration.",
+            "description": "Returned only on route creation and token regeneration. Used by Alertmanager, Zabbix and Generic Webhook routes as bearer intake token.",
         },
         "escalation_policy_id": {
             "type": "integer",
@@ -183,10 +245,7 @@ def paths():
             "post": {
                 "tags": ["routes"],
                 "summary": "Create route",
-                "description": (
-                    "Creates an alert route. Incoming alerts match routes by source and matchers. "
-                    "When a route matches, the alert is assigned to the route rotation and sent to route channels."
-                ),
+                "description": CREATE_ROUTE_DESCRIPTION,
                 "operationId": "createRoute",
                 "requestBody": json_body("Route properties.", ROUTE_SCHEMA),
                 "responses": {"201": response("Route created."), "400": response("Validation error.")},

@@ -1,4 +1,4 @@
-from app.services.auth import hash_token
+from app.services.integrations.auth import hash_token
 from tests.factories import create_group, create_route, create_team
 
 

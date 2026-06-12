@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 from app.login import create_access_token, decode_access_token, hash_password, verify_password
-from app.services.auth import create_raw_token, get_bearer_token, hash_token, token_has_scope
+from app.services.integrations.auth import create_raw_token, get_bearer_token, hash_token, token_has_scope
 
 
 def test_password_hash_is_not_plaintext_and_can_be_verified():

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from app.modules.db.models import (
     UserNotificationDelivery,
 )
-from app.services import notification_rules
+from app.services.notifications import rules
 from app.services.alerts import upsert_alert
 from tests.factories import (
     create_group,
@@ -51,7 +51,7 @@ def test_create_user_notification_rule(db):
     group = create_group()
     user = create_user("alice", group)
 
-    rule = notification_rules.create_user_rule(
+    rule = rules.create_user_rule(
         user,
         method="browser_push",
         delay_seconds=120,
@@ -75,21 +75,21 @@ def test_list_matching_rules_filters_by_event_type_and_severity(db):
     user = create_user("alice", group)
     alert_group = create_assigned_group(user, severity="critical")
 
-    matching = notification_rules.create_user_rule(
+    matching = rules.create_user_rule(
         user,
         method="browser_push",
         delay_seconds=0,
         severities=["critical"],
         event_types=["notification"],
     )
-    notification_rules.create_user_rule(
+    rules.create_user_rule(
         user,
         method="email",
         delay_seconds=60,
         severities=["warning"],
         event_types=["notification"],
     )
-    notification_rules.create_user_rule(
+    rules.create_user_rule(
         user,
         method="voice_call",
         delay_seconds=300,
@@ -97,9 +97,9 @@ def test_list_matching_rules_filters_by_event_type_and_severity(db):
         event_types=["resolved"],
     )
 
-    rules = notification_rules.list_matching_rules(alert_group, "notification")
+    rules1 = rules.list_matching_rules(alert_group, "notification")
 
-    assert [rule.id for rule in rules] == [matching.id]
+    assert [rule.id for rule in rules1] == [matching.id]
 
 
 def test_has_deliverable_user_notification_uses_default_browser_push_without_custom_rules(
@@ -111,12 +111,12 @@ def test_has_deliverable_user_notification_uses_default_browser_push_without_cus
     alert_group = create_assigned_group(user)
 
     monkeypatch.setattr(
-        notification_rules.browser_push,
+        rules.browser_push,
         "can_send_alert_push",
         lambda pushed_group: pushed_group.id == alert_group.id,
     )
 
-    assert notification_rules.has_deliverable_user_notification(alert_group) is True
+    assert rules.has_deliverable_user_notification(alert_group) is True
 
 
 def test_has_deliverable_user_notification_uses_custom_rules_when_present(
@@ -127,7 +127,7 @@ def test_has_deliverable_user_notification_uses_custom_rules_when_present(
     user = create_user("alice", group)
     alert_group = create_assigned_group(user)
 
-    notification_rules.create_user_rule(
+    rules.create_user_rule(
         user,
         method="email",
         delay_seconds=60,
@@ -136,13 +136,13 @@ def test_has_deliverable_user_notification_uses_custom_rules_when_present(
     )
 
     monkeypatch.setattr(
-        notification_rules.browser_push,
+        rules.browser_push,
         "can_send_alert_push",
         lambda pushed_group: False,
     )
 
-    assert notification_rules.has_deliverable_user_notification(alert_group) is True
-    assert notification_rules.has_deliverable_user_notification(
+    assert rules.has_deliverable_user_notification(alert_group) is True
+    assert rules.has_deliverable_user_notification(
         alert_group,
         event_type="resolved",
     ) is False
@@ -159,7 +159,7 @@ def test_enqueue_user_notifications_default_browser_push_sends_immediately(
     calls = []
 
     monkeypatch.setattr(
-        notification_rules.browser_push,
+        rules.browser_push,
         "can_send_alert_push",
         lambda pushed_group: True,
     )
@@ -175,12 +175,12 @@ def test_enqueue_user_notifications_default_browser_push_sends_immediately(
         return 1
 
     monkeypatch.setattr(
-        notification_rules.browser_push,
+        rules.browser_push,
         "send_alert_push_to_user",
         fake_send_alert_push_to_user,
     )
 
-    sent = notification_rules.enqueue_user_notifications(
+    sent = rules.enqueue_user_notifications(
         alert_group,
         event_type="notification",
     )
@@ -209,7 +209,7 @@ def test_enqueue_user_notifications_creates_pending_delayed_rule(db, monkeypatch
     user = create_user("alice", group)
     alert_group = create_assigned_group(user)
 
-    rule = notification_rules.create_user_rule(
+    rule = rules.create_user_rule(
         user,
         method="browser_push",
         delay_seconds=300,
@@ -218,12 +218,12 @@ def test_enqueue_user_notifications_creates_pending_delayed_rule(db, monkeypatch
     )
 
     monkeypatch.setattr(
-        notification_rules.browser_push,
+        rules.browser_push,
         "send_alert_push_to_user",
         lambda *args, **kwargs: 1,
     )
 
-    sent = notification_rules.enqueue_user_notifications(
+    sent = rules.enqueue_user_notifications(
         alert_group,
         event_type="notification",
     )
@@ -245,7 +245,7 @@ def test_process_due_user_notifications_sends_due_delivery(db, monkeypatch):
     user = create_user("alice", group)
     alert_group = create_assigned_group(user)
 
-    rule = notification_rules.create_user_rule(
+    rule = rules.create_user_rule(
         user,
         method="browser_push",
         delay_seconds=60,
@@ -272,12 +272,12 @@ def test_process_due_user_notifications_sends_due_delivery(db, monkeypatch):
         return 1
 
     monkeypatch.setattr(
-        notification_rules.browser_push,
+        rules.browser_push,
         "send_alert_push_to_user",
         fake_send_alert_push_to_user,
     )
 
-    sent = notification_rules.process_due_user_notifications()
+    sent = rules.process_due_user_notifications()
 
     assert sent == 1
     assert calls == [(user.id, alert_group.id, "notification")]
@@ -295,7 +295,7 @@ def test_process_due_user_notifications_does_not_send_future_delivery(db, monkey
     user = create_user("alice", group)
     alert_group = create_assigned_group(user)
 
-    rule = notification_rules.create_user_rule(
+    rule = rules.create_user_rule(
         user,
         method="browser_push",
         delay_seconds=60,
@@ -314,14 +314,14 @@ def test_process_due_user_notifications_does_not_send_future_delivery(db, monkey
     )
 
     monkeypatch.setattr(
-        notification_rules.browser_push,
+        rules.browser_push,
         "send_alert_push_to_user",
         lambda *args, **kwargs: (_ for _ in ()).throw(
             AssertionError("must not send future delivery")
         ),
     )
 
-    assert notification_rules.process_due_user_notifications() == 0
+    assert rules.process_due_user_notifications() == 0
 
 
 def test_process_due_user_notifications_skips_if_alert_no_longer_firing(
@@ -332,7 +332,7 @@ def test_process_due_user_notifications_skips_if_alert_no_longer_firing(
     user = create_user("alice", group)
     alert_group = create_assigned_group(user, status="acknowledged")
 
-    rule = notification_rules.create_user_rule(
+    rule = rules.create_user_rule(
         user,
         method="browser_push",
         delay_seconds=60,
@@ -351,14 +351,14 @@ def test_process_due_user_notifications_skips_if_alert_no_longer_firing(
     )
 
     monkeypatch.setattr(
-        notification_rules.browser_push,
+        rules.browser_push,
         "send_alert_push_to_user",
         lambda *args, **kwargs: (_ for _ in ()).throw(
             AssertionError("must not send for non-firing alert group")
         ),
     )
 
-    sent = notification_rules.process_due_user_notifications()
+    sent = rules.process_due_user_notifications()
 
     assert sent == 0
 
@@ -376,7 +376,7 @@ def test_process_due_user_notifications_does_not_send_already_processing_deliver
     user = create_user("alice", group)
     alert_group = create_assigned_group(user)
 
-    rule = notification_rules.create_user_rule(
+    rule = rules.create_user_rule(
         user,
         method="browser_push",
         delay_seconds=60,
@@ -395,11 +395,11 @@ def test_process_due_user_notifications_does_not_send_already_processing_deliver
     )
 
     monkeypatch.setattr(
-        notification_rules.browser_push,
+        rules.browser_push,
         "send_alert_push_to_user",
         lambda *args, **kwargs: (_ for _ in ()).throw(
             AssertionError("must not send already processing delivery from query")
         ),
     )
 
-    assert notification_rules.process_due_user_notifications() == 0
+    assert rules.process_due_user_notifications() == 0

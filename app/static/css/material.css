@@ -2832,3 +2832,31 @@ body.md-theme .incident-priority-select {
         grid-template-columns: 1fr;
     }
 }
+.copy-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.copy-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.copy-field label {
+    font-weight: 600;
+}
+
+.copy-field-control {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.copy-field-code {
+    min-height: 180px;
+    resize: vertical;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    white-space: pre;
+}

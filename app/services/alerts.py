@@ -5,14 +5,14 @@ from app.settings import Config
 from app.modules.db import alerts_repo, users_repo, incidents_repo
 from app.services import escalation_policies as escalation_policy_service
 from app.services.oncall import get_current_oncall_user, get_next_rotation_user
-from app.services.routing import build_group_key, find_route_for_alert
+from app.services.routing.routing import build_group_key, find_route_for_alert
 from app.services.silences import find_active_silence
-from app.services.notification_service import (
+from app.services.notifications.delivery import (
     has_matching_notification_channel,
     notify_alert,
     update_alert_messages,
 )
-from app.services.service_resolution import (
+from app.services.routing.service_resolution import (
     get_effective_escalation_policy,
     get_effective_route_rotation,
     resolve_alert_service,

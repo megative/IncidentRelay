@@ -6,7 +6,7 @@ from app.api.schemas.auth import ChangePasswordSchema
 from app.api.schemas.profile import ActiveGroupSchema, ProfileTokenCreateSchema, ProfileUpdateSchema
 from app.login import hash_password, verify_password
 from app.modules.db import groups_repo, tokens_repo, users_repo
-from app.services.auth import create_raw_token, hash_token
+from app.services.integrations.auth import create_raw_token, hash_token
 from app.services.audit import write_audit
 from app.services.rbac import can_read_group
 from app.services.serializers import serialize_user, serialize_api_token

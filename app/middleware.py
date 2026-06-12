@@ -154,7 +154,7 @@ def load_api_token_principal():
     This function imports auth helpers lazily to avoid circular imports.
     """
 
-    from app.services.auth import authenticate_api_token, get_bearer_token
+    from app.services.integrations.auth import authenticate_api_token, get_bearer_token
 
     raw_token = get_bearer_token()
 

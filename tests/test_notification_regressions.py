@@ -3,7 +3,9 @@ from datetime import datetime, timedelta
 from app.db import init_database
 from app.modules.db.models import AlertEvent, AlertGroup, UserNotificationDelivery
 from app.services import alerts as alerts_service
-from app.services import notification_service
+from app.services.notifications import delivery as notification_service
+from app.services.notifications import rules as notification_rules
+from app.services.notifications.delivery import notify_alert
 from app.services.alerts import upsert_alert
 from tests.factories import (
     create_group,
@@ -291,7 +293,7 @@ def test_notify_alert_creates_user_notification_delivery_with_group_id(
     alert_group.save()
 
     monkeypatch.setattr(
-        notification_service.notification_rules.browser_push,
+        notification_rules.browser_push,
         "send_alert_push_to_user",
         lambda assignee, group, event_type="notification": 1,
     )

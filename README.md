@@ -11,7 +11,7 @@ It provides the core building blocks of an on-call system:
 - access groups and RBAC-style group roles;
 - teams and on-call rotations;
 - alert intake routes with per-route tokens;
-- Alertmanager, Zabbix, and generic webhook integrations;
+- Alertmanager, Zabbix, Sentry, and generic webhook integrations;
 - Mattermost, Slack, Telegram, Discord, Microsoft Teams, email, webhook, and voice-call notifications;
 - profile-level browser/PWA push notifications;
 - profile notification rules for browser push, email, and voice-call follow-up;
@@ -104,11 +104,12 @@ IncidentRelay includes Swagger/OpenAPI documentation and personal API tokens wit
 
 ### Incoming alert sources
 
-| Source | Endpoint |
-|---|---|
-| Alertmanager | `POST /api/integrations/alertmanager` |
-| Zabbix | `POST /api/integrations/zabbix` |
-| Generic webhook | `POST /api/integrations/webhook` |
+| Source          | Endpoint                                   |
+|-----------------|--------------------------------------------|
+| Alertmanager    | `POST /api/integrations/alertmanager`      |
+| Zabbix          | `POST /api/integrations/zabbix`            |
+| Sentry          | `POST /api/integrations/sentry/<route_id>` |
+| Generic webhook | `POST /api/integrations/webhook`           |
 
 ### Notification channels
 

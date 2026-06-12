@@ -353,6 +353,23 @@ def serialize_service_match_rule(rule, current_user=None):
     return attach_team_permissions(data, rule.team_id, current_user)
 
 
+def serialize_route_integration_config(route):
+    """Serialize provider-specific integration config without secrets."""
+    config = route.integration_config or {}
+
+    if route.source == "sentry":
+        sentry = dict(config.get("sentry") or {})
+
+        return {
+            "sentry": {
+                "has_webhook_secret": bool(sentry.get("webhook_secret")),
+                "webhook_path": f"/api/integrations/sentry/{route.id}",
+            }
+        }
+
+    return {}
+
+
 def serialize_route(route, current_user=None):
     """
     Serialize an alert route.
@@ -378,6 +395,7 @@ def serialize_route(route, current_user=None):
         ),
         "matchers": route.matchers,
         "group_by": route.group_by,
+        "integration_config": serialize_route_integration_config(route),
         "enabled": route.enabled,
         "intake_token_prefix": route.intake_token_prefix,
         "has_intake_token": bool(route.intake_token_hash),

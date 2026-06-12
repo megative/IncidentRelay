@@ -5,7 +5,7 @@ from app.api.schemas.notification_rules import (
     NotificationRuleCreateSchema,
     NotificationRuleUpdateSchema,
 )
-from app.services import notification_rules
+from app.services.notifications import rules
 
 notification_rules_bp = Blueprint("notification_rules_api", __name__)
 

@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
 from app.modules.db.models import UserNotificationDelivery
-from app.services import notification_rules
+from app.services.notifications import rules
 from app.services.alerts import resolve_alert, upsert_alert
 from tests.factories import add_user_to_team, create_group, create_route, create_team, create_user
 
@@ -46,24 +46,24 @@ def test_has_deliverable_user_notification_uses_default_browser_push_for_group(d
     alert_group, user = _group_with_assignee()
 
     monkeypatch.setattr(
-        notification_rules.browser_push,
+        rules.browser_push,
         "can_send_alert_push",
         lambda group: group.id == alert_group.id,
     )
 
-    assert notification_rules.has_deliverable_user_notification(alert_group) is True
+    assert rules.has_deliverable_user_notification(alert_group) is True
 
 
 def test_enqueue_user_notifications_creates_group_delivery_for_default_browser_push(db, monkeypatch):
     alert_group, user = _group_with_assignee()
 
     monkeypatch.setattr(
-        notification_rules.browser_push,
+        rules.browser_push,
         "send_alert_push_to_user",
         lambda assignee, group, event_type="notification": 1,
     )
 
-    sent = notification_rules.enqueue_user_notifications(
+    sent = rules.enqueue_user_notifications(
         alert_group,
         event_type="notification",
     )
@@ -83,7 +83,7 @@ def test_enqueue_user_notifications_creates_group_delivery_for_default_browser_p
 def test_custom_delayed_user_notification_is_skipped_when_group_no_longer_firing(db, monkeypatch):
     alert_group, user = _group_with_assignee()
 
-    notification_rules.create_user_rule(
+    rules.create_user_rule(
         user,
         method="browser_push",
         delay_seconds=60,
@@ -92,7 +92,7 @@ def test_custom_delayed_user_notification_is_skipped_when_group_no_longer_firing
         enabled=True,
     )
 
-    created = notification_rules.enqueue_user_notifications(
+    created = rules.enqueue_user_notifications(
         alert_group,
         event_type="notification",
     )
@@ -109,14 +109,14 @@ def test_custom_delayed_user_notification_is_skipped_when_group_no_longer_firing
     delivery.save()
 
     monkeypatch.setattr(
-        notification_rules.browser_push,
+        rules.browser_push,
         "send_alert_push_to_user",
         lambda *args, **kwargs: (_ for _ in ()).throw(
             AssertionError("must not send skipped notification")
         ),
     )
 
-    processed = notification_rules.process_due_user_notifications()
+    processed = rules.process_due_user_notifications()
 
     delivery = UserNotificationDelivery.get_by_id(delivery.id)
 
@@ -128,7 +128,7 @@ def test_custom_delayed_user_notification_is_skipped_when_group_no_longer_firing
 def test_resolved_user_notification_is_not_skipped_when_group_is_resolved(db, monkeypatch):
     alert_group, user = _group_with_assignee()
 
-    notification_rules.create_user_rule(
+    rules.create_user_rule(
         user,
         method="browser_push",
         delay_seconds=60,
@@ -139,7 +139,7 @@ def test_resolved_user_notification_is_not_skipped_when_group_is_resolved(db, mo
 
     resolve_alert(alert_group.id, user_id=user.id)
 
-    created = notification_rules.enqueue_user_notifications(
+    created = rules.enqueue_user_notifications(
         alert_group,
         event_type="resolved",
     )
@@ -153,14 +153,14 @@ def test_resolved_user_notification_is_not_skipped_when_group_is_resolved(db, mo
     calls = []
 
     monkeypatch.setattr(
-        notification_rules.browser_push,
+        rules.browser_push,
         "send_alert_push_to_user",
         lambda assignee, group, event_type="resolved": calls.append(
             (assignee.id, group.id, event_type)
         ) or 1,
     )
 
-    processed = notification_rules.process_due_user_notifications()
+    processed = rules.process_due_user_notifications()
 
     delivery = UserNotificationDelivery.get_by_id(delivery.id)
 
@@ -170,13 +170,13 @@ def test_resolved_user_notification_is_not_skipped_when_group_is_resolved(db, mo
     assert calls == [(user.id, alert_group.id, "resolved")]
 
 
-def test_notification_rules_reject_child_alert_objects(db):
+def test_rules_reject_child_alert_objects(db):
     alert_group, user = _group_with_assignee()
 
     child = alert_group.alerts[0]
 
     try:
-        notification_rules.has_deliverable_user_notification(child)
+        rules.has_deliverable_user_notification(child)
     except TypeError as exc:
         assert "AlertGroup" in str(exc)
     else:
