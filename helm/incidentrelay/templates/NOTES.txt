@@ -15,14 +15,25 @@ Access the web UI:
   then open http://127.0.0.1:{{ .Values.service.port }}
 {{- end }}
 
+{{- if eq .Values.image.repository "roxywi/incidentrelay" }}
+
+WARNING: image.repository is left at its default ("roxywi/incidentrelay").
+No public image is published under that name yet, so pods will sit in
+ImagePullBackOff. Build the image yourself and set image.repository /
+image.tag to your registry.
+{{- end }}
+
 {{- $dbType := "" }}
 {{- if .Values.config }}{{- if .Values.config.database }}{{- $dbType = .Values.config.database.type | default "" }}{{- end }}{{- end }}
-{{- if and (eq ($dbType | toString) "sqlite") (or .Values.scheduler.enabled .Values.telegram.enabled) }}
+{{- if eq ($dbType | toString) "sqlite" }}
 
-NOTE: you are running SQLite with background workers enabled. All pods
-share one PersistentVolumeClaim, so on a multi-node cluster the volume
-must support ReadWriteMany (persistence.accessModes). For anything
-beyond a single-node setup, switch config.database to PostgreSQL.
+NOTE: you are running SQLite. All components share one
+PersistentVolumeClaim, which is only safe while every pod runs on the
+same node — SQLite over network-backed ReadWriteMany storage (NFS and
+friends) is a known way to corrupt the database. For any multi-node
+setup switch config.database to PostgreSQL. Migrations run on web pod
+start: keep web.replicaCount at 1, or disable web.runMigrations and
+migrate out of band before scaling.
 {{- end }}
 
 {{- if not .Values.existingConfigSecret }}

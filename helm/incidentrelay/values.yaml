@@ -1,6 +1,10 @@
 # Default values for the IncidentRelay chart.
 
 image:
+  # NB: no public image is published under this name yet (neither
+  # Docker Hub nor GHCR) — installing with defaults ends in
+  # ImagePullBackOff. Build the image yourself and point repository/tag
+  # at your registry.
   repository: roxywi/incidentrelay
   # Defaults to the chart appVersion when empty.
   tag: ""
@@ -61,8 +65,11 @@ config:
 existingConfigSecret: ""
 
 # Persistent storage for /var/lib/incidentrelay (the SQLite database).
-# Every enabled component mounts this volume, so on a multi-node cluster
-# it must be ReadWriteMany — or use PostgreSQL and disable persistence.
+# Every enabled component mounts this volume, which is only safe while
+# all pods land on one node: SQLite over network-backed ReadWriteMany
+# storage (NFS and friends) is a known way to corrupt the database.
+# For anything multi-node switch config.database to PostgreSQL and
+# disable persistence.
 persistence:
   enabled: true
   accessModes:
@@ -76,9 +83,16 @@ persistence:
 
 web:
   replicaCount: 1
+  # Recreate is the safe default while SQLite lives on the shared PVC:
+  # it prevents the old and new pod from writing one database file
+  # during a rollout (and a rollout deadlock on RWO volumes). With
+  # PostgreSQL feel free to switch to RollingUpdate.
+  strategy:
+    type: Recreate
   # Run database migrations in the entrypoint before gunicorn starts.
-  # Keep replicaCount at 1 while this is on: concurrent starts would
-  # run migrations concurrently.
+  # Keep replicaCount at 1 while this is on: several pods starting at
+  # once would race on the migrations. To scale web, set this to false
+  # and run migrations out of band (`python app/migrate.py migrate`).
   runMigrations: true
   port: 8080
   gunicorn:
@@ -96,6 +110,8 @@ web:
 # Background worker that evaluates schedules, reminders and escalations.
 scheduler:
   enabled: true
+  strategy:
+    type: Recreate
   resources: {}
   podAnnotations: {}
   podLabels: {}
@@ -108,6 +124,8 @@ scheduler:
 # configured bot (it idles), disable it if you do not use Telegram.
 telegram:
   enabled: true
+  strategy:
+    type: Recreate
   resources: {}
   podAnnotations: {}
   podLabels: {}
