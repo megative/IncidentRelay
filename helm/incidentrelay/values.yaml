@@ -1,0 +1,141 @@
+# Default values for the IncidentRelay chart.
+
+image:
+  repository: roxywi/incidentrelay
+  # Defaults to the chart appVersion when empty.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  # Defaults to the fullname when empty.
+  name: ""
+
+# IncidentRelay reads every setting from a single INI file mounted at
+# /etc/incidentrelay/incidentrelay.conf. The map below is rendered into
+# that file verbatim: top-level keys become INI sections, nested keys
+# become options. It is stored as a Secret because it carries credentials
+# (secret_key, database password, SMTP password, VAPID keys, ...).
+config:
+  main:
+    secret_key: change-me
+  server:
+    host: 0.0.0.0
+    port: 8080
+    public_base_url: http://localhost:8080
+  # SQLite works out of the box but requires the shared data volume below;
+  # with more than one node, switch to PostgreSQL:
+  #   database:
+  #     type: postgresql
+  #     host: postgres.example.svc
+  #     port: 5432
+  #     name: incidentrelay
+  #     user: incidentrelay
+  #     password: change-me
+  # NB: the SQLite file location option is `name` (not `path` — the app
+  # ignores `path`, see Config.DB_NAME in app/settings.py).
+  database:
+    type: sqlite
+    name: /var/lib/incidentrelay/incidentrelay.db
+  sqlite:
+    wal: true
+    busy_timeout: 5000
+  logging:
+    level: INFO
+    file: /var/log/incidentrelay/incidentrelay.log
+    scheduler_file: /var/log/incidentrelay/incidentrelay-scheduler.log
+    telegram_worker_file: /var/log/incidentrelay/incidentrelay-telegram-worker.log
+  voice:
+    provider: stub
+    providers_dir: /usr/local/lib/incidentrelay/voice_providers
+    callback_secret: change-me
+
+# Name of an existing Secret holding the full config under the key
+# `incidentrelay.conf`. When set, the `config` map above is ignored and
+# no Secret is rendered by the chart.
+existingConfigSecret: ""
+
+# Persistent storage for /var/lib/incidentrelay (the SQLite database).
+# Every enabled component mounts this volume, so on a multi-node cluster
+# it must be ReadWriteMany — or use PostgreSQL and disable persistence.
+persistence:
+  enabled: true
+  accessModes:
+    - ReadWriteOnce
+  size: 1Gi
+  # Empty means the cluster default storage class.
+  storageClass: ""
+  # Use a pre-existing PVC instead of creating one.
+  existingClaim: ""
+  annotations: {}
+
+web:
+  replicaCount: 1
+  # Run database migrations in the entrypoint before gunicorn starts.
+  # Keep replicaCount at 1 while this is on: concurrent starts would
+  # run migrations concurrently.
+  runMigrations: true
+  port: 8080
+  gunicorn:
+    workers: 1
+    threads: 4
+    timeout: 120
+  resources: {}
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []
+
+# Background worker that evaluates schedules, reminders and escalations.
+scheduler:
+  enabled: true
+  resources: {}
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []
+
+# Long-polling worker for Telegram callback buttons. Harmless without a
+# configured bot (it idles), disable it if you do not use Telegram.
+telegram:
+  enabled: true
+  resources: {}
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []
+
+service:
+  type: ClusterIP
+  port: 8080
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: incidentrelay.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+podSecurityContext: {}
+securityContext: {}
+
+# Extra volumes / mounts added to every component, e.g. custom voice
+# provider plugins for /usr/local/lib/incidentrelay/voice_providers.
+extraVolumes: []
+extraVolumeMounts: []

@@ -151,6 +151,31 @@ docker compose \
 
 Read more: [Docker installation](docs/getting-started/docker.md)
 
+### Kubernetes (Helm)
+
+A Helm chart lives in [`helm/incidentrelay`](helm/incidentrelay). It deploys the web UI plus the scheduler and Telegram workers, renders the application config from values into a Secret, and wires up the `/healthz` and `/readyz` probes.
+
+```bash
+helm install incidentrelay ./helm/incidentrelay \
+  --set config.main.secret_key="$(openssl rand -hex 32)"
+```
+
+The default values use SQLite on a shared PersistentVolumeClaim, which is fine for a single-node cluster. For anything bigger, point `config.database` at PostgreSQL:
+
+```bash
+helm install incidentrelay ./helm/incidentrelay \
+  --set config.main.secret_key="$(openssl rand -hex 32)" \
+  --set config.database.type=postgresql \
+  --set config.database.host=postgres.example.svc \
+  --set config.database.port=5432 \
+  --set config.database.name=incidentrelay \
+  --set config.database.user=incidentrelay \
+  --set config.database.password=change-me \
+  --set persistence.enabled=false
+```
+
+All settings from `incidentrelay.conf` are available under `config.*` in [values.yaml](helm/incidentrelay/values.yaml); you can also bring a pre-rendered config via `existingConfigSecret`.
+
 ### RedHat-like distributions from RPM repository
 
 Recommended for RHEL, Rocky Linux, AlmaLinux, and CentOS Stream.

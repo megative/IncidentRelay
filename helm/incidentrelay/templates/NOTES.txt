@@ -1,0 +1,33 @@
+IncidentRelay {{ .Chart.AppVersion }} has been deployed.
+
+Components:
+  web        {{ .Values.web.replicaCount }} replica(s)
+  scheduler  {{ .Values.scheduler.enabled | ternary "enabled" "disabled" }}
+  telegram   {{ .Values.telegram.enabled | ternary "enabled" "disabled" }}
+
+Access the web UI:
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else }}
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "incidentrelay.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+  then open http://127.0.0.1:{{ .Values.service.port }}
+{{- end }}
+
+{{- $dbType := "" }}
+{{- if .Values.config }}{{- if .Values.config.database }}{{- $dbType = .Values.config.database.type | default "" }}{{- end }}{{- end }}
+{{- if and (eq ($dbType | toString) "sqlite") (or .Values.scheduler.enabled .Values.telegram.enabled) }}
+
+NOTE: you are running SQLite with background workers enabled. All pods
+share one PersistentVolumeClaim, so on a multi-node cluster the volume
+must support ReadWriteMany (persistence.accessModes). For anything
+beyond a single-node setup, switch config.database to PostgreSQL.
+{{- end }}
+
+{{- if not .Values.existingConfigSecret }}
+
+NOTE: the application config (including secret_key) is rendered from
+values into Secret "{{ include "incidentrelay.configSecretName" . }}".
+Change the default "change-me" values before exposing the service.
+{{- end }}
