@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta
 
 from app.modules.db.models import OnCallShiftEmailNotification
-from app.services.oncall_shift_notifications import (
+from app.services.notifications import shift_notifications as shift_email_service
+from app.services.notifications.shift_notifications import (
     send_due_oncall_shift_email_notifications,
 )
 from tests.factories import (
@@ -20,7 +21,8 @@ def test_shift_start_email_is_sent_once(db, monkeypatch):
         sent.append((to_email, subject, body))
 
     monkeypatch.setattr(
-        "app.services.oncall_shift_notifications._send_plain_email",
+        shift_email_service,
+        "_send_plain_email",
         fake_send,
     )
 
@@ -65,7 +67,8 @@ def test_shift_end_email_is_sent(db, monkeypatch):
     sent = []
 
     monkeypatch.setattr(
-        "app.services.oncall_shift_notifications._send_plain_email",
+        shift_email_service,
+        "_send_plain_email",
         lambda to_email, subject, body: sent.append((to_email, subject, body)),
     )
 
@@ -106,7 +109,8 @@ def test_shift_handoff_sends_end_and_start_emails(db, monkeypatch):
     sent = []
 
     monkeypatch.setattr(
-        "app.services.oncall_shift_notifications._send_plain_email",
+        shift_email_service,
+        "_send_plain_email",
         lambda to_email, subject, body: sent.append((to_email, subject, body)),
     )
 
@@ -170,7 +174,8 @@ def test_shift_email_respects_user_preferences(db, monkeypatch):
     sent = []
 
     monkeypatch.setattr(
-        "app.services.oncall_shift_notifications._send_plain_email",
+        shift_email_service,
+        "_send_plain_email",
         lambda to_email, subject, body: sent.append((to_email, subject, body)),
     )
 
@@ -206,7 +211,8 @@ def test_shift_email_requires_user_email(db, monkeypatch):
     sent = []
 
     monkeypatch.setattr(
-        "app.services.oncall_shift_notifications._send_plain_email",
+        shift_email_service,
+        "_send_plain_email",
         lambda to_email, subject, body: sent.append((to_email, subject, body)),
     )
 
