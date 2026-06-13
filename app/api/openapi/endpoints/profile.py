@@ -287,7 +287,7 @@ PROFILE_TOKEN_SCHEMA = {
             "type": "array",
             "description": "Token scopes.",
             "items": {"type": "string"},
-            "example": ["alerts:read", "resources:read"],
+            "example": ["alerts:read", "resources:read", "calendar:read"],
         },
         "group_id": {
             "type": "integer",

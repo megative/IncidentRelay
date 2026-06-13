@@ -1,4 +1,5 @@
 let lastGeneratedProfileToken = "";
+let currentProfileData = null;
 
 function getProfileInitials(profile) {
     /*
@@ -139,7 +140,7 @@ function loadProfile() {
         if (!profile.is_admin) {
             $('#profile-token-scopes option[value="*"]').remove();
         }
-
+        renderProfileCaldav(profile);
         renderProfileHeader(profile);
         fillProfileGroupSelects(profile);
     });
@@ -530,3 +531,80 @@ $(document).on("click", "[data-profile-tab]", function () {
 });
 
 switchProfileTab("details");
+function getProfileCaldavUrl() {
+    return window.location.origin + "/caldav/";
+}
+
+function renderProfileCaldav(profile) {
+    const username = profile.email || profile.username || "";
+
+    $("#profile-caldav-url").val(getProfileCaldavUrl());
+    $("#profile-caldav-username").val(username);
+}
+
+function copyProfileField(selector, statusSelector, successMessage) {
+    const value = $(selector).val() || "";
+
+    if (!value) {
+        setProfileInlineStatus(statusSelector, "Nothing to copy.", true);
+        return;
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(value).then(function () {
+            setProfileInlineStatus(statusSelector, successMessage, false);
+        });
+        return;
+    }
+
+    const field = $(selector);
+    field.trigger("select");
+    document.execCommand("copy");
+    setProfileInlineStatus(statusSelector, successMessage, false);
+}
+
+function openCreateCaldavTokenModal() {
+    resetProfileTokenModal();
+
+    $("#profile-token-name").val("caldav-calendar");
+    $("#profile-token-days").val("");
+    $("#profile-token-group").val("");
+
+    const scopes = $("#profile-token-scopes");
+
+    scopes.val(["calendar:read"]);
+
+    if (!scopes.val() || scopes.val().indexOf("calendar:read") === -1) {
+        setProfileInlineStatus(
+            "#profile-caldav-status",
+            "calendar:read scope is not available. Add it to the token scope list first.",
+            true
+        );
+        return;
+    }
+
+    setProfileInlineStatus(
+        "#profile-token-status",
+        "Calendar token will be created with calendar:read scope.",
+        false
+    );
+
+    openAppModal("#profile-token-modal");
+}
+$(document).on("click", "#copy-profile-caldav-url", function () {
+    copyProfileField(
+        "#profile-caldav-url",
+        "#profile-caldav-status",
+        "CalDAV URL copied."
+    );
+});
+
+$(document).on("click", "#copy-profile-caldav-username", function () {
+    copyProfileField(
+        "#profile-caldav-username",
+        "#profile-caldav-status",
+        "Username copied."
+    );
+});
+
+$(document).on("click", "#create-profile-caldav-token", openCreateCaldavTokenModal);

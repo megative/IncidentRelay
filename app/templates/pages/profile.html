@@ -3,18 +3,14 @@
         <div class="card-header">
             <div class="person-inline">
                 <div id="profile-avatar" class="person-avatar">?</div>
-
                 <div>
                     <h2 id="profile-display-title">Profile</h2>
-
                     <div id="profile-display-meta" class="card-subtitle">
                         Loading profile...
                     </div>
-
                     <div id="profile-groups-summary" class="inline-pills"></div>
                 </div>
             </div>
-
             <div class="card-header-actions">
                 <button id="save-profile-top" type="button" class="btn btn-primary">
                     Save profile
@@ -24,27 +20,16 @@
     </section>
 
     <div id="profile-page-tabs" class="page-tabs">
-        <button
-            type="button"
-            class="page-tab is-active"
-            data-profile-tab="details"
-        >
+        <button type="button" class="page-tab is-active" data-profile-tab="details">
             Profile
         </button>
-
-        <button
-            type="button"
-            class="page-tab"
-            data-profile-tab="oncall"
-        >
+        <button type="button" class="page-tab" data-profile-tab="oncall">
             On-call
         </button>
-        <button type="button" class="page-tab" data-profile-tab="notifications">Notifications</button>
-        <button
-            type="button"
-            class="page-tab"
-            data-profile-tab="tokens"
-        >
+        <button type="button" class="page-tab" data-profile-tab="notifications">
+            Notifications
+        </button>
+        <button type="button" class="page-tab" data-profile-tab="tokens">
             API tokens
         </button>
     </div>
@@ -200,14 +185,18 @@
                             Change password
                         </button>
                     </div>
-
                     <div id="profile-password-status" class="inline-status"></div>
                 </div>
             </aside>
         </div>
     </section>
 
-    <section id="profile-tab-oncall" class="profile-tab-panel" data-profile-panel="oncall" style="display: none;">
+    <section
+        id="profile-tab-oncall"
+        class="profile-tab-panel"
+        data-profile-panel="oncall"
+        style="display: none;"
+    >
         <div class="page-layout-grid">
             <section class="page-layout-main">
                 <section class="card">
@@ -268,6 +257,7 @@
             </aside>
         </div>
     </section>
+
     <div id="profile-tab-notifications" class="profile-tab-panel" style="display: none;">
         <section class="card" id="browser-push-card">
             <div class="card-header">
@@ -293,15 +283,12 @@
                     <button type="button" class="btn btn-primary" id="enable-push-btn">
                         Enable push on this device
                     </button>
-
                     <button type="button" class="btn" id="send-test-push-btn">
                         Send test push
                     </button>
-
                     <button type="button" class="btn" id="reload-push-devices-btn">
                         Reload devices
                     </button>
-
                     <span id="push-status" class="inline-status"></span>
                 </div>
             </div>
@@ -327,6 +314,7 @@
         </section>
 
         <script src="{{ url_for('static', filename='js/components/profile/profile-push.js') }}"></script>
+
         <section class="card" id="notification-rules-card">
             <div class="card-header">
                 <div>
@@ -335,7 +323,6 @@
                         Configure how IncidentRelay should notify you when an alert is assigned to you.
                     </div>
                 </div>
-
                 <div class="card-actions">
                     <button type="button" class="btn btn-primary" id="open-notification-rule-modal">
                         New rule
@@ -377,7 +364,6 @@
                             Personal notification rule for assigned alerts.
                         </div>
                     </div>
-
                     <button
                         id="close-notification-rule-modal"
                         type="button"
@@ -445,29 +431,24 @@
                             <div class="form-body">
                                 <div>
                                     <label>Severities</label>
-
                                     <div class="checkbox-grid">
                                         <label class="md-checkbox">
                                             <input type="checkbox" class="notification-rule-severity" value="critical">
                                             <span>Critical</span>
                                         </label>
-
                                         <label class="md-checkbox">
                                             <input type="checkbox" class="notification-rule-severity" value="warning">
                                             <span>Warning</span>
                                         </label>
-
                                         <label class="md-checkbox">
                                             <input type="checkbox" class="notification-rule-severity" value="info">
                                             <span>Info</span>
                                         </label>
-
                                         <label class="md-checkbox">
                                             <input type="checkbox" class="notification-rule-severity" value="unknown">
                                             <span>Unknown</span>
                                         </label>
                                     </div>
-
                                     <div class="help-text">
                                         Leave empty to match all severities.
                                     </div>
@@ -477,34 +458,28 @@
 
                                 <div>
                                     <label>Event types</label>
-
                                     <div class="checkbox-grid">
                                         <label class="md-checkbox">
                                             <input type="checkbox" class="notification-rule-event-type" value="notification">
                                             <span>Initial alert</span>
                                         </label>
-
                                         <label class="md-checkbox">
                                             <input type="checkbox" class="notification-rule-event-type" value="reminder">
                                             <span>Reminder</span>
                                         </label>
-
                                         <label class="md-checkbox">
                                             <input type="checkbox" class="notification-rule-event-type" value="escalation">
                                             <span>Escalation</span>
                                         </label>
-
                                         <label class="md-checkbox">
                                             <input type="checkbox" class="notification-rule-event-type" value="acknowledged">
                                             <span>Acknowledged</span>
                                         </label>
-
                                         <label class="md-checkbox">
                                             <input type="checkbox" class="notification-rule-event-type" value="resolved">
                                             <span>Resolved</span>
                                         </label>
                                     </div>
-
                                     <div class="help-text">
                                         Leave empty for initial alert, reminders and escalations.
                                     </div>
@@ -518,7 +493,6 @@
                     <button id="cancel-notification-rule" type="button" class="btn">
                         Cancel
                     </button>
-
                     <button id="save-notification-rule-btn" type="button" class="btn btn-primary">
                         Save rule
                     </button>
@@ -526,13 +500,12 @@
             </div>
         </div>
 
-
         <script src="{{ url_for('static', filename='js/components/profile/profile-notification-rules.js') }}"></script>
     </div>
 
     <section
         id="profile-tab-tokens"
-        class="profile-tab-panel"
+        class="profile-tab-panel page-stack"
         data-profile-panel="tokens"
         style="display: none;"
     >
@@ -544,7 +517,6 @@
                         Tokens for scripts, integrations and API access.
                     </div>
                 </div>
-
                 <div class="card-header-actions">
                     <button id="open-profile-token-modal" type="button" class="btn btn-primary">
                         Generate token
@@ -567,13 +539,67 @@
                             <th class="actions-th">Actions</th>
                         </tr>
                     </thead>
-
                     <tbody id="profile-tokens-table">
                         <tr>
                             <td colspan="9" class="empty-cell">Loading tokens...</td>
                         </tr>
                     </tbody>
                 </table>
+            </div>
+        </section>
+
+        <section class="card" id="profile-caldav-card">
+            <div class="card-header">
+                <div>
+                    <h2>CalDAV calendar sync</h2>
+                    <div class="card-subtitle">
+                        Connect your on-call calendar to Apple Calendar, Thunderbird, DAVx5
+                        or another CalDAV-compatible client.
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-body">
+                <label for="profile-caldav-url">CalDAV URL</label>
+                <input
+                    id="profile-caldav-url"
+                    class="input"
+                    type="text"
+                    readonly
+                >
+                <div class="help-text">
+                    Use this URL as the server address in your calendar client.
+                </div>
+
+                <label for="profile-caldav-username">Username</label>
+                <input
+                    id="profile-caldav-username"
+                    class="input"
+                    type="text"
+                    readonly
+                >
+                <div class="help-text">
+                    Use your IncidentRelay username or email.
+                </div>
+
+                <label>Password</label>
+                <div class="help-text">
+                    Use a personal API token with the <code>calendar:read</code> scope.
+                    Do not use your login password.
+                </div>
+
+                <div class="form-actions-inline">
+                    <button id="copy-profile-caldav-url" type="button" class="btn">
+                        Copy URL
+                    </button>
+                    <button id="copy-profile-caldav-username" type="button" class="btn">
+                        Copy username
+                    </button>
+                    <button id="create-profile-caldav-token" type="button" class="btn btn-primary">
+                        Generate calendar token
+                    </button>
+                    <span id="profile-caldav-status" class="inline-status"></span>
+                </div>
             </div>
         </section>
     </section>
@@ -587,7 +613,6 @@
                         The full token is shown only once.
                     </div>
                 </div>
-
                 <button
                     id="close-profile-token-modal"
                     type="button"
@@ -632,6 +657,7 @@
                         <option value="resources:write">resources:write</option>
                         <option value="profile:read">profile:read</option>
                         <option value="profile:write">profile:write</option>
+                        <option value="calendar:read">calendar:read</option>
                         <option value="*">*</option>
                     </select>
 
@@ -654,7 +680,6 @@
                                 Copy token
                             </button>
                         </div>
-
                         <textarea
                             id="profile-token-result"
                             class="input code-textarea json-editor-textarea"
@@ -686,7 +711,6 @@
                         Update your local account password.
                     </div>
                 </div>
-
                 <button
                     id="close-profile-password-modal"
                     type="button"

@@ -5,6 +5,7 @@ let calendarMode = "week";
 let selectedCalendarEvent = null;
 let selectedCalendarClippedStart = null;
 let selectedCalendarClippedEnd = null;
+let calendarExportFeed = null;
 
 const calendarWeekdaysShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -1545,3 +1546,140 @@ function endOfCalendarWeek(date) {
      */
     return addCalendarDays(startOfCalendarWeek(date), 7);
 }
+function getCalendarExportTeamId() {
+    return Number($("#global-team-filter").val() || 0) || null;
+}
+
+function setCalendarExportStatus(message, isError) {
+    const box = $("#calendar-export-status");
+
+    box
+        .text(message || "")
+        .toggleClass("error", !!isError)
+        .toggleClass("success", !!message && !isError);
+}
+
+function openCalendarExportModal() {
+    const teamId = getCalendarExportTeamId();
+
+    if (!teamId) {
+        setCalendarExportStatus("Select a team before exporting calendar.", true);
+        return;
+    }
+
+    calendarExportFeed = null;
+    $("#calendar-export-url").val("");
+    setCalendarExportStatus("", false);
+
+    openAppModal("#calendar-export-modal");
+
+    apiGet(
+        "/api/calendar/feeds?team_id=" + encodeURIComponent(teamId),
+        function (feeds) {
+            feeds = Array.isArray(feeds) ? feeds : [];
+
+            if (!feeds.length) {
+                setCalendarExportStatus(
+                    "No subscription URL exists yet. Click Create URL.",
+                    false
+                );
+                return;
+            }
+
+            calendarExportFeed = feeds[0];
+
+            if (calendarExportFeed.feed_url) {
+                $("#calendar-export-url").val(calendarExportFeed.feed_url);
+            } else {
+                setCalendarExportStatus(
+                    "This URL was created earlier and cannot be shown again. Click Regenerate to create a new URL.",
+                    true
+                );
+            }
+        }
+    );
+}
+
+function createCalendarExportFeed() {
+    const teamId = getCalendarExportTeamId();
+    if (!teamId) {
+        setCalendarExportStatus("Select a team before exporting calendar.", true);
+        return;
+    }
+
+    apiPost(
+        "/api/calendar/feeds",
+        {
+            team_id: teamId,
+            name: "On-call calendar",
+            past_days: 7,
+            future_days: 90
+        },
+        function (feed) {
+            calendarExportFeed = feed;
+            $("#calendar-export-url").val(feed.feed_url || "");
+            setCalendarExportStatus("Subscription URL created. Copy it now.", false);
+        }
+    );
+}
+
+function regenerateCalendarExportFeed() {
+    if (!calendarExportFeed || !calendarExportFeed.id) {
+        createCalendarExportFeed();
+        return;
+    }
+
+    apiPost(
+        "/api/calendar/feeds/" + calendarExportFeed.id + "/token",
+        {},
+        function (feed) {
+            calendarExportFeed = feed;
+            $("#calendar-export-url").val(feed.feed_url || "");
+            setCalendarExportStatus(
+                "Subscription URL regenerated. The old URL no longer works.",
+                false
+            );
+        }
+    );
+}
+
+function copyCalendarExportUrl() {
+    const value = $("#calendar-export-url").val() || "";
+
+    if (!value) {
+        setCalendarExportStatus("There is no URL to copy.", true);
+        return;
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(value).then(function () {
+            setCalendarExportStatus("Subscription URL copied.", false);
+        });
+        return;
+    }
+
+    $("#calendar-export-url").trigger("select");
+    document.execCommand("copy");
+    setCalendarExportStatus("Subscription URL copied.", false);
+}
+
+function closeCalendarExportModal() {
+    closeAppModal("#calendar-export-modal");
+    calendarExportFeed = null;
+    $("#calendar-export-url").val("");
+    setCalendarExportStatus("", false);
+}
+$(document).on("click", "#calendar-export", openCalendarExportModal);
+$(document).on("click", "#create-calendar-export-feed", createCalendarExportFeed);
+$(document).on("click", "#copy-calendar-export-url", copyCalendarExportUrl);
+$(document).on("click", "#regenerate-calendar-export-url", regenerateCalendarExportFeed);
+$(document).on("click", "#close-calendar-export-modal", closeCalendarExportModal);
+$(document).on("click", "#close-calendar-export-modal-footer", closeCalendarExportModal);
+function updateCalendarExportButtonVisibility() {
+    const teamId = getCalendarExportTeamId();
+
+    $("#calendar-export").toggleClass("is-hidden", !teamId);
+}
+$("#global-team-filter").on("change", function () {
+    updateCalendarExportButtonVisibility();
+});

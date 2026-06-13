@@ -80,14 +80,14 @@ def jwt_required(func):
 
 
 def api_auth_required_for_path(path):
-    """
-    Return True when the API path must be protected.
-    """
-
+    """Return True when the API path must be protected."""
     if not path.startswith("/api/"):
         return False
 
     if path in PUBLIC_API_PATHS:
+        return False
+
+    if is_public_calendar_feed_path(path):
         return False
 
     for prefix in PUBLIC_API_PREFIXES:
@@ -95,6 +95,30 @@ def api_auth_required_for_path(path):
             return False
 
     return True
+
+
+PUBLIC_CALENDAR_FEED_PREFIX = "/api/calendar/feeds/"
+
+
+def is_public_calendar_feed_path(path):
+    """Return True for tokenized public ICS subscription URLs only.
+
+    Management endpoints stay protected:
+    - /api/calendar/feeds
+    - /api/calendar/feeds/<feed_id>/token
+
+    Public endpoint:
+    - /api/calendar/feeds/<secret-token>.ics
+    """
+    if request.method not in {"GET", "HEAD"}:
+        return False
+
+    if not path.startswith(PUBLIC_CALENDAR_FEED_PREFIX):
+        return False
+
+    rest = path[len(PUBLIC_CALENDAR_FEED_PREFIX):]
+
+    return bool(rest) and rest.endswith(".ics") and "/" not in rest
 
 
 def required_scopes_for_request():

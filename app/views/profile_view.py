@@ -23,6 +23,7 @@ ALLOWED_PROFILE_TOKEN_SCOPES = {
     "resources:write",
     "profile:read",
     "profile:write",
+    "calendar:read",
     "*",
 }
 

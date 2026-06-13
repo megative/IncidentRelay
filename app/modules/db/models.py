@@ -1672,3 +1672,24 @@ class UserNotificationDelivery(BaseModel):
             (("group", "user", "method", "event_type"), False),
             (("rule", "group", "event_type"), False),
         )
+
+
+class CalendarFeed(SoftDeleteModel):
+    """Tokenized public ICS subscription feed for a team calendar."""
+
+    id = AutoField()
+    team = ForeignKeyField(Team, backref="calendar_feeds", on_delete="CASCADE")
+    name = CharField(default="On-call calendar")
+    token_prefix = CharField(index=True)
+    token_hash = CharField()
+    enabled = BooleanField(default=True)
+    past_days = IntegerField(default=7)
+    future_days = IntegerField(default=90)
+    created_by = ForeignKeyField(
+        User,
+        null=True,
+        backref="calendar_feeds",
+        on_delete="SET NULL",
+    )
+    created_at = DateTimeField(default=datetime.utcnow)
+    last_used_at = DateTimeField(null=True)

@@ -73,6 +73,7 @@ from app.modules.db.models import (  # noqa: E402
     IncidentResponder,
     IncidentStakeholder,
     MaintenanceWindowScope,
+    CalendarFeed,
 )
 
 
@@ -112,6 +113,7 @@ CLEANUP_MODELS = [
     RotationMember,
     Rotation,
     TeamUser,
+    CalendarFeed,
     UserGroup,
     UserRole,
     AuditLog,
