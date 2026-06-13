@@ -6,8 +6,7 @@ from flask import Response, g, request
 
 from app.modules.db import tokens_repo
 from app.modules.db.models import User
-from app.services.auth import hash_token, token_has_scope
-
+from app.services.integrations.auth import hash_token, token_has_scope
 
 CALDAV_REQUIRED_SCOPES = ["calendar:read"]
 

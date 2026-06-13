@@ -4,7 +4,7 @@ from xml.etree import ElementTree
 
 from app.modules.db import tokens_repo
 from app.modules.db.models import ApiToken
-from app.services.auth import hash_token
+from app.services.integrations.auth import hash_token
 from app.services.caldav.ics import event_href, event_uid
 from app.services.caldav.service import list_team_caldav_events
 from tests.factories import (
