@@ -3,11 +3,13 @@ from datetime import datetime, timedelta
 from flask import Blueprint, jsonify, request
 from peewee import DoesNotExist, IntegrityError
 
-from app.modules.db.models import Alert
+from app.modules.db.models import AlertGroup
 from app.api.schemas.services import (
     ServiceCreateSchema,
     ServiceDependencyCreateSchema,
     ServiceDependencyUpdateSchema,
+    ServiceImpactQuerySchema,
+    ServiceImpactServiceQuerySchema,
     ServiceLinkCreateSchema,
     ServiceLinkUpdateSchema,
     ServiceMatchRuleCreateSchema,
@@ -15,9 +17,11 @@ from app.api.schemas.services import (
     ServiceRunbookCreateSchema,
     ServiceRunbookUpdateSchema,
     ServiceUpdateSchema,
+    ServiceAnalyticsQuerySchema
 )
 from app.modules.db import (
     escalation_policies_repo,
+    maintenance_repo,
     rotations_repo,
     routes_repo,
     services_repo,
@@ -31,6 +35,7 @@ from app.services.rbac import (
     require_team_write,
 )
 from app.services.serializers import (
+    serialize_maintenance_window,
     serialize_service,
     serialize_service_dependency,
     serialize_service_link,
@@ -38,9 +43,283 @@ from app.services.serializers import (
     serialize_service_runbook,
     serialize_utc_datetime,
 )
-from app.services.validation import validate_body
+from app.services.service_analytics import build_service_analytics_v2
+from app.services.validation import validate_body, validate_query
+from app.services.service_impact import (
+    build_service_impact_v2,
+    build_single_service_impact_v2,
+)
 
 services_bp = Blueprint("services_api", __name__)
+
+
+SERVICE_DETAILS_DEFAULT_DAYS = 30
+SERVICE_DETAILS_MAX_DAYS = 365
+
+
+class ServiceDetailsImpactQuery:
+    include_disabled = True
+    include_explanation = True
+    include_root_causes = True
+    include_blast_radius = True
+    include_paths = True
+    max_depth = 5
+
+
+def _service_details_days_from_request():
+    days = request.args.get("days", default=SERVICE_DETAILS_DEFAULT_DAYS, type=int)
+    return max(1, min(days or SERVICE_DETAILS_DEFAULT_DAYS, SERVICE_DETAILS_MAX_DAYS))
+
+
+def _service_open_statuses():
+    return ("firing", "acknowledged")
+
+
+def _service_alert_group_query(service_id):
+    return AlertGroup.select().where(AlertGroup.service == service_id)
+
+
+def _count_alert_groups(service_id, *conditions):
+    query = _service_alert_group_query(service_id)
+
+    for condition in conditions:
+        query = query.where(condition)
+
+    return query.count()
+
+
+def _service_alert_summary(service_id, *, days):
+    since = datetime.utcnow() - timedelta(days=days)
+
+    base_query = _service_alert_group_query(service_id)
+    recent_query = base_query.where(AlertGroup.last_seen_at >= since)
+
+    last_group = (
+        base_query
+        .order_by(AlertGroup.last_seen_at.desc(), AlertGroup.id.desc())
+        .first()
+    )
+
+    open_statuses = _service_open_statuses()
+
+    by_status = {
+        "firing": _count_alert_groups(service_id, AlertGroup.status == "firing"),
+        "acknowledged": _count_alert_groups(service_id, AlertGroup.status == "acknowledged"),
+        "resolved": _count_alert_groups(service_id, AlertGroup.status == "resolved"),
+    }
+
+    by_severity = {}
+
+    for severity in ("critical", "high", "warning", "info", "unknown"):
+        if severity == "unknown":
+            by_severity[severity] = _count_alert_groups(
+                service_id,
+                AlertGroup.severity.is_null(True),
+            )
+        else:
+            by_severity[severity] = _count_alert_groups(
+                service_id,
+                AlertGroup.severity == severity,
+            )
+
+    return {
+        "window_days": days,
+        "total": base_query.count(),
+        "recent": recent_query.count(),
+        "open": _count_alert_groups(
+            service_id,
+            AlertGroup.status.in_(open_statuses),
+        ),
+        "firing": by_status["firing"],
+        "acknowledged": by_status["acknowledged"],
+        "resolved": by_status["resolved"],
+        "critical_open": _count_alert_groups(
+            service_id,
+            AlertGroup.status.in_(open_statuses),
+            AlertGroup.severity == "critical",
+        ),
+        "last_seen_at": serialize_utc_datetime(last_group.last_seen_at) if last_group else None,
+        "by_status": by_status,
+        "by_severity": by_severity,
+    }
+
+
+def _serialize_service_status_history_item(item):
+    return {
+        "id": item.id,
+        "old_status": item.old_status,
+        "new_status": item.new_status,
+        "source": item.source,
+        "message": item.message,
+        "alert_id": item.alert_id,
+        "maintenance_window_id": item.maintenance_window_id,
+        "changed_by_id": item.changed_by_id,
+        "created_at": serialize_utc_datetime(item.created_at),
+    }
+
+
+def _readable_dependency_rows(dependencies, *, target_side):
+    """Filter cross-team dependency rows by read permission.
+
+    target_side=True checks depends_on_service team.
+    target_side=False checks source service team.
+    """
+    rows = []
+
+    for dependency in dependencies:
+        target_service = (
+            dependency.depends_on_service
+            if target_side
+            else dependency.service
+        )
+
+        if not target_service:
+            continue
+
+        error = require_team_read(target_service.team_id)
+
+        if not error:
+            rows.append(dependency)
+
+    return rows
+
+
+def _service_maintenance_windows(service):
+    windows = maintenance_repo.list_maintenance_windows(
+        group_id=service.group_id,
+        team_id=service.team_id,
+        service_id=service.id,
+        include_deleted=False,
+        include_finished=False,
+    )
+
+    return [
+        serialize_maintenance_window(window)
+        for window in windows
+    ]
+
+
+def _service_analytics_payload(
+    service,
+    *,
+    days,
+    alert_summary,
+    status_history,
+    impact=None,
+):
+    until = datetime.utcnow()
+    since = until - timedelta(days=days)
+
+    impact = impact or {}
+    blast_radius = impact.get("blast_radius") or {}
+
+    return {
+        "version": 1,
+        "window": {
+            "days": days,
+            "since": serialize_utc_datetime(since),
+            "until": serialize_utc_datetime(until),
+        },
+        "widgets": {
+            "alert_volume": {
+                "total": alert_summary["total"],
+                "recent": alert_summary["recent"],
+                "open": alert_summary["open"],
+                "critical_open": alert_summary["critical_open"],
+            },
+            "status": {
+                "current": service.status,
+                "source": service.status_source,
+                "updated_at": serialize_utc_datetime(service.status_updated_at),
+                "changes": len(status_history),
+            },
+            "impact": {
+                "effective_status": impact.get("effective_status") or service.status,
+                "primary_reason": impact.get("primary_reason"),
+                "upstream_issues_count": impact.get("upstream_issues_count") or 0,
+                "root_causes": len(impact.get("root_causes") or []),
+                "blast_radius": {
+                    "direct_downstream": blast_radius.get("direct_downstream") or 0,
+                    "transitive_downstream": blast_radius.get("transitive_downstream") or 0,
+                    "critical_downstream": blast_radius.get("critical_downstream") or 0,
+                    "tier_1_downstream": blast_radius.get("tier_1_downstream") or 0,
+                },
+            },
+        },
+        "breakdowns": {
+            "alerts_by_status": alert_summary["by_status"],
+            "alerts_by_severity": alert_summary["by_severity"],
+        },
+        "series": [],
+        "extensions": {},
+    }
+
+
+def _service_details_payload(service, *, days):
+    alert_summary = _service_alert_summary(service.id, days=days)
+    status_history = services_repo.list_service_status_history(service.id, limit=20)
+
+    upstream_dependencies = _readable_dependency_rows(
+        services_repo.list_service_dependencies(service_id=service.id),
+        target_side=True,
+    )
+    downstream_dependencies = _readable_dependency_rows(
+        services_repo.list_downstream_service_dependencies(service_id=service.id),
+        target_side=False,
+    )
+
+    links = services_repo.list_service_links(service_id=service.id)
+    runbooks = services_repo.list_service_runbooks(service_id=service.id)
+
+    impact = build_single_service_impact_v2(
+        service.id,
+        ServiceDetailsImpactQuery(),
+        team_ids=[service.team_id],
+    )
+
+    return {
+        "service": serialize_service(service, current_user()),
+        "summary": {
+            "alerts": alert_summary,
+            "maintenance_windows": len(_service_maintenance_windows(service)),
+            "links": len(links),
+            "runbooks": len(runbooks),
+            "upstream_dependencies": len(upstream_dependencies),
+            "downstream_dependencies": len(downstream_dependencies),
+            "status_history": len(status_history),
+        },
+        "maintenance_windows": _service_maintenance_windows(service),
+        "links": [
+            serialize_service_link(link, current_user())
+            for link in links
+        ],
+        "runbooks": [
+            serialize_service_runbook(runbook, current_user())
+            for runbook in runbooks
+        ],
+        "dependencies": {
+            "upstream": [
+                serialize_service_dependency(dependency, current_user())
+                for dependency in upstream_dependencies
+            ],
+            "downstream": [
+                serialize_service_dependency(dependency, current_user())
+                for dependency in downstream_dependencies
+            ],
+        },
+        "status_history": [
+            _serialize_service_status_history_item(item)
+            for item in status_history
+        ],
+        "analytics": _service_analytics_payload(
+            service,
+            days=days,
+            alert_summary=alert_summary,
+            status_history=status_history,
+            impact=impact,
+        ),
+        "impact": impact,
+    }
 
 
 def _json_error(error, message, status=400, **extra):
@@ -344,6 +623,33 @@ def get_service(service_id):
         return error
 
     return jsonify(serialize_service(service, current_user()))
+
+
+@services_bp.route("/<int:service_id>/details", methods=["GET"])
+def get_service_details(service_id):
+    """Return expanded service details for the service details panel."""
+    try:
+        service = services_repo.get_service(service_id)
+    except DoesNotExist:
+        return _json_error(
+            "service_not_found",
+            "Service was not found",
+            404,
+            service_id=service_id,
+        )
+
+    error = require_team_read(service.team_id)
+    if error:
+        return error
+
+    days = _service_details_days_from_request()
+
+    return jsonify(
+        _service_details_payload(
+            service,
+            days=days,
+        )
+    )
 
 
 @services_bp.route("", methods=["POST"])
@@ -997,809 +1303,136 @@ def list_all_service_dependencies():
 
 @services_bp.route("/analytics", methods=["GET"])
 def service_analytics():
-    """Return alert analytics grouped by affected service."""
-    services, error = _readable_services_from_request(include_disabled=False)
+    """Return Service Analytics v2 for readable services."""
+
+    query, error = validate_query(ServiceAnalyticsQuerySchema)
+
     if error:
         return error
 
-    days = request.args.get("days", default=30, type=int)
-    days = max(1, min(days or 30, 365))
+    team_ids = None
+
+    if query.service_id:
+        try:
+            service = services_repo.get_service(query.service_id)
+        except DoesNotExist:
+            return _json_error(
+                "service_not_found",
+                "Service was not found",
+                404,
+                service_id=query.service_id,
+            )
+
+        if getattr(service, "deleted", False):
+            return _json_error(
+                "service_not_found",
+                "Service was not found",
+                404,
+                service_id=query.service_id,
+            )
+
+        if not query.include_disabled and not service.enabled:
+            return _json_error(
+                "service_not_found",
+                "Service was not found",
+                404,
+                service_id=query.service_id,
+            )
+
+        error = require_team_read(service.team_id)
 
-    service_ids = [service.id for service in services]
-    if not service_ids:
-        return jsonify([])
-
-    since = datetime.utcnow() - timedelta(days=days)
-
-    stats = {}
-
-    for service in services:
-        stats[service.id] = {
-            "service_id": service.id,
-            "service_name": service.name,
-            "service_slug": service.slug,
-            "team_id": service.team_id,
-            "team_name": service.team.name if service.team else None,
-            "team_slug": service.team.slug if service.team else None,
-            "service_status": service.status,
-            "service_criticality": service.criticality,
-            "service_environment": service.environment,
-            "service_tier": service.tier,
-            "total_alerts": 0,
-            "open_alerts": 0,
-            "firing_alerts": 0,
-            "acknowledged_alerts": 0,
-            "resolved_alerts": 0,
-            "silenced_alerts": 0,
-            "critical_open_alerts": 0,
-            "warning_open_alerts": 0,
-            "last_alert_at": None,
-            "_last_alert_at_value": None,
-        }
-
-    alerts = (
-        Alert
-        .select()
-        .where(
-            (Alert.service.in_(service_ids))
-            & (Alert.first_seen_at >= since)
-        )
-    )
-
-    for alert in alerts:
-        service_id = alert.service_id
-        item = stats.get(service_id)
-        if not item:
-            continue
-
-        status = (alert.status or "").lower()
-        severity = (alert.severity or "unknown").lower()
-        is_open = status in {"firing", "acknowledged"}
-
-        item["total_alerts"] += 1
-
-        if status == "firing":
-            item["firing_alerts"] += 1
-
-        if status == "acknowledged":
-            item["acknowledged_alerts"] += 1
-
-        if status == "resolved":
-            item["resolved_alerts"] += 1
-
-        if is_open:
-            item["open_alerts"] += 1
-
-        if alert.silenced:
-            item["silenced_alerts"] += 1
-
-        if is_open and severity in {"critical", "crit", "fatal"}:
-            item["critical_open_alerts"] += 1
-
-        if is_open and severity in {"warning", "warn"}:
-            item["warning_open_alerts"] += 1
-
-        last_alert_at = alert.last_seen_at or alert.first_seen_at
-        if last_alert_at and (
-            item["_last_alert_at_value"] is None
-            or last_alert_at > item["_last_alert_at_value"]
-        ):
-            item["_last_alert_at_value"] = last_alert_at
-            item["last_alert_at"] = serialize_utc_datetime(last_alert_at)
-
-    result = []
-
-    for item in stats.values():
-        item.pop("_last_alert_at_value", None)
-        result.append(item)
-
-    result.sort(
-        key=lambda row: (
-            row["open_alerts"],
-            row["critical_open_alerts"],
-            row["total_alerts"],
-        ),
-        reverse=True,
-    )
-
-    return jsonify(result)
-
-
-SERVICE_STATUS_RANK = {
-    "disabled": -1,
-    "operational": 0,
-    "unknown": 1,
-    "maintenance": 2,
-    "degraded": 3,
-    "partial_outage": 4,
-    "major_outage": 5,
-}
-
-
-def _service_status_rank(status):
-    """Return comparable service status rank."""
-    return SERVICE_STATUS_RANK.get(status or "unknown", 1)
-
-
-def _worst_service_status(statuses):
-    """Return worst service status from a list."""
-    statuses = [
-        status
-        for status in statuses
-        if status
-    ]
-
-    if not statuses:
-        return "operational"
-
-    return max(
-        statuses,
-        key=lambda status: _service_status_rank(status),
-    )
-
-
-def _alert_impact_status(alert):
-    """Return service impact status for one open alert."""
-    if alert.silenced:
-        return "operational"
-
-    status = (alert.status or "").lower()
-    if status not in {"firing", "acknowledged"}:
-        return "operational"
-
-    severity = (alert.severity or "unknown").lower()
-
-    if severity in {"critical", "crit", "fatal"}:
-        return "major_outage"
-
-    if severity in {"warning", "warn"}:
-        return "degraded"
-
-    if severity in {"info", "informational", "none"}:
-        return "operational"
-
-    return "degraded"
-
-
-def _build_alert_impact_by_service(service_ids, days=30):
-    """Return alert impact grouped by service."""
-    if not service_ids:
-        return {}
-
-    since = datetime.utcnow() - timedelta(days=days)
-
-    rows = (
-        Alert
-        .select()
-        .where(
-            (Alert.service.in_(service_ids))
-            & (Alert.first_seen_at >= since)
-            & (Alert.status.in_(["firing", "acknowledged"]))
-            & (Alert.silenced == False)
-        )
-    )
-
-    result = {}
-
-    for alert in rows:
-        service_id = alert.service_id
-        item = result.setdefault(
-            service_id,
-            {
-                "alert_impact_status": "operational",
-                "open_alerts": 0,
-                "critical_open_alerts": 0,
-                "warning_open_alerts": 0,
-            },
-        )
-
-        impact_status = _alert_impact_status(alert)
-
-        item["open_alerts"] += 1
-
-        severity = (alert.severity or "unknown").lower()
-        if severity in {"critical", "crit", "fatal"}:
-            item["critical_open_alerts"] += 1
-
-        if severity in {"warning", "warn"}:
-            item["warning_open_alerts"] += 1
-
-        item["alert_impact_status"] = _worst_service_status([
-            item["alert_impact_status"],
-            impact_status,
-        ])
-
-    return result
-
-
-def _base_service_impact_row(service, alert_impact):
-    """Build service impact row without dependency propagation."""
-    own_status = service.status or "unknown"
-
-    alert_data = alert_impact.get(
-        service.id,
-        {
-            "alert_impact_status": "operational",
-            "open_alerts": 0,
-            "critical_open_alerts": 0,
-            "warning_open_alerts": 0,
-        },
-    )
-
-    alert_impact_status = alert_data["alert_impact_status"]
-
-    effective_status = _worst_service_status([
-        own_status,
-        alert_impact_status,
-    ])
-
-    if not service.enabled:
-        effective_status = "disabled"
-
-    return {
-        "service_id": service.id,
-        "service_name": service.name,
-        "service_slug": service.slug,
-        "team_id": service.team_id,
-        "team_name": service.team.name if service.team else None,
-        "team_slug": service.team.slug if service.team else None,
-
-        "own_status": own_status,
-        "alert_impact_status": alert_impact_status,
-        "dependency_impact_status": "operational",
-        "effective_status": effective_status,
-
-        "has_alert_impact": alert_impact_status != "operational",
-        "has_dependency_impact": False,
-
-        "open_alerts": alert_data["open_alerts"],
-        "critical_open_alerts": alert_data["critical_open_alerts"],
-        "warning_open_alerts": alert_data["warning_open_alerts"],
-
-        "upstream_issues_count": 0,
-        "upstream_issues": [],
-
-        "criticality": service.criticality,
-        "environment": service.environment,
-        "tier": service.tier,
-        "enabled": service.enabled,
-    }
-
-
-def _downgrade_dependency_status(status, target_status):
-    """Return the lower of status and target_status by service status rank."""
-    if _service_status_rank(status) <= _service_status_rank(target_status):
-        return status
-    return target_status
-
-
-def _dependency_downstream_impact_status(dependency, upstream_status):
-    """
-    Return downstream impact status caused by one upstream dependency.
-
-    The upstream issue can still be shown in UI even when it does not change
-    downstream effective_status.
-    """
-    upstream_status = upstream_status or "unknown"
-
-    if upstream_status in {"operational", "disabled"}:
-        return "operational"
-
-    dependency_type = (dependency.dependency_type or "hard").lower()
-    criticality = (dependency.criticality or "important").lower()
-
-    if dependency_type == "informational":
-        return "operational"
-
-    if criticality == "optional":
-        if upstream_status in {"major_outage", "partial_outage", "degraded"}:
-            return "degraded"
-        return "operational"
-
-    if upstream_status == "maintenance":
-        return "maintenance"
-
-    if upstream_status == "unknown":
-        return "unknown"
-
-    if upstream_status == "major_outage":
-        if criticality == "required" and dependency_type in {"hard", "external"}:
-            return "major_outage"
-        if criticality in {"required", "important"}:
-            return "partial_outage"
-        return "degraded"
-
-    if upstream_status == "partial_outage":
-        if criticality == "required" and dependency_type in {"hard", "external"}:
-            return "partial_outage"
-        return "degraded"
-
-    if upstream_status == "degraded":
-        return "degraded"
-
-    return upstream_status
-
-
-def _apply_dependency_impact(row, dependencies, rows_by_service, dependencies_by_service=None):
-    """Apply dependency impact and attach full dependency paths."""
-    dependencies_by_service = dependencies_by_service or {}
-
-    service_id = row["service_id"]
-
-    upstream_issues = _build_dependency_issue_paths(
-        service_id=service_id,
-        rows_by_service=rows_by_service,
-        dependencies_by_service=dependencies_by_service,
-        path_service_ids={service_id},
-        depth=0,
-        max_depth=SERVICE_IMPACT_MAX_DEPTH,
-    )
-
-    # Keep only issues from direct dependencies passed to this row.
-    direct_dependency_ids = {
-        dependency.id
-        for dependency in dependencies
-        if dependency.enabled
-    }
-
-    upstream_issues = [
-        issue
-        for issue in upstream_issues
-        if issue.get("dependency_id") in direct_dependency_ids
-    ]
-
-    contributing_statuses = [
-        issue["impact_status"]
-        for issue in upstream_issues
-        if issue.get("contributes_to_impact")
-    ]
-
-    dependency_impact_status = _worst_service_status(contributing_statuses)
-
-    row["dependency_impact_status"] = dependency_impact_status
-    row["has_dependency_impact"] = dependency_impact_status != "operational"
-    row["upstream_issues_count"] = len(upstream_issues)
-    row["upstream_issues"] = upstream_issues
-
-    row["effective_status"] = _worst_service_status([
-        row["own_status"],
-        row["alert_impact_status"],
-        dependency_impact_status,
-    ])
-
-    if not row["enabled"]:
-        row["effective_status"] = "disabled"
-
-    return row
-
-
-SERVICE_IMPACT_MAX_DEPTH = 3
-
-
-def _collect_dependency_impact_context(services, max_depth=SERVICE_IMPACT_MAX_DEPTH):
-    """
-    Collect requested services plus readable upstream dependency services.
-
-    This allows:
-        frontend -> billing-api -> postgresql
-
-    If postgresql has a critical alert, frontend can still receive dependency impact.
-    """
-    services_by_id = {
-        service.id: service
-        for service in services
-    }
-
-    dependencies_by_service = {}
-    visited_service_ids = set(services_by_id.keys())
-    frontier = set(services_by_id.keys())
-
-    for _depth in range(max_depth):
-        if not frontier:
-            break
-
-        dependencies = services_repo.list_service_dependencies(
-            service_ids=list(frontier),
-        )
-
-        next_frontier = set()
-
-        for dependency in dependencies:
-            dependencies_by_service.setdefault(
-                dependency.service_id,
-                [],
-            ).append(dependency)
-
-            if not dependency.enabled:
-                continue
-
-            target = dependency.depends_on_service
-            if not target or not target.enabled:
-                continue
-
-            error = require_team_read(target.team_id)
-            if error:
-                continue
-
-            services_by_id[target.id] = target
-
-            if target.id not in visited_service_ids:
-                visited_service_ids.add(target.id)
-                next_frontier.add(target.id)
-
-        frontier = next_frontier
-
-    return services_by_id, dependencies_by_service
-
-
-def _service_display_name(service):
-    """Return service display name using name first, then slug."""
-    if not service:
-        return "-"
-
-    return service.name or service.slug or f"Service #{service.id}"
-
-
-def _team_display_name(team):
-    """Return team display name using name first, then slug."""
-    if not team:
-        return "-"
-
-    return team.name or team.slug or f"Team #{team.id}"
-
-
-def _service_path_node(service, row=None, dependency=None, *, cycle=False):
-    """Build a dependency path node."""
-    team = service.team if service else None
-
-    return {
-        "service_id": service.id if service else None,
-        "service_name": service.name if service else None,
-        "service_slug": service.slug if service else None,
-        "service_display": _service_display_name(service),
-
-        "team_id": team.id if team else None,
-        "team_name": team.name if team else None,
-        "team_slug": team.slug if team else None,
-        "team_display": _team_display_name(team),
-
-        "status": (
-            row.get("effective_status")
-            if row
-            else service.status if service else "unknown"
-        ),
-
-        "dependency_id": dependency.id if dependency else None,
-        "dependency_type": dependency.dependency_type if dependency else None,
-        "criticality": dependency.criticality if dependency else None,
-        "cycle": cycle,
-    }
-
-
-def _service_has_own_or_alert_impact(row):
-    """Return true when service itself is a root cause candidate."""
-    if not row:
-        return False
-
-    return (
-        row.get("own_status") not in {None, "operational", "disabled"}
-        or row.get("has_alert_impact") is True
-    )
-
-
-def _make_dependency_issue(
-    *,
-    direct_dependency,
-    direct_service,
-    direct_row,
-    path,
-    impact_status,
-    contributes_to_impact,
-    cycle_detected=False,
-    depth_limited=False,
-):
-    """Build one upstream issue with full dependency path."""
-    root = path[-1] if path else None
-
-    return {
-        "dependency_id": direct_dependency.id,
-        "dependency_type": direct_dependency.dependency_type,
-        "criticality": direct_dependency.criticality,
-        "description": direct_dependency.description,
-
-        # Direct upstream service. Kept for backward compatibility with UI.
-        "service_id": direct_service.id,
-        "service_name": direct_service.name,
-        "service_slug": direct_service.slug,
-        "service_display": _service_display_name(direct_service),
-
-        "team_id": direct_service.team_id,
-        "team_name": direct_service.team.name if direct_service.team else None,
-        "team_slug": direct_service.team.slug if direct_service.team else None,
-        "team_display": _team_display_name(direct_service.team),
-
-        # Effective status of direct upstream.
-        "status": direct_row.get("effective_status") if direct_row else direct_service.status,
-
-        # What this dependency contributes to downstream.
-        "impact_status": impact_status,
-        "contributes_to_impact": contributes_to_impact,
-
-        # Full path metadata.
-        "path": path,
-        "depth": max(len(path) - 1, 0),
-        "cycle_detected": cycle_detected,
-        "depth_limited": depth_limited,
-
-        # Root cause metadata.
-        "root_cause_service_id": root.get("service_id") if root else direct_service.id,
-        "root_cause_service_name": root.get("service_name") if root else direct_service.name,
-        "root_cause_service_slug": root.get("service_slug") if root else direct_service.slug,
-        "root_cause_service_display": (
-            root.get("service_display")
-            if root
-            else _service_display_name(direct_service)
-        ),
-        "root_cause_status": root.get("status") if root else (
-            direct_row.get("effective_status") if direct_row else direct_service.status
-        ),
-    }
-
-
-def _build_dependency_issue_paths(
-    *,
-    service_id,
-    rows_by_service,
-    dependencies_by_service,
-    path_service_ids=None,
-    depth=0,
-    max_depth=SERVICE_IMPACT_MAX_DEPTH,
-):
-    """
-    Return dependency issue paths for service_id.
-
-    Each result describes one root-cause path visible from this service:
-
-        Frontend -> Billing API -> PostgreSQL
-
-    The returned path excludes the current service and starts with its direct
-    upstream dependency.
-    """
-    path_service_ids = set(path_service_ids or [])
-    issues = []
-
-    if depth >= max_depth:
-        return issues
-
-    dependencies = dependencies_by_service.get(service_id, [])
-
-    for dependency in dependencies:
-        if not dependency.enabled:
-            continue
-
-        target = dependency.depends_on_service
-        if not target or not target.enabled:
-            continue
-
-        error = require_team_read(target.team_id)
         if error:
-            continue
+            return error
 
-        target_row = rows_by_service.get(target.id)
-        target_status = (
-            target_row.get("effective_status")
-            if target_row
-            else target.status or "unknown"
-        )
+        team_ids = [service.team_id]
 
-        impact_status = _dependency_downstream_impact_status(
-            dependency,
-            target_status,
-        )
-        contributes_to_impact = impact_status != "operational"
+    elif query.team_id:
+        error = require_team_read(query.team_id)
 
-        target_node = _service_path_node(
-            target,
-            target_row,
-            dependency,
-        )
+        if error:
+            return error
 
-        if target.id in path_service_ids:
-            cycle_node = _service_path_node(
-                target,
-                target_row,
-                dependency,
-                cycle=True,
-            )
-            issues.append(
-                _make_dependency_issue(
-                    direct_dependency=dependency,
-                    direct_service=target,
-                    direct_row=target_row,
-                    path=[cycle_node],
-                    impact_status="operational",
-                    contributes_to_impact=False,
-                    cycle_detected=True,
-                )
-            )
-            continue
+        team_ids = [query.team_id]
 
-        next_path_service_ids = set(path_service_ids)
-        next_path_service_ids.add(target.id)
+    else:
+        team_ids = get_allowed_team_ids()
 
-        child_issues = _build_dependency_issue_paths(
-            service_id=target.id,
-            rows_by_service=rows_by_service,
-            dependencies_by_service=dependencies_by_service,
-            path_service_ids=next_path_service_ids,
-            depth=depth + 1,
-            max_depth=max_depth,
-        )
-
-        # If the target has its own/manual/alert impact, it is a root cause.
-        if target_status != "operational" and _service_has_own_or_alert_impact(target_row):
-            issues.append(
-                _make_dependency_issue(
-                    direct_dependency=dependency,
-                    direct_service=target,
-                    direct_row=target_row,
-                    path=[target_node],
-                    impact_status=impact_status,
-                    contributes_to_impact=contributes_to_impact,
-                )
-            )
-
-        # If target is impacted by deeper dependencies, prepend target to each path.
-        for child_issue in child_issues:
-            child_path = child_issue.get("path") or []
-            full_path = [target_node] + child_path
-
-            issues.append(
-                _make_dependency_issue(
-                    direct_dependency=dependency,
-                    direct_service=target,
-                    direct_row=target_row,
-                    path=full_path,
-                    impact_status=impact_status,
-                    contributes_to_impact=contributes_to_impact,
-                    cycle_detected=bool(child_issue.get("cycle_detected")),
-                    depth_limited=bool(child_issue.get("depth_limited")),
-                )
-            )
-
-        # If target is non-operational but has no own/alert root and no child path,
-        # keep it visible as a terminal upstream issue.
-        if (
-            target_status != "operational"
-            and not _service_has_own_or_alert_impact(target_row)
-            and not child_issues
-        ):
-            depth_limited = (
-                depth + 1 >= max_depth
-                and bool(dependencies_by_service.get(target.id))
-            )
-
-            issues.append(
-                _make_dependency_issue(
-                    direct_dependency=dependency,
-                    direct_service=target,
-                    direct_row=target_row,
-                    path=[target_node],
-                    impact_status=impact_status,
-                    contributes_to_impact=contributes_to_impact,
-                    depth_limited=depth_limited,
-                )
-            )
-
-    return issues
-
-
-def _compute_service_impact_row(
-    service_id,
-    rows_by_service,
-    dependencies_by_service,
-    state,
-):
-    """
-    Compute effective status for one service after upstream rows are computed.
-
-    Cycles are ignored safely:
-        A -> B -> A
-    """
-    current_state = state.get(service_id)
-
-    if current_state == "done":
-        return rows_by_service.get(service_id)
-
-    if current_state == "visiting":
-        return rows_by_service.get(service_id)
-
-    row = rows_by_service.get(service_id)
-    if not row:
-        return None
-
-    state[service_id] = "visiting"
-
-    for dependency in dependencies_by_service.get(service_id, []):
-        target = dependency.depends_on_service
-        if target and target.id in rows_by_service:
-            _compute_service_impact_row(
-                target.id,
-                rows_by_service,
-                dependencies_by_service,
-                state,
-            )
-
-    _apply_dependency_impact(
-        row,
-        dependencies_by_service.get(service_id, []),
-        rows_by_service,
-        dependencies_by_service=dependencies_by_service,
+    payload = build_service_analytics_v2(
+        query,
+        team_ids=team_ids,
     )
 
-    state[service_id] = "done"
-    return row
+    return jsonify(payload)
 
 
 @services_bp.route("/impact", methods=["GET"])
 def list_service_impact():
-    """Return computed service impact based on alerts and dependencies."""
-    services, error = _readable_services_from_request(include_disabled=False)
+    """Return Service Impact v2 for readable services."""
+
+    query, error = validate_query(ServiceImpactQuerySchema)
 
     if error:
         return error
 
-    service_ids = [service.id for service in services]
+    team_ids = None
 
-    if not service_ids:
-        return jsonify([])
+    if query.service_id:
+        service = services_repo.get_service(query.service_id)
 
-    days = request.args.get("days", default=30, type=int)
-    days = max(1, min(days or 30, 365))
+        error = require_team_read(service.team_id)
 
-    alert_impact = _build_alert_impact_by_service(
-        service_ids,
-        days=days,
+        if error:
+            return error
+
+        team_ids = [service.team_id]
+
+    elif query.team_id:
+        error = require_team_read(query.team_id)
+
+        if error:
+            return error
+
+        team_ids = [query.team_id]
+
+    else:
+        team_ids = get_allowed_team_ids()
+
+    payload = build_service_impact_v2(
+        query,
+        team_ids=team_ids,
     )
 
-    rows_by_service = {
-        service.id: _base_service_impact_row(
-            service,
-            alert_impact,
+    return jsonify(payload)
+
+
+@services_bp.route("/<int:service_id>/impact", methods=["GET"])
+def get_service_impact(service_id):
+    """Return Service Impact v2 for one service."""
+
+    service = services_repo.get_service(service_id)
+
+    error = require_team_read(service.team_id)
+
+    if error:
+        return error
+
+    query, error = validate_query(ServiceImpactServiceQuerySchema)
+
+    if error:
+        return error
+
+    payload = build_single_service_impact_v2(
+        service_id,
+        query,
+        team_ids=[service.team_id],
+    )
+
+    if not payload:
+        return _json_error(
+            "service_not_found",
+            "Service was not found",
+            404,
+            service_id=service_id,
         )
-        for service in services
-    }
 
-    dependencies = services_repo.list_service_dependencies(
-        service_ids=service_ids,
-    )
-
-    dependencies_by_service = {}
-
-    for dependency in dependencies:
-        dependencies_by_service.setdefault(
-            dependency.service_id,
-            [],
-        ).append(dependency)
-
-    for service in services:
-        row = rows_by_service[service.id]
-        _apply_dependency_impact(
-            row,
-            dependencies_by_service.get(service.id, []),
-            rows_by_service,
-        )
-
-    result = list(rows_by_service.values())
-
-    result.sort(
-        key=lambda row: (
-            _service_status_rank(row["effective_status"]),
-            row["upstream_issues_count"],
-            row["critical_open_alerts"],
-            row["open_alerts"],
-        ),
-        reverse=True,
-    )
-
-    return jsonify(result)
+    return jsonify(payload)

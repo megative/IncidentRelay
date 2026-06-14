@@ -5,7 +5,7 @@ import requests
 from app import Config
 from app.notifiers.plugins import IncomingWebhookNotifier, alert_service_label
 from app.services.links import build_alert_web_url
-from app.services.service_context import (
+from app.services.routing.service_context import (
     format_service_links_markdown,
     format_service_runbooks_markdown,
 )

@@ -4,7 +4,7 @@ import requests
 
 from app.notifiers.base import BaseNotifier
 from app.services.links import build_alert_web_url
-from app.services.service_context import (
+from app.services.routing.service_context import (
     get_alert_service_links,
     get_alert_service_runbooks,
     link_display_label,

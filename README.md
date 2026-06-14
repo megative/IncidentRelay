@@ -11,7 +11,7 @@ It provides the core building blocks of an on-call system:
 - access groups and RBAC-style group roles;
 - teams and on-call rotations;
 - alert intake routes with per-route tokens;
-- Alertmanager, Zabbix, and generic webhook integrations;
+- Alertmanager, Zabbix, Sentry, and generic webhook integrations;
 - Mattermost, Slack, Telegram, Discord, Microsoft Teams, email, webhook, and voice-call notifications;
 - profile-level browser/PWA push notifications;
 - profile notification rules for browser push, email, and voice-call follow-up;
@@ -19,6 +19,7 @@ It provides the core building blocks of an on-call system:
 - reminders and escalation to the next on-call user;
 - rotation overrides;
 - alert silences;
+- maintenance windows for planned work and alert behavior control;
 - calendar view for on-call schedules;
 - personal API tokens;
 - Swagger/OpenAPI documentation.
@@ -103,11 +104,12 @@ IncidentRelay includes Swagger/OpenAPI documentation and personal API tokens wit
 
 ### Incoming alert sources
 
-| Source | Endpoint |
-|---|---|
-| Alertmanager | `POST /api/integrations/alertmanager` |
-| Zabbix | `POST /api/integrations/zabbix` |
-| Generic webhook | `POST /api/integrations/webhook` |
+| Source          | Endpoint                                   |
+|-----------------|--------------------------------------------|
+| Alertmanager    | `POST /api/integrations/alertmanager`      |
+| Zabbix          | `POST /api/integrations/zabbix`            |
+| Sentry          | `POST /api/integrations/sentry/<route_id>` |
+| Generic webhook | `POST /api/integrations/webhook`           |
 
 ### Notification channels
 
@@ -148,6 +150,35 @@ docker compose \
 ```
 
 Read more: [Docker installation](docs/getting-started/docker.md)
+
+### Kubernetes (Helm)
+
+A Helm chart lives in [`helm/incidentrelay`](helm/incidentrelay). It deploys the web UI plus the scheduler and Telegram workers, renders the application config from values into a Secret, and wires up the `/healthz` and `/readyz` probes.
+
+> **Note:** no public image is published yet — the default `image.repository` (`roxywi/incidentrelay`) does not exist on Docker Hub, so an out-of-the-box install ends in `ImagePullBackOff`. Build the image yourself, push it to your registry and set `image.repository` / `image.tag`.
+
+```bash
+helm install incidentrelay ./helm/incidentrelay \
+  --set image.repository=registry.example.com/incidentrelay \
+  --set image.tag=1.0.15-beta \
+  --set config.main.secret_key="$(openssl rand -hex 32)"
+```
+
+The default values use SQLite on a shared PersistentVolumeClaim. This is strictly a single-node setup: SQLite over network-backed `ReadWriteMany` storage (NFS and friends) is a known way to corrupt the database. Database migrations run on web pod start, so keep `web.replicaCount` at `1` (or disable `web.runMigrations` and migrate out of band). For anything multi-node or multi-replica, point `config.database` at PostgreSQL:
+
+```bash
+helm install incidentrelay ./helm/incidentrelay \
+  --set config.main.secret_key="$(openssl rand -hex 32)" \
+  --set config.database.type=postgresql \
+  --set config.database.host=postgres.example.svc \
+  --set config.database.port=5432 \
+  --set config.database.name=incidentrelay \
+  --set config.database.user=incidentrelay \
+  --set config.database.password=change-me \
+  --set persistence.enabled=false
+```
+
+All settings from `incidentrelay.conf` are available under `config.*` in [values.yaml](helm/incidentrelay/values.yaml); you can also bring a pre-rendered config via `existingConfigSecret`.
 
 ### RedHat-like distributions from RPM repository
 
@@ -445,6 +476,8 @@ OpenAPI JSON is available at:
 | Groups and RBAC | [docs/concepts/groups-and-rbac.md](docs/concepts/groups-and-rbac.md) |
 | Teams, rotations, routes | [docs/concepts/teams-rotations-routes.md](docs/concepts/teams-rotations-routes.md) |
 | Route intake tokens | [docs/concepts/route-intake-tokens.md](docs/concepts/route-intake-tokens.md) |
+| Maintenance Windows | [docs/concepts/maintenance-windows.md](docs/concepts/maintenance-windows.md) |
+| Services | [docs/concepts/services.md](docs/concepts/services.md) |
 | Channels | [docs/concepts/channels.md](docs/concepts/channels.md) |
 | Alertmanager | [docs/integrations/alertmanager.md](docs/integrations/alertmanager.md) |
 | Zabbix | [docs/integrations/zabbix.md](docs/integrations/zabbix.md) |

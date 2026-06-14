@@ -1,6 +1,6 @@
 from app.modules.db.models import AlertEvent, AlertNotification
 from app.services.alerts import upsert_alert
-from app.services.notification_service import (
+from app.services.notifications.delivery import (
     channel_matches_alert_severity,
     format_alert_message,
     get_channel_notify_on_severities,
@@ -150,7 +150,7 @@ def test_notify_alert_sends_and_stores_delivery(monkeypatch, db):
     alert_group = create_alert_group_for_route(route)
 
     fake = FakeNotifier()
-    monkeypatch.setattr("app.services.notification_service.get_notifier", lambda channel_type: fake)
+    monkeypatch.setattr("app.services.notifications.delivery.get_notifier", lambda channel_type: fake)
 
     assert notify_alert(alert_group, event_type="notification") == 1
 
@@ -184,7 +184,7 @@ def test_notify_alert_skips_new_notification_when_severity_does_not_match(monkey
     alert_group = create_alert_group_for_route(route)
 
     fake = FakeNotifier()
-    monkeypatch.setattr("app.services.notification_service.get_notifier", lambda channel_type: fake)
+    monkeypatch.setattr("app.services.notifications.delivery.get_notifier", lambda channel_type: fake)
 
     assert notify_alert(alert_group, event_type="notification") == 0
     assert AlertNotification.select().count() == 0
@@ -216,7 +216,7 @@ def test_notify_alert_updates_existing_editable_delivery_even_if_severity_filter
     )
 
     fake = FakeNotifier(supports_update=True)
-    monkeypatch.setattr("app.services.notification_service.get_notifier", lambda channel_type: fake)
+    monkeypatch.setattr("app.services.notifications.delivery.get_notifier", lambda channel_type: fake)
 
     assert notify_alert(alert_group, event_type="acknowledged") == 1
 
@@ -238,7 +238,7 @@ def test_notify_alert_records_delivery_error_and_alert_event(monkeypatch, db):
     alert_group = create_alert_group_for_route(route)
 
     fake = FakeNotifier(fail_send=True)
-    monkeypatch.setattr("app.services.notification_service.get_notifier", lambda channel_type: fake)
+    monkeypatch.setattr("app.services.notifications.delivery.get_notifier", lambda channel_type: fake)
 
     assert notify_alert(alert_group, event_type="notification") == 0
 
@@ -273,7 +273,7 @@ def test_update_alert_messages_updates_existing_delivery(monkeypatch, db):
     )
 
     fake = FakeNotifier(supports_update=True)
-    monkeypatch.setattr("app.services.notification_service.get_notifier", lambda channel_type: fake)
+    monkeypatch.setattr("app.services.notifications.delivery.get_notifier", lambda channel_type: fake)
 
     assert update_alert_messages(alert_group, "resolved") == 1
 

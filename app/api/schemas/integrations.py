@@ -159,3 +159,14 @@ class GenericWebhookSchema(ApiModel):
     source_url: str | None = None
     dashboard_url: str | None = None
     runbook_url: str | None = None
+
+
+class SentryWebhookSchema(ApiModel):
+    """Validate Sentry integration webhook payload."""
+
+    model_config = ConfigDict(extra="allow")
+
+    action: str | None = None
+    actor: Dict[str, Any] | None = None
+    installation: Dict[str, Any] | None = None
+    data: Dict[str, Any] = Field(default_factory=dict)

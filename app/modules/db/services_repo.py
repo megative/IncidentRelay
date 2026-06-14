@@ -6,6 +6,7 @@ from app.modules.db.models import (
     ServiceLink,
     ServiceMatchRule,
     ServiceRunbook,
+    ServiceStatusHistory,
     Team,
 )
 
@@ -443,3 +444,41 @@ def soft_delete_service_dependency(dependency_id):
     dependency.updated_at = datetime.utcnow()
     dependency.save()
     return dependency
+
+
+def list_downstream_service_dependencies(service_id=None, service_ids=None):
+    """Return dependencies where selected services are upstream targets."""
+    query = (
+        ServiceDependency
+        .select()
+        .where(ServiceDependency.deleted == False)  # noqa: E712
+    )
+
+    if service_id is not None:
+        query = query.where(ServiceDependency.depends_on_service == service_id)
+
+    if service_ids is not None:
+        service_ids = list(service_ids)
+
+        if not service_ids:
+            return []
+
+        query = query.where(ServiceDependency.depends_on_service.in_(service_ids))
+
+    return list(
+        query.order_by(
+            ServiceDependency.criticality.asc(),
+            ServiceDependency.id.asc(),
+        )
+    )
+
+
+def list_service_status_history(service_id, *, limit=20):
+    """Return recent service status changes."""
+    return list(
+        ServiceStatusHistory
+        .select()
+        .where(ServiceStatusHistory.service == service_id)
+        .order_by(ServiceStatusHistory.created_at.desc(), ServiceStatusHistory.id.desc())
+        .limit(limit)
+    )

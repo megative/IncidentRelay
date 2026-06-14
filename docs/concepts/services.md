@@ -1,419 +1,208 @@
-title: Services
-description: Logical services, affected systems, service routing and service impact analytics in IncidentRelay.
-
 # Services
 
-Services describe the logical system affected by an alert.
+Services represent technical systems affected by alerts: APIs, websites, databases, queues, workers, cron jobs, infrastructure components, external dependencies and other logical systems.
 
-A service is not the same thing as a team or route:
+A service is owned by a team and can be connected to routes, rotations, escalation policies, links, runbooks, dependencies, maintenance windows, impact calculations and analytics.
 
-- **Route** answers how the alert entered IncidentRelay.
-- **Service** answers what system is affected.
-- **Team** answers who owns the system.
-- **Rotation / Escalation Policy** answers who should be notified.
-- **Channel** answers where notifications are sent.
+## Why services exist
 
-The service layer makes IncidentRelay service ownership while keeping routing simple and self-hosted.
+Routes answer where an incoming alert should go. Services answer what is affected.
 
-## Alert flow
+This separation makes it possible to:
 
-Without services:
+- group alerts by affected system;
+- show service-specific runbooks and links;
+- calculate dependency impact;
+- understand blast radius;
+- build analytics by affected system;
+- connect incidents and maintenance windows to technical systems.
 
-```text
-Monitoring system -> Route -> Team -> Rotation -> Notification channels -> ACK / Resolve
-```
+## Service metadata
 
-With services:
+Common service fields:
 
-```text
-Monitoring system -> Route -> Service -> Team -> Rotation / Escalation Policy -> Channels -> ACK / Resolve
-```
+- name and slug;
+- owning team;
+- type, environment, criticality and tier;
+- current status and status message;
+- default rotation and escalation policy;
+- labels, tags and metadata;
+- enabled/disabled state.
 
-A route can have a default service. Service match rules can override or refine that default based on alert labels, annotations or payload fields.
+## Service links
 
-## Why services are useful
+Service links attach useful URLs to a service:
 
-Services allow you to answer questions that are hard to answer with routes alone:
+- dashboards;
+- metrics;
+- logs;
+- traces;
+- repositories;
+- documentation;
+- status pages;
+- wiki pages.
 
-- Which system is broken?
-- Which team owns that system?
-- Which runbook should the on-call engineer open?
-- Which dashboard, logs or traces are related to this service?
-- Which upstream services may be causing this incident?
-- Which services are noisy?
-- Which services have the highest number of open critical alerts?
-
-## Core service fields
-
-A service has:
-
-- `slug` — stable API/UI identifier, for example `rabbitmq-cloud`.
-- `name` — human-readable name, for example `RabbitMQ Cloud`.
-- `team_id` — owning team.
-- `service_type` — `api`, `web`, `database`, `queue`, `cache`, `worker`, `cron`, `network`, `storage`, `infrastructure`, `external`, `other`.
-- `environment` — `production`, `staging`, `development`, `testing`, `shared`.
-- `criticality` — `low`, `medium`, `high`, `critical`.
-- `tier` — `tier_1`, `tier_2`, `tier_3`, `tier_4`.
-- `status` — `operational`, `degraded`, `partial_outage`, `major_outage`, `maintenance`, `disabled`, `unknown`.
-- `labels`, `tags`, `metadata` — additional structured metadata.
-- `default_rotation_id` — optional default rotation.
-- `default_escalation_policy_id` — optional default escalation policy.
-
-## Service match rules
-
-Service match rules map incoming alerts to services.
-
-A match rule belongs to a service and can optionally be scoped to a route.
-
-Example:
-
-```json
-{
-  "team_id": 1,
-  "route_id": 10,
-  "service_id": 5,
-  "name": "RabbitMQ Cloud",
-  "position": 10,
-  "enabled": true,
-  "matchers": {
-    "labels": {
-      "job": "RabbitMQ",
-      "rabbitmq": {
-        "op": "regex",
-        "value": "^rabbitmq-cloud$"
-      }
-    }
-  }
-}
-```
-
-For an Alertmanager alert like this:
-
-```json
-{
-  "status": "firing",
-  "alerts": [
-    {
-      "labels": {
-        "alertname": "RabbitMQClusterPartition",
-        "severity": "critical",
-        "job": "RabbitMQ",
-        "rabbitmq": "rabbitmq-cloud"
-      },
-      "annotations": {
-        "summary": "RabbitMQ Cluster Partition Detected"
-      }
-    }
-  ]
-}
-```
-
-the service match rule can attach the alert to `RabbitMQ Cloud`.
-
-## Default route service
-
-A route may have `service_id`.
-
-Use this when all alerts coming through the route belong to the same service.
-
-Example:
-
-```text
-Route: alertmanager-rabbitmq-prod
-Default service: RabbitMQ Cloud
-```
-
-Use service match rules when one route receives alerts for many services.
-
-Example:
-
-```text
-Route: alertmanager-prod
-Service rule 1: labels.job = RabbitMQ -> RabbitMQ Cloud
-Service rule 2: labels.job = PostgreSQL -> PostgreSQL Prod
-Service rule 3: labels.app = billing-api -> Billing API
-```
-
-## Links
-
-Service links point the on-call engineer to useful systems:
-
-- dashboard
-- metrics
-- logs
-- traces
-- repository
-- documentation
-- status page
-- wiki
-- other
-
-Example:
-
-```json
-{
-  "link_type": "dashboard",
-  "label": "RabbitMQ Grafana dashboard",
-  "url": "https://grafana.example.com/d/rabbitmq-cloud",
-  "priority": 10,
-  "enabled": true
-}
-```
+Links help responders move from an alert or incident to the correct operational context.
 
 ## Runbooks
 
-Runbooks describe what to do when a service is broken.
+Runbooks attach response instructions to a service.
 
-Example:
+Runbooks can include optional matchers so a service can have generic and alert-specific instructions.
 
-```json
-{
-  "title": "RabbitMQ cluster partition",
-  "url": "https://docs.example.com/runbooks/rabbitmq/cluster-partition",
-  "severity": "critical",
-  "priority": 10,
-  "enabled": true,
-  "matchers": {
-    "labels": {
-      "alertname": "RabbitMQClusterPartition"
-    }
-  }
-}
-```
+Example use cases:
 
-Runbooks can be generic for a service or specific to an alert type.
+- database outage procedure;
+- API latency investigation;
+- queue backlog mitigation;
+- deployment rollback steps.
 
 ## Dependencies
 
-Dependencies describe upstream services.
-
-Example:
-
-```text
-Billing API depends on PostgreSQL Prod
-Frontend depends on Billing API
-```
+Dependencies describe relationships between services.
 
 A dependency has:
 
-- `depends_on_service_id`
-- `dependency_type` — `hard`, `soft`, `external`, `informational`
-- `criticality` — `required`, `important`, `optional`
+- source service;
+- target service the source depends on;
+- dependency type;
+- dependency criticality;
+- enabled flag;
+- optional description.
 
-Dependencies are used by service impact views to show whether a service may be affected by upstream incidents.
+Supported dependency types:
 
-## Service impact
+- `hard`;
+- `soft`;
+- `external`;
+- `informational`.
 
-Service impact is computed from four values:
+Supported criticalities:
 
-| Field | Meaning |
-|---|---|
-| `own_status` | Manual/current service status |
-| `alert_impact_status` | Impact from open firing or acknowledged alerts |
-| `dependency_impact_status` | Impact from upstream dependencies |
-| `effective_status` | Worst status from own, alert and dependency impact |
+- `required`;
+- `important`;
+- `optional`.
 
-Resolved and silenced alerts do not affect service impact.
+Dependencies are used by impact calculations to propagate upstream failures to downstream services.
 
-Dependency impact respects dependency type and criticality:
+## Service Impact v2
 
-| Dependency | Effect |
-|---|---|
-| `hard` + `required` | Can propagate major outage |
-| `soft` / `important` | Reduces severe upstream impact |
-| `optional` | Maximum downstream impact is degraded |
-| `informational` | Visible in upstream issues, but does not change effective status |
+Service Impact v2 calculates the current effective status for every readable service.
 
-Impact is calculated through upstream dependencies up to the configured impact depth.
+Impact combines:
 
+- the service own status;
+- open grouped alerts;
+- upstream dependency impact;
+- disabled state;
+- cycle and depth-limit detection.
+
+Impact is intentionally based on `AlertGroup`, not raw alert events. A grouped alert represents the operational state that users acknowledge, resolve, silence and investigate.
+
+Each impact item contains:
+
+- `own_status` — the service status itself;
+- `alert_impact_status` — impact caused by open grouped alerts;
+- `dependency_impact_status` — impact propagated from upstream services;
+- `effective_status` — the final computed status;
+- `primary_reason` — why the final status was selected;
+- `root_causes` — services where the problem originated;
+- `explanation` — human-readable explanation and dependency paths;
+- `blast_radius` — downstream services that can be affected by this service.
+
+### Root causes
+
+A root cause is the service where impact started.
+
+Examples:
+
+- a service with a critical firing alert group;
+- a service with manual `major_outage` own status;
+- a disabled service;
+- a service in maintenance status.
+
+Downstream services reference the same root cause through dependency paths.
 
 ### Dependency paths
 
-When impact is propagated through multiple upstream dependencies, IncidentRelay shows the full dependency path.
+A dependency path explains how impact propagated.
 
 Example:
 
 ```text
 Frontend Web -> Billing API -> PostgreSQL Prod
-
-root_cause_* points to the last affected service in the path.
-
-path contains upstream services from the direct dependency to the root cause.
-
-cycle_detected is true when a dependency cycle was found.
-
-depth_limited is true when traversal stopped at the configured impact depth.
 ```
 
-The API exposes this through:
+If `PostgreSQL Prod` has a critical firing alert group and `Billing API` depends on it as `hard / required`, `Billing API` can become `major_outage`.
+
+If `Frontend Web` depends on `Billing API` as `soft / important`, the propagated impact can be reduced to `partial_outage`.
+
+### Blast radius
+
+Blast radius answers the reverse question:
 
 ```text
-GET /api/services/impact
-GET /api/services/impact?team_id=1
-GET /api/services/impact?service_id=5
+Which downstream services can be affected if this service is unhealthy?
 ```
 
-## Analytics
+It contains:
 
-Service analytics group alerts by affected system.
+- direct downstream count;
+- transitive downstream count;
+- critical downstream count;
+- tier 1 downstream count;
+- optional paths;
+- cycle/depth flags.
 
-Examples:
+## Service Analytics v2
+
+Service Analytics v2 is historical and period-based.
+
+It answers:
+
+- which services had the most grouped alerts;
+- which services are noisy by raw alert count;
+- which services have open or critical open alert groups;
+- which services are currently affected by impact;
+- which services have maintenance suppression activity;
+- response metrics such as MTTA/MTTR when timestamp fields are available.
+
+Analytics uses two alert layers:
+
+| Layer | Purpose |
+| --- | --- |
+| `AlertGroup` | Grouped operational analytics: open, firing, acknowledged, resolved, silenced, critical open. |
+| `Alert` | Raw/noise analytics: raw alert count, dedup ratio, top alertnames. |
+
+### Impact vs Analytics
+
+Impact and Analytics answer different questions.
+
+| Feature | Question | Time model |
+| --- | --- | --- |
+| Impact v2 | What is affected right now and why? | Current computed state |
+| Analytics v2 | What happened during the selected period? | Historical window |
+
+Analytics includes a current Impact v2 widget per service, but this is not historical impact. Historical impact trends require impact snapshots and are reserved under `series.impact_by_day`.
+
+## Service details
+
+The service details panel uses an aggregated details endpoint:
 
 ```text
-GET /api/services/analytics?days=30
-GET /api/services/analytics?team_id=1&days=7
-GET /api/services/analytics?service_id=5&days=90
+GET /api/services/{service_id}/details
 ```
 
-Useful metrics:
+The response is designed as an expandable contract for operators and analytics. It contains:
 
-- total alerts
-- open alerts
-- firing alerts
-- acknowledged alerts
-- resolved alerts
-- silenced alerts
-- critical open alerts
-- warning open alerts
-- last alert time
+- service metadata and permissions;
+- grouped alert summary based on `AlertGroup`;
+- current Impact v2 block;
+- active or upcoming maintenance windows;
+- service links;
+- runbooks;
+- upstream and downstream dependencies;
+- recent service status history;
+- a versioned `analytics` block.
 
-## API examples
-
-List services:
-
-```bash
-curl -H "Authorization: Bearer $TOKEN" \
-  https://incidentrelay.example.com/api/services
-```
-
-Create service:
-
-```bash
-curl -X POST \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  https://incidentrelay.example.com/api/services \
-  -d '{
-    "team_id": 1,
-    "slug": "rabbitmq-cloud",
-    "name": "RabbitMQ Cloud",
-    "service_type": "queue",
-    "environment": "production",
-    "criticality": "critical",
-    "tier": "tier_1",
-    "status": "operational"
-  }'
-```
-
-Create service match rule:
-
-```bash
-curl -X POST \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  https://incidentrelay.example.com/api/services/5/match-rules \
-  -d '{
-    "team_id": 1,
-    "route_id": 10,
-    "service_id": 5,
-    "name": "RabbitMQ Cloud labels",
-    "position": 10,
-    "enabled": true,
-    "matchers": {
-      "labels": {
-        "job": "RabbitMQ",
-        "rabbitmq": {
-          "op": "regex",
-          "value": "^rabbitmq-cloud$"
-        }
-      }
-    }
-  }'
-```
-
-Create service link:
-
-```bash
-curl -X POST \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  https://incidentrelay.example.com/api/services/5/links \
-  -d '{
-    "link_type": "dashboard",
-    "label": "Grafana",
-    "url": "https://grafana.example.com/d/rabbitmq-cloud",
-    "priority": 10,
-    "enabled": true
-  }'
-```
-
-Create runbook:
-
-```bash
-curl -X POST \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  https://incidentrelay.example.com/api/services/5/runbooks \
-  -d '{
-    "title": "RabbitMQ cluster partition",
-    "url": "https://docs.example.com/runbooks/rabbitmq/cluster-partition",
-    "severity": "critical",
-    "priority": 10,
-    "enabled": true
-  }'
-```
-
-Create dependency:
-
-```bash
-curl -X POST \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  https://incidentrelay.example.com/api/services/5/dependencies \
-  -d '{
-    "depends_on_service_id": 2,
-    "dependency_type": "hard",
-    "criticality": "required",
-    "enabled": true
-  }'
-```
-
-## Recommended service naming
-
-Use stable slugs:
-
-```text
-rabbitmq-cloud
-postgresql-prod
-billing-api
-frontend-web
-kubernetes-prod
-```
-
-Avoid environment-less ambiguous names like:
-
-```text
-api
-database
-queue
-```
-
-## Troubleshooting
-
-### Service is not assigned to an alert
-
-Check:
-
-1. The route has a default `service_id`, or a service match rule exists.
-2. The service match rule is enabled.
-3. The service match rule is scoped to the correct route, or has no route scope.
-4. The matcher fields match actual alert labels or annotations.
-5. The service and owning team are enabled.
-
-### Service is visible but cannot be edited
-
-Service access follows team access. The user must have write access to the owning team or global admin permissions.
-
-### Dependency cannot be created
-
-Check that the source service is editable by the user and the target service is readable.
+The `analytics` block is intentionally versioned. New widgets such as MTTR, noise, acknowledgement latency, incident count, SLO burn rate or raw alert event volume should be added under `analytics.widgets`, `analytics.breakdowns`, `analytics.series` or `analytics.extensions` instead of changing existing fields.

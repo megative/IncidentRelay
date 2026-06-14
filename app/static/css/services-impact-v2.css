@@ -1,0 +1,221 @@
+.impact-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin: 12px 0 16px;
+}
+
+.impact-summary-card {
+    border: 1px solid var(--border, #e5edf6);
+    border-radius: 14px;
+    padding: 12px;
+    background: var(--surface, #ffffff);
+}
+
+.impact-summary-value {
+    color: var(--text, #101828);
+    font-size: 24px;
+    font-weight: 800;
+    line-height: 1.1;
+}
+
+.impact-summary-label {
+    margin-top: 4px;
+    color: var(--text, #101828);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.impact-summary-hint {
+    margin-top: 2px;
+    color: var(--muted, #667085);
+    font-size: 12px;
+}
+
+.page-toolbar-checkbox {
+    min-height: 38px;
+    align-items: center;
+    white-space: nowrap;
+}
+
+.impact-reason-cell,
+.impact-status-stack,
+.impact-explanation-card,
+.impact-blast-radius-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.impact-reason-pill {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    min-height: 22px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: var(--surface-muted, #f8fafc);
+    color: var(--text, #101828);
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.2;
+    text-transform: capitalize;
+}
+
+.impact-reason-upstream_dependency,
+.impact-reason-alert_group,
+.impact-reason-own_status {
+    background: #fff4e5;
+    color: #b54708;
+}
+
+.impact-reason-maintenance {
+    background: #eef4ff;
+    color: #3538cd;
+}
+
+.impact-reason-none {
+    background: #ecfdf3;
+    color: #027a48;
+}
+
+.impact-reason-disabled,
+.impact-reason-unknown {
+    background: var(--surface-muted, #f8fafc);
+    color: var(--muted, #667085);
+}
+
+.impact-reason-source {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: var(--muted, #667085);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.25;
+    text-align: left;
+    cursor: pointer;
+}
+
+.impact-reason-source:hover {
+    text-decoration: underline;
+}
+
+.impact-status-hint,
+.impact-explanation-message,
+.impact-path-title {
+    color: var(--muted, #667085);
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.impact-explanation-title {
+    color: var(--text, #101828);
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.3;
+}
+
+.impact-root-cause-strip,
+.impact-issue-flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.impact-root-cause-chip,
+.impact-more-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 3px 8px;
+    border: 1px solid var(--border, #e5edf6);
+    border-radius: 999px;
+    background: var(--surface-muted, #f8fafc);
+    color: var(--text, #101828);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+button.impact-root-cause-chip {
+    cursor: pointer;
+}
+
+button.impact-root-cause-chip:hover {
+    text-decoration: underline;
+}
+
+.impact-rule-list {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--muted, #667085);
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.impact-rule-item + .impact-rule-item {
+    margin-top: 3px;
+}
+
+.impact-paths-wrapper,
+.impact-downstream-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.impact-blast-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.impact-blast-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px 8px;
+    border: 1px solid var(--border, #e5edf6);
+    border-radius: 10px;
+    background: var(--surface-muted, #f8fafc);
+}
+
+.impact-blast-value {
+    color: var(--text, #101828);
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.impact-blast-label {
+    color: var(--muted, #667085);
+    font-size: 11px;
+    line-height: 1.1;
+}
+
+.impact-downstream-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.impact-explanation-td {
+    min-width: 320px;
+}
+
+@media (max-width: 1100px) {
+    .impact-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 700px) {
+    .impact-summary-grid,
+    .impact-blast-metrics {
+        grid-template-columns: 1fr;
+    }
+}

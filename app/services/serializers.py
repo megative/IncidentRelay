@@ -1,6 +1,9 @@
-from datetime import datetime, timezone
+import json
+from datetime import datetime
 
 from app.modules.sso.saml_security import get_saml_security
+from app.modules.db import maintenance_repo
+from app.modules.common import as_naive_datetime, as_utc_aware
 
 
 def extract_alert_event_link(alert):
@@ -26,16 +29,23 @@ def extract_alert_event_link(alert):
 
 
 def serialize_utc_datetime(value):
-    """Serialize a datetime as an explicit UTC ISO-8601 string."""
+    """Serialize a datetime/string value as an explicit UTC ISO-8601 string."""
+    value = as_utc_aware(value)
+
     if not value:
         return None
 
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
-    else:
-        value = value.astimezone(timezone.utc)
-
     return value.isoformat().replace("+00:00", "Z")
+
+
+def serialize_local_datetime(value):
+    """Serialize a local wall-clock datetime without timezone conversion."""
+    value = as_naive_datetime(value)
+
+    if not value:
+        return None
+
+    return value.isoformat()
 
 
 def attach_group_permissions(data, group_id, current_user=None):
@@ -301,6 +311,11 @@ def serialize_service(service, current_user=None):
 
         "created_at": serialize_utc_datetime(service.created_at),
         "updated_at": serialize_utc_datetime(service.updated_at),
+        "active_maintenance": serialize_active_maintenance_for_scope(
+            group_id=service.team.group_id if service.team_id and service.team else None,
+            team_id=service.team_id,
+            service_id=service.id,
+        ),
     }
 
     return attach_team_permissions(data, service.team_id, current_user)
@@ -338,6 +353,23 @@ def serialize_service_match_rule(rule, current_user=None):
     return attach_team_permissions(data, rule.team_id, current_user)
 
 
+def serialize_route_integration_config(route):
+    """Serialize provider-specific integration config without secrets."""
+    config = route.integration_config or {}
+
+    if route.source == "sentry":
+        sentry = dict(config.get("sentry") or {})
+
+        return {
+            "sentry": {
+                "has_webhook_secret": bool(sentry.get("webhook_secret")),
+                "webhook_path": f"/api/integrations/sentry/{route.id}",
+            }
+        }
+
+    return {}
+
+
 def serialize_route(route, current_user=None):
     """
     Serialize an alert route.
@@ -363,6 +395,7 @@ def serialize_route(route, current_user=None):
         ),
         "matchers": route.matchers,
         "group_by": route.group_by,
+        "integration_config": serialize_route_integration_config(route),
         "enabled": route.enabled,
         "intake_token_prefix": route.intake_token_prefix,
         "has_intake_token": bool(route.intake_token_hash),
@@ -370,6 +403,12 @@ def serialize_route(route, current_user=None):
         "service_id": route.service.id if getattr(route, "service_id", None) else None,
         "service_name": route.service.name if getattr(route, "service_id", None) else None,
         "service_slug": route.service.slug if getattr(route, "service_id", None) else None,
+        "active_maintenance": serialize_active_maintenance_for_scope(
+            group_id=route.team.group_id if route.team_id and route.team else None,
+            team_id=route.team_id,
+            service_id=route.service_id,
+            route_id=route.id,
+        ),
     }
 
     return attach_team_permissions(data, route.team.id, current_user)
@@ -817,6 +856,54 @@ def serialize_service_dependency(dependency, current_user=None):
     return attach_team_permissions(data, service.team_id, current_user)
 
 
+def serialize_incident_priority(priority):
+    """Serialize incident priority object."""
+    if not priority:
+        return None
+
+    return {
+        "id": priority.id,
+        "slug": priority.slug,
+        "name": priority.name,
+        "description": priority.description,
+        "level": priority.level,
+        "color": priority.color,
+        "enabled": priority.enabled,
+        "default": priority.default,
+    }
+
+
+def serialize_priority_ref(obj):
+    """Serialize priority fields from AlertGroup or Alert without returning ORM object."""
+    priority = None
+
+    if getattr(obj, "priority_id", None):
+        try:
+            priority = obj.priority
+        except Exception:
+            priority = None
+
+    slug = (
+        getattr(obj, "priority_slug", None)
+        or getattr(priority, "slug", None)
+        or "p3"
+    )
+
+    order = (
+        getattr(obj, "priority_order", None)
+        or getattr(priority, "level", None)
+        or 3
+    )
+
+    return {
+        "priority": slug,
+        "priority_id": getattr(obj, "priority_id", None),
+        "priority_slug": slug,
+        "priority_order": order,
+        "priority_details": serialize_incident_priority(priority),
+    }
+
+
 def serialize_alert_group(
     group,
     include_payload=False,
@@ -909,7 +996,11 @@ def serialize_alert_group(
         "escalation_rule_position": group.escalation_rule.position if group.escalation_rule else None,
         "escalation_rule_target_type": group.escalation_rule.target_type if group.escalation_rule else None,
         "team_escalation_enabled": group.team.escalation_enabled if group.team else None,
+        "maintenance_window_id": group.maintenance_window_id,
+        "maintenance_suppressed": group.maintenance_suppressed,
     }
+
+    data.update(serialize_priority_ref(group))
 
     if include_payload:
         data["payload_summary"] = group.payload_summary
@@ -927,6 +1018,8 @@ def serialize_alert_group(
             serialize_alert_notification(notification)
             for notification in notifications or []
         ]
+
+    data["active_maintenance"] = serialize_attached_maintenance_ref(group)
 
     return attach_team_permissions(data, team.id if team else None, current_user)
 
@@ -956,4 +1049,399 @@ def serialize_alert_comment(comment):
             and comment.updated_at
             and comment.updated_at > comment.created_at
         ),
+    }
+
+
+def serialize_incident_responder(responder):
+    return {
+        "id": responder.id,
+        "group_id": responder.group_id,
+        "target_type": responder.target_type,
+        "target_user_id": responder.target_user_id,
+        "target_team_id": responder.target_team_id,
+        "target_rotation_id": responder.target_rotation_id,
+        "target_escalation_policy_id": responder.target_escalation_policy_id,
+        "requested_by_id": responder.requested_by_id,
+        "status": responder.status,
+        "message": responder.message,
+        "created_at": responder.created_at.isoformat() if responder.created_at else None,
+        "updated_at": responder.updated_at.isoformat() if responder.updated_at else None,
+        "responded_at": responder.responded_at.isoformat() if responder.responded_at else None,
+    }
+
+
+def serialize_incident_stakeholder(stakeholder):
+    user = stakeholder.user if stakeholder.user_id else None
+
+    return {
+        "id": stakeholder.id,
+        "group_id": stakeholder.group_id,
+        "user_id": stakeholder.user_id,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "display_name": user.display_name,
+            "email": user.email,
+        } if user else None,
+        "email": stakeholder.email,
+        "display_name": stakeholder.display_name,
+        "role": stakeholder.role,
+        "source": stakeholder.source,
+        "notify": stakeholder.notify,
+        "created_at": stakeholder.created_at.isoformat() if stakeholder.created_at else None,
+        "updated_at": stakeholder.updated_at.isoformat() if stakeholder.updated_at else None,
+    }
+
+
+def serialize_incident_priority(priority):
+    if not priority:
+        return None
+
+    return {
+        "id": priority.id,
+        "slug": priority.slug,
+        "name": priority.name,
+        "description": priority.description,
+        "level": priority.level,
+        "color": priority.color,
+        "enabled": priority.enabled,
+        "default": priority.default,
+    }
+
+
+def serialize_incident_responder(responder):
+    return {
+        "id": responder.id,
+        "incident_id": responder.group_id,
+        "target_type": responder.target_type,
+        "target_user_id": responder.target_user_id,
+        "target_team_id": responder.target_team_id,
+        "target_rotation_id": responder.target_rotation_id,
+        "target_escalation_policy_id": responder.target_escalation_policy_id,
+        "requested_by_id": responder.requested_by_id,
+        "accepted_by_id": responder.accepted_by_id,
+        "declined_by_id": responder.declined_by_id,
+        "status": responder.status,
+        "message": responder.message,
+        "response_message": responder.response_message,
+        "notification_status": responder.notification_status,
+        "notification_error": responder.notification_error,
+        "requested_at": responder.requested_at.isoformat() if responder.requested_at else None,
+        "responded_at": responder.responded_at.isoformat() if responder.responded_at else None,
+        "expires_at": responder.expires_at.isoformat() if responder.expires_at else None,
+        "created_at": responder.created_at.isoformat() if responder.created_at else None,
+        "updated_at": responder.updated_at.isoformat() if responder.updated_at else None,
+    }
+
+
+def serialize_incident_stakeholder(stakeholder):
+    user = stakeholder.user if stakeholder.user_id else None
+
+    return {
+        "id": stakeholder.id,
+        "incident_id": stakeholder.group_id,
+        "user_id": stakeholder.user_id,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "display_name": user.display_name,
+            "email": user.email,
+        } if user else None,
+        "email": stakeholder.email,
+        "display_name": stakeholder.display_name,
+        "role": stakeholder.role,
+        "source": stakeholder.source,
+        "notify_on_created": stakeholder.notify_on_created,
+        "notify_on_priority_change": stakeholder.notify_on_priority_change,
+        "notify_on_status_change": stakeholder.notify_on_status_change,
+        "notify_on_resolved": stakeholder.notify_on_resolved,
+        "active": stakeholder.active,
+        "created_by_id": stakeholder.created_by_id,
+        "created_at": stakeholder.created_at.isoformat() if stakeholder.created_at else None,
+        "updated_at": stakeholder.updated_at.isoformat() if stakeholder.updated_at else None,
+    }
+
+
+def serialize_incident(group, *, current_user=None, include_details=False):
+    data = serialize_alert_group(
+        group,
+        current_user=current_user,
+        include_details=include_details,
+        include_payload=include_details,
+    )
+
+    data["incident_id"] = group.id
+    data["priority"] = {
+        "id": group.priority_id,
+        "slug": group.priority_slug,
+        "order": group.priority_order,
+        "set_manually": group.priority_set_manually,
+        "set_by_id": group.priority_set_by_id,
+        "set_at": group.priority_set_at.isoformat() if group.priority_set_at else None,
+    }
+
+    data["maintenance"] = {
+        "window_id": group.maintenance_window_id,
+        "behavior": group.maintenance_behavior,
+        "suppressed": group.maintenance_suppressed,
+    }
+
+    data["active_maintenance"] = serialize_attached_maintenance_ref(group)
+
+    return data
+
+
+def serialize_maintenance_window_scope(scope):
+    return {
+        "id": scope.id,
+        "maintenance_window_id": scope.maintenance_window_id,
+        "scope_type": scope.scope_type,
+        "group_id": scope.group_id,
+        "team_id": scope.team_id,
+        "service_id": scope.service_id,
+        "route_id": scope.route_id,
+        "created_at": scope.created_at.isoformat() if scope.created_at else None,
+    }
+
+
+def serialize_attached_maintenance_ref(obj):
+    window = None
+    window_id = getattr(obj, "maintenance_window_id", None)
+
+    if window_id:
+        try:
+            window = obj.maintenance_window
+        except Exception:
+            window = None
+
+    behavior = (
+        getattr(obj, "maintenance_behavior", None)
+        or getattr(window, "behavior", None)
+    )
+
+    suppressed = bool(getattr(obj, "maintenance_suppressed", False))
+
+    if not window and not behavior and not suppressed:
+        return None
+
+    return {
+        "id": getattr(window, "id", None),
+        "name": getattr(window, "name", None) or "Maintenance",
+        "status": (
+            maintenance_repo.get_effective_window_status(window)
+            if window
+            else None
+        ),
+        "behavior": behavior,
+        "timezone": getattr(window, "timezone", None),
+        "starts_at": window.starts_at.isoformat() if window and window.starts_at else None,
+        "ends_at": window.ends_at.isoformat() if window and window.ends_at else None,
+        "occurrence": (
+            serialize_maintenance_window_occurrence(window)
+            if window
+            else None
+        ),
+        "suppressed": suppressed,
+    }
+
+
+def serialize_maintenance_window(window, include_scopes=True):
+    data = {
+        "id": window.id,
+        "group_id": window.group_id,
+        "group_name": window.group.name if window.group_id else None,
+        "team_id": window.team_id,
+        "team_name": window.team.name if window.team_id else None,
+        "name": window.name,
+        "description": window.description,
+        "status": maintenance_repo.get_effective_window_status(window),
+        "stored_status": window.status,
+        "behavior": window.behavior,
+        "timezone": window.timezone,
+        "rrule": window.rrule,
+        "starts_at": serialize_local_datetime(window.starts_at),
+        "ends_at": serialize_local_datetime(window.ends_at),
+        "occurrence": serialize_maintenance_window_occurrence(window),
+        "enabled": window.enabled,
+        "deleted": window.deleted,
+        "cancelled_by_id": window.cancelled_by_id,
+        "cancelled_at": window.cancelled_at.isoformat() if window.cancelled_at else None,
+        "cancel_reason": window.cancel_reason,
+        "created_at": window.created_at.isoformat() if getattr(window, "created_at", None) else None,
+        "updated_at": window.updated_at.isoformat() if getattr(window, "updated_at", None) else None,
+    }
+
+    if include_scopes:
+        data["scopes"] = [
+            serialize_maintenance_window_scope(scope)
+            for scope in maintenance_repo.list_maintenance_window_scopes(window)
+        ]
+
+    return data
+
+
+def _as_dict(value):
+    if isinstance(value, dict):
+        return value
+
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except (TypeError, ValueError):
+            return {}
+
+        return parsed if isinstance(parsed, dict) else {}
+
+    return {}
+
+
+def _isoformat(value):
+    return value.isoformat() if value else None
+
+
+def _extract_alert_annotations(payload):
+    annotations = payload.get("annotations")
+    if isinstance(annotations, dict):
+        return annotations
+
+    common_annotations = payload.get("commonAnnotations")
+    if isinstance(common_annotations, dict):
+        return common_annotations
+
+    nested_alert = payload.get("alert")
+    if isinstance(nested_alert, dict):
+        nested_annotations = nested_alert.get("annotations")
+        if isinstance(nested_annotations, dict):
+            return nested_annotations
+
+    alerts = payload.get("alerts")
+    if isinstance(alerts, list) and alerts:
+        first_alert = alerts[0]
+        if isinstance(first_alert, dict):
+            nested_annotations = first_alert.get("annotations")
+            if isinstance(nested_annotations, dict):
+                return nested_annotations
+
+    return {}
+
+
+def _add_optional_incident_alert_fields(data, alert):
+    optional_fields = (
+        "priority_id",
+        "priority_slug",
+        "priority_order",
+        "maintenance_window_id",
+        "maintenance_behavior",
+        "maintenance_suppressed",
+    )
+
+    for field_name in optional_fields:
+        if hasattr(alert, field_name):
+            data[field_name] = getattr(alert, field_name)
+
+    if "priority_slug" in data and not data["priority_slug"]:
+        data["priority_slug"] = "p3"
+
+    if "priority_order" in data and not data["priority_order"]:
+        data["priority_order"] = 3
+
+    if "maintenance_suppressed" in data:
+        data["maintenance_suppressed"] = bool(data["maintenance_suppressed"])
+
+
+def serialize_incident_alert(alert):
+    payload = _as_dict(getattr(alert, "payload", None))
+
+    data = {
+        "id": alert.id,
+        "group_id": alert.group_id,
+        "incident_id": alert.group_id,
+        "team_id": alert.team_id,
+        "route_id": alert.route_id,
+        "rotation_id": alert.rotation_id,
+        "escalation_policy_id": alert.escalation_policy_id,
+        "escalation_rule_id": alert.escalation_rule_id,
+        "service_id": alert.service_id,
+        "assignee_id": alert.assignee_id,
+
+        "source": alert.source,
+        "external_id": alert.external_id,
+        "dedup_key": alert.dedup_key,
+        "group_key": alert.group_key,
+
+        "title": alert.title,
+        "message": alert.message,
+        "severity": alert.severity,
+        "status": alert.status,
+        "previous_status": alert.previous_status,
+
+        "labels": _as_dict(alert.labels),
+        "annotations": _extract_alert_annotations(payload),
+        "payload": payload,
+
+        "silenced": alert.silenced,
+
+        "acknowledged_by_id": alert.acknowledged_by_id,
+        "acknowledged_at": _isoformat(alert.acknowledged_at),
+
+        "next_escalation_at": _isoformat(alert.next_escalation_at),
+        "last_escalated_at": _isoformat(alert.last_escalated_at),
+        "escalation_repeat_count": alert.escalation_repeat_count,
+        "escalation_level": alert.escalation_level,
+
+        "last_notification_at": _isoformat(alert.last_notification_at),
+        "reminder_count": alert.reminder_count,
+
+        "first_seen_at": _isoformat(alert.first_seen_at),
+        "last_seen_at": _isoformat(alert.last_seen_at),
+        "resolved_at": _isoformat(alert.resolved_at),
+    }
+
+    _add_optional_incident_alert_fields(data, alert)
+
+    return data
+
+
+def serialize_maintenance_window_ref(window):
+    if not window:
+        return None
+
+    return {
+        "id": window.id,
+        "name": window.name,
+        "status": maintenance_repo.get_effective_window_status(window),
+        "behavior": window.behavior,
+        "timezone": window.timezone,
+        "starts_at": serialize_local_datetime(window.starts_at),
+        "ends_at": serialize_local_datetime(window.ends_at),
+        "occurrence": serialize_maintenance_window_occurrence(window),
+    }
+
+
+def serialize_active_maintenance_for_scope(*, group_id=None, team_id=None, service_id=None, route_id=None):
+    window = maintenance_repo.find_active_maintenance_window(
+        group_id=group_id,
+        team_id=team_id,
+        service_id=service_id,
+        route_id=route_id,
+    )
+
+    return serialize_maintenance_window_ref(window)
+
+
+def serialize_maintenance_window_occurrence(window):
+    occurrence = maintenance_repo.get_effective_window_occurrence(window)
+
+    if not occurrence:
+        return None
+
+    starts_at = occurrence.get("starts_at")
+    ends_at = occurrence.get("ends_at")
+
+    return {
+        "status": occurrence.get("status"),
+        "starts_at": starts_at.isoformat() if starts_at else None,
+        "ends_at": ends_at.isoformat() if ends_at else None,
+        "timezone": occurrence.get("timezone"),
+        "recurring": bool(occurrence.get("recurring")),
     }

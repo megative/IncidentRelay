@@ -173,10 +173,24 @@
 
               <label for="route-source">Source</label>
               <select id="route-source" class="input">
-                <option value="alertmanager">Alertmanager</option>
-                <option value="zabbix">Zabbix</option>
-                <option value="webhook">Webhook</option>
+                  <option value="alertmanager">Alertmanager</option>
+                  <option value="zabbix">Zabbix</option>
+                  <option value="sentry">Sentry</option>
+                  <option value="webhook">Webhook</option>
               </select>
+                <div id="route-sentry-settings" class="form-group is-hidden">
+                    <label for="route-sentry-webhook-secret">Sentry webhook secret</label>
+                    <input
+                        id="route-sentry-webhook-secret"
+                        class="input"
+                        type="password"
+                        placeholder="Paste Sentry Client Secret"
+                        autocomplete="new-password"
+                    >
+                    <div id="route-sentry-secret-help" class="help-text">
+                        Create the route first to get the Sentry webhook URL. Then create a Sentry Internal Integration and paste its Client Secret here.
+                    </div>
+                </div>
                 <label for="route-service">Default service</label>
                 <select id="route-service" class="input">
                   <option value="">No service</option>
@@ -282,54 +296,76 @@
       </div>
     </div>
   </div>
+    <div id="route-token-box" class="app-modal is-hidden" style="display: none;" aria-hidden="true">
+        <div class="app-modal-dialog">
+            <div class="app-modal-header">
+                <div>
+                    <h2 id="route-intake-title">Route intake details</h2>
+                    <p id="route-intake-subtitle">
+                        Copy these values now. The token may not be shown again.
+                    </p>
+                </div>
+                <button id="close-route-token-modal" class="modal-close" type="button">
+                    ×
+                </button>
+            </div>
 
-  <div id="route-token-box" class="app-modal" style="display: none;">
-    <div class="app-modal-dialog app-modal-dialog-medium">
-      <div class="app-modal-header">
-        <div>
-          <h2>Route intake token</h2>
-          <div class="card-subtitle">
-            Copy this token now. It may not be shown again.
-          </div>
+            <div class="app-modal-body">
+                <div class="copy-fields">
+                    <div class="copy-field">
+                        <label for="route-intake-url">Webhook URL</label>
+                        <input
+                            id="route-intake-url"
+                            class="input copy-field-control"
+                            type="text"
+                            readonly
+                        >
+                        <div id="route-intake-url-help" class="help-text">
+                            Send incoming alerts to this URL.
+                        </div>
+                    </div>
+
+                    <div id="route-intake-token-group" class="copy-field">
+                        <label for="route-intake-token">Token</label>
+                        <input
+                            id="route-intake-token"
+                            class="input copy-field-control"
+                            type="text"
+                            readonly
+                        >
+                        <div class="help-text">
+                            Use this token as an Authorization Bearer token.
+                        </div>
+                    </div>
+
+                    <div id="route-intake-command-group" class="copy-field">
+                        <label for="route-intake-curl">Example curl</label>
+                        <textarea
+                            id="route-intake-curl"
+                            class="input copy-field-control copy-field-code"
+                            rows="8"
+                            readonly
+                        ></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="app-modal-footer">
+                <button id="copy-route-intake-url" class="btn btn-secondary" type="button">
+                    Copy URL
+                </button>
+                <button id="copy-route-intake-token" class="btn btn-secondary" type="button">
+                    Copy token
+                </button>
+                <button id="copy-route-intake-curl" class="btn btn-secondary" type="button">
+                    Copy curl
+                </button>
+                <button id="close-route-token-modal-footer" class="btn btn-primary" type="button">
+                    Close
+                </button>
+            </div>
         </div>
-
-        <button
-          id="close-route-token-modal"
-          type="button"
-          class="app-modal-close"
-          aria-label="Close"
-        >
-          ×
-        </button>
-      </div>
-
-      <div class="app-modal-body">
-        <div class="form-body">
-          <label for="route-intake-token">Token</label>
-          <textarea
-            id="route-intake-token"
-            class="input code-textarea"
-            readonly
-            spellcheck="false"
-          ></textarea>
-
-          <div class="help-text">
-            Use this token in the route-specific webhook URL or source integration configuration.
-          </div>
-        </div>
-      </div>
-
-      <div class="app-modal-footer">
-        <button id="copy-route-intake-token" type="button" class="btn btn-primary">
-          Copy token
-        </button>
-
-        <button id="close-route-token-modal-footer" type="button" class="btn">
-          Close
-        </button>
-      </div>
     </div>
-  </div>
     <div id="route-service-rules-modal" class="app-modal" style="display: none;">
   <div class="app-modal-dialog app-modal-dialog-wide">
     <div class="app-modal-header">

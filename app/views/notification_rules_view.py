@@ -5,7 +5,7 @@ from app.api.schemas.notification_rules import (
     NotificationRuleCreateSchema,
     NotificationRuleUpdateSchema,
 )
-from app.services import notification_rules
+from app.services.notifications import rules
 
 notification_rules_bp = Blueprint("notification_rules_api", __name__)
 
@@ -13,7 +13,7 @@ notification_rules_bp = Blueprint("notification_rules_api", __name__)
 @notification_rules_bp.route("/profile/notification-rules", methods=["GET"])
 def list_profile_notification_rules():
     return jsonify(
-        notification_rules.list_user_rules(request.current_user)
+        rules.list_user_rules(request.current_user)
     )
 
 
@@ -23,7 +23,7 @@ def create_profile_notification_rule():
 
     try:
         data = NotificationRuleCreateSchema.model_validate(payload)
-        rule = notification_rules.create_user_rule(
+        rule = rules.create_user_rule(
             request.current_user,
             method=data.method,
             delay_seconds=data.delay_seconds,
@@ -47,7 +47,7 @@ def create_profile_notification_rule():
             }
         ), 400
 
-    return jsonify(notification_rules.serialize_rule(rule)), 201
+    return jsonify(rules.serialize_rule(rule)), 201
 
 
 @notification_rules_bp.route("/profile/notification-rules/<int:rule_id>", methods=["PUT"])
@@ -56,7 +56,7 @@ def update_profile_notification_rule(rule_id):
 
     try:
         data = NotificationRuleUpdateSchema.model_validate(payload)
-        rule = notification_rules.update_user_rule(
+        rule = rules.update_user_rule(
             request.current_user,
             rule_id,
             data.model_dump(exclude_unset=True),
@@ -77,13 +77,13 @@ def update_profile_notification_rule(rule_id):
             }
         ), 400
 
-    return jsonify(notification_rules.serialize_rule(rule))
+    return jsonify(rules.serialize_rule(rule))
 
 
 @notification_rules_bp.route("/profile/notification-rules/<int:rule_id>", methods=["DELETE"])
 def delete_profile_notification_rule(rule_id):
     try:
-        rule = notification_rules.delete_user_rule(
+        rule = rules.delete_user_rule(
             request.current_user,
             rule_id,
         )

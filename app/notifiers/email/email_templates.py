@@ -4,7 +4,7 @@ from html import escape
 from string import Formatter
 
 from app.modules.common import SafeFormatDict
-from app.services.service_context import (
+from app.services.routing.service_context import (
     format_service_links_html,
     format_service_runbooks_html,
     service_display_name,

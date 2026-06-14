@@ -3,6 +3,7 @@ from json import JSONDecodeError
 
 from flask import jsonify, request
 from pydantic import ValidationError
+from werkzeug.datastructures import MultiDict
 
 
 def make_json_safe(value):
@@ -68,11 +69,54 @@ def make_validation_response(message, details):
     )
 
 
-def validate_body(schema_cls):
+def _validate_payload(schema_cls, payload):
+    try:
+        return schema_cls.model_validate(payload), None
+    except ValidationError as exc:
+        return None, make_validation_response(
+            "Request validation failed",
+            [
+                normalize_validation_error(error)
+                for error in exc.errors()
+            ],
+        )
+
+
+def normalize_query_payload(args: MultiDict):
+    """Convert Flask query args to a Pydantic-friendly dict.
+
+    Single values stay scalar:
+        ?service_id=1 -> {"service_id": "1"}
+
+    Repeated values become lists:
+        ?status=firing&status=acknowledged -> {"status": ["firing", "acknowledged"]}
+    """
+    payload = {}
+
+    for key in args.keys():
+        values = args.getlist(key)
+
+        if len(values) == 1:
+            payload[key] = values[0]
+        else:
+            payload[key] = values
+
+    return payload
+
+
+def validate_query(schema_cls):
+    """Validate request query parameters with a Pydantic schema."""
+    return _validate_payload(schema_cls, normalize_query_payload(request.args))
+
+
+def validate_body(schema_cls, *, allow_empty=False):
     """Validate JSON request body with a Pydantic schema."""
     raw_body = request.get_data(cache=True) or b""
 
     if not raw_body.strip():
+        if allow_empty:
+            return _validate_payload(schema_cls, {})
+
         message = "Request body is required"
         return None, make_validation_response(
             message,
@@ -90,10 +134,4 @@ def validate_body(schema_cls):
             [make_body_validation_detail(message, "json_invalid", raw_text)],
         )
 
-    try:
-        return schema_cls.model_validate(payload), None
-    except ValidationError as exc:
-        return None, make_validation_response(
-            "Request validation failed",
-            [normalize_validation_error(error) for error in exc.errors()],
-        )
+    return _validate_payload(schema_cls, payload)

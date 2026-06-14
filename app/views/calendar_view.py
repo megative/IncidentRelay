@@ -1,9 +1,18 @@
 from datetime import datetime, timedelta, timezone as dt_timezone
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, Response
+from peewee import DoesNotExist
 
 from app.services.calendar_service import build_team_calendar
-from app.services.rbac import parse_date_or_datetime, require_team_oncall_read
+from app.services.rbac import parse_date_or_datetime, require_team_oncall_read, require_team_write
+from app.modules.db import calendar_feeds_repo
+from app.services.calendar_feeds import (
+    build_calendar_feed_url,
+    build_ics_for_calendar_feed,
+    generate_calendar_feed_token,
+    get_calendar_feed_by_token,
+    serialize_calendar_feed,
+)
 
 calendar_bp = Blueprint("calendar_api", __name__)
 
@@ -111,6 +120,130 @@ def get_calendar():
             if event_overlaps_range(event, query_start_at, query_end_at)
         ]
     )
+
+
+@calendar_bp.route("/feeds", methods=["GET"])
+def list_calendar_feeds():
+    team_id = request.args.get("team_id", type=int)
+
+    if not team_id:
+        return jsonify({"error": "team_id_required"}), 400
+
+    error = require_team_write(team_id)
+    if error:
+        return error
+
+    feeds = calendar_feeds_repo.list_calendar_feeds(team_id)
+
+    return jsonify([
+        serialize_calendar_feed(feed)
+        for feed in feeds
+    ])
+
+
+@calendar_bp.route("/feeds", methods=["POST"])
+def create_calendar_feed():
+    payload = request.get_json(silent=True) or {}
+
+    team_id = payload.get("team_id")
+    if not team_id:
+        return jsonify({"error": "team_id_required"}), 400
+
+    error = require_team_write(team_id)
+    if error:
+        return error
+
+    token, prefix, token_hash = generate_calendar_feed_token()
+
+    feed = calendar_feeds_repo.create_calendar_feed(
+        team_id=team_id,
+        name=payload.get("name") or "On-call calendar",
+        token_prefix=prefix,
+        token_hash=token_hash,
+        created_by=request.current_user,
+        past_days=int(payload.get("past_days") or 7),
+        future_days=int(payload.get("future_days") or 90),
+    )
+
+    return jsonify(
+        serialize_calendar_feed(
+            feed,
+            base_url=request.url_root.rstrip("/"),
+            token=token,
+        )
+    ), 201
+
+
+@calendar_bp.route("/feeds/<int:feed_id>/token", methods=["POST"])
+def regenerate_calendar_feed_token(feed_id):
+    try:
+        feed = calendar_feeds_repo.get_calendar_feed(feed_id)
+    except DoesNotExist:
+        return jsonify({"error": "calendar_feed_not_found"}), 404
+
+    error = require_team_write(feed.team.id)
+    if error:
+        return error
+
+    token, prefix, token_hash = generate_calendar_feed_token()
+
+    feed = calendar_feeds_repo.update_calendar_feed(
+        feed,
+        token_prefix=prefix,
+        token_hash=token_hash,
+        enabled=True,
+    )
+
+    return jsonify(
+        serialize_calendar_feed(
+            feed,
+            base_url=request.url_root.rstrip("/"),
+            token=token,
+        )
+    )
+
+
+@calendar_bp.route("/feeds/<int:feed_id>", methods=["DELETE"])
+def delete_calendar_feed(feed_id):
+    try:
+        feed = calendar_feeds_repo.get_calendar_feed(feed_id)
+    except DoesNotExist:
+        return jsonify({"error": "calendar_feed_not_found"}), 404
+
+    error = require_team_write(feed.team.id)
+    if error:
+        return error
+
+    calendar_feeds_repo.soft_delete_calendar_feed(feed)
+
+    return jsonify({"deleted": True})
+
+
+@calendar_bp.route("/feeds/<token>.ics", methods=["GET"])
+def export_calendar_feed(token):
+    feed = get_calendar_feed_by_token(token)
+
+    if not feed:
+        return Response("Calendar feed not found\n", status=404, mimetype="text/plain")
+
+    if not feed.team or feed.team.deleted or not feed.team.active:
+        return Response("Calendar feed is not available\n", status=403, mimetype="text/plain")
+
+    if feed.team.group and (
+        feed.team.group.deleted or not feed.team.group.active
+    ):
+        return Response("Calendar feed is not available\n", status=403, mimetype="text/plain")
+
+    body = build_ics_for_calendar_feed(feed)
+    calendar_feeds_repo.mark_calendar_feed_used(feed)
+
+    response = Response(body, mimetype="text/calendar; charset=utf-8")
+    response.headers["Content-Disposition"] = (
+        f'inline; filename="incidentrelay-team-{feed.team.id}.ics"'
+    )
+    response.headers["Cache-Control"] = "no-store"
+
+    return response
 
 
 def _as_utc_naive(value):

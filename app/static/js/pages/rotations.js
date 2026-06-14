@@ -19,137 +19,28 @@ const WEEKDAY_LABELS = [
     "Sunday"
 ];
 
-const FALLBACK_TIMEZONES = [
-    "UTC",
-    "Europe/London",
-    "Europe/Berlin",
-    "Europe/Paris",
-    "Europe/Moscow",
-    "Asia/Almaty",
-    "Asia/Tashkent",
-    "Asia/Dubai",
-    "Asia/Yekaterinburg",
-    "Asia/Novosibirsk",
-    "Asia/Vladivostok",
-    "Asia/Tokyo",
-    "Asia/Shanghai",
-    "Asia/Kolkata",
-    "America/New_York",
-    "America/Chicago",
-    "America/Denver",
-    "America/Los_Angeles",
-    "America/Sao_Paulo",
-    "Australia/Sydney"
-];
-
 function getBrowserTimezones() {
-    let zones = [];
-
-    if (window.Intl && typeof Intl.supportedValuesOf === "function") {
-        try {
-            zones = Intl.supportedValuesOf("timeZone") || [];
-        } catch (error) {
-            zones = [];
-        }
-    }
-
-    FALLBACK_TIMEZONES.forEach(function (zone) {
-        if (zones.indexOf(zone) === -1) {
-            zones.push(zone);
-        }
-    });
-
-    zones.sort(function (left, right) {
-        if (left === "UTC") {
-            return -1;
-        }
-
-        if (right === "UTC") {
-            return 1;
-        }
-
-        return left.localeCompare(right);
-    });
-
-    return zones;
+    return window.AppTimezones.getBrowserTimezones();
 }
 
 function fillTimezoneSelect(selector, selectedTimezone) {
-    const select = $(selector);
-
-    if (!select.length) {
-        return;
-    }
-
-    const value = selectedTimezone || "UTC";
-    const zones = getBrowserTimezones();
-
-    select.empty();
-
-    zones.forEach(function (zone) {
-        select.append(
-            $("<option>")
-                .val(zone)
-                .text(zone)
-        );
-    });
-
-    if (zones.indexOf(value) === -1) {
-        select.append(
-            $("<option>")
-                .val(value)
-                .text(value)
-        );
-    }
-
-    select.val(value);
+    window.AppTimezones.fillSelect(selector, selectedTimezone);
 }
 
 function initTimezoneSelect(selector, selectedTimezone, dropdownParent) {
-    const select = $(selector);
-
-    if (!select.length) {
-        return;
-    }
-
-    fillTimezoneSelect(select, selectedTimezone || "UTC");
-
-    if ($.fn.select2) {
-        if (select.hasClass("select2-hidden-accessible")) {
-            select.select2("destroy");
-        }
-
-        select.select2({
-            width: "100%",
-            placeholder: "Select timezone",
-            dropdownParent: dropdownParent ? $(dropdownParent) : undefined
-        });
-    }
+    window.AppTimezones.initSelect(selector, selectedTimezone, dropdownParent);
 }
 
 function setTimezoneSelectValue(selector, value) {
-    const select = $(selector);
-    const timezone = value || "UTC";
-
-    if (!select.length) {
-        return;
-    }
-
-    if (!select.find("option").filter(function () {
-        return $(this).val() === timezone;
-    }).length) {
-        select.append(
-            $("<option>")
-                .val(timezone)
-                .text(timezone)
-        );
-    }
-
-    select.val(timezone).trigger("change");
+    window.AppTimezones.setSelectValue(selector, value);
 }
 
 function getTimezoneSelectValue(selector) {
-    return $(selector).val() || "UTC";
+    return window.AppTimezones.getSelectValue(selector);
+}
+
+function datetimeLocalNowForTimezone(timezone) {
+    return window.AppTimezones.datetimeLocalNow(timezone);
 }
 
 function findRotationInCache(rotationId) {
@@ -324,6 +215,10 @@ function loadOneLayerCardDetails(layerId, callback) {
 function renderRotationLayerCards() {
     const container = $("#rotation-layer-cards");
 
+    container.find("select.js-user-select").each(function () {
+        destroyTomSelectIfExists(this);
+    });
+
     container.empty();
 
     if (!rotationLayersCache.length) {
@@ -340,6 +235,7 @@ function renderRotationLayerCards() {
         updateLayerCadenceVisibility(layer.id);
     });
 
+    initUserTomSelects(container);
     initLayerTimezoneSelects();
 }
 
@@ -741,8 +637,9 @@ function renderLayerMembersEditor(layer) {
     const addRow = $("<div>").addClass("layer-member-add-grid");
 
     const userSelect = $("<select>")
-        .addClass("input")
-        .attr("data-layer-member-user", layer.id);
+        .addClass("input js-user-select")
+        .attr("data-layer-member-user", layer.id)
+        .attr("data-placeholder", "Select user...");
 
     if (!availableUsers.length) {
         userSelect.append(
@@ -750,12 +647,18 @@ function renderLayerMembersEditor(layer) {
                 .val("")
                 .text(currentMembers.length ? "All active users are already in this layer" : "No active team members")
         );
-    } else {
+    }else {
+        userSelect.append(
+            $("<option>")
+                .val("")
+                .text("")
+        );
+
         availableUsers.forEach(function (user) {
             userSelect.append(
                 $("<option>")
-                    .val(user.user_id)
-                    .text("#" + user.user_id + " " + (user.display_name || user.username || "user"))
+                    .val(String(user.user_id))
+                    .text(getUserOptionText(user))
             );
         });
     }
@@ -2353,37 +2256,3 @@ $(document).on("keydown", function (event) {
         closeRotationOverridesModal();
     }
 });
-function datetimeLocalNowForTimezone(timezone) {
-    const date = new Date();
-
-    try {
-        const parts = new Intl.DateTimeFormat("en-CA", {
-            timeZone: timezone || "UTC",
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false,
-            hourCycle: "h23"
-        }).formatToParts(date);
-
-        const values = {};
-
-        parts.forEach(function (part) {
-            if (part.type !== "literal") {
-                values[part.type] = part.value;
-            }
-        });
-
-        return (
-            values.year + "-" +
-            values.month + "-" +
-            values.day + "T" +
-            values.hour + ":" +
-            values.minute
-        );
-    } catch (error) {
-        return date.toISOString().slice(0, 16);
-    }
-}

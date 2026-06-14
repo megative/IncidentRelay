@@ -1,39 +1,40 @@
 <link rel="stylesheet" href="/static/css/services.css">
+<link rel="stylesheet" href="/static/css/services-impact-v2.css">
 <div class="first-div-page-layout services-page page-stack">
     <div class="summary-grid">
       <div class="summary-card summary-primary">
         <div class="summary-icon">▦</div>
         <div>
-          <div class="summary-title">Services</div>
+          <div id="services-summary-total-title" class="summary-title">Total</div>
           <div id="services-summary-total" class="summary-value">0</div>
-          <div class="summary-hint">Current scope</div>
+          <div id="services-summary-total-hint" class="summary-hint">Services in scope</div>
         </div>
       </div>
 
       <div class="summary-card summary-success">
         <div class="summary-icon">✓</div>
         <div>
-          <div class="summary-title">Operational</div>
+          <div id="services-summary-operational-title" class="summary-title">Operational</div>
           <div id="services-summary-operational" class="summary-value">0</div>
-          <div class="summary-hint">Healthy services</div>
+          <div id="services-summary-operational-hint" class="summary-hint">Effective status</div>
         </div>
       </div>
 
       <div class="summary-card summary-muted">
         <div class="summary-icon">!</div>
         <div>
-          <div class="summary-title">Degraded</div>
+          <div id="services-summary-degraded-title" class="summary-title">Affected</div>
           <div id="services-summary-degraded" class="summary-value">0</div>
-          <div class="summary-hint">Degraded or outage</div>
+          <div id="services-summary-degraded-hint" class="summary-hint">Not operational</div>
         </div>
       </div>
 
       <div class="summary-card summary-info">
         <div class="summary-icon">★</div>
         <div>
-          <div class="summary-title">Critical</div>
+          <div id="services-summary-critical-title" class="summary-title">Major outage</div>
           <div id="services-summary-critical" class="summary-value">0</div>
-          <div class="summary-hint">Critical services</div>
+          <div id="services-summary-critical-hint" class="summary-hint">Cycles/depth 0/0</div>
         </div>
       </div>
     </div>
@@ -202,56 +203,82 @@
         </div>
 
           <div id="services-tab-impact" class="services-tab-panel" style="display: none;">
-  <div class="card-header">
-    <div>
-      <h2>Service impact</h2>
-      <div class="card-subtitle">
-        Computed service status based on own status, open alerts and upstream dependencies.
-      </div>
-    </div>
+              <div class="card-header">
+                  <div>
+                      <h2>Service impact</h2>
+                      <div class="card-subtitle">
+                        Impact v2 explains effective status, primary reason, root causes, paths and downstream blast radius.
+                      </div>
+                    </div>
 
-    <div class="card-header-actions">
-      <button id="reload-service-impact" type="button" class="btn">
-        Reload
-      </button>
-    </div>
-  </div>
+                    <div class="card-header-actions">
+                      <button id="reload-service-impact" type="button" class="btn">
+                        Reload
+                      </button>
+                    </div>
+                  </div>
 
-  <div class="page-toolbar is-flush-top">
-    <div class="page-toolbar-search">
-      <span class="page-toolbar-search-icon">⌕</span>
-      <input
-        id="service-impact-search"
-        class="input"
-        type="search"
-        placeholder="Search impacted services..."
-        autocomplete="off"
-      >
-    </div>
-  </div>
+                  <div class="page-toolbar is-flush-top">
+                    <div class="page-toolbar-search">
+                      <span class="page-toolbar-search-icon">⌕</span>
+                      <input
+                        id="service-impact-search"
+                        class="input"
+                        type="search"
+                        placeholder="Search impacted services, reasons, root causes or paths..."
+                        autocomplete="off"
+                      >
+                    </div>
+                      <select id="service-impact-effective-filter" class="input page-toolbar-filter">
+                          <option value="">All effective statuses</option>
+                          <option value="major_outage">Major outage</option>
+                          <option value="partial_outage">Partial outage</option>
+                          <option value="degraded">Degraded</option>
+                          <option value="maintenance">Maintenance</option>
+                          <option value="operational">Operational</option>
+                          <option value="disabled">Disabled</option>
+                          <option value="unknown">Unknown</option>
+                        </select>
 
-  <div class="table-wrapper">
-    <table class="data-table sortable-table">
-      <thead>
-        <tr>
-          <th>Service</th>
-          <th>Team</th>
-          <th>Own status</th>
-            <th>Alert impact / Open</th>
-            <th>Effective status</th>
-            <th>Upstream issues</th>
-          <th>Criticality</th>
-          <th>Environment</th>
-        </tr>
-      </thead>
-      <tbody id="service-impact-table">
-        <tr>
-          <td colspan="8" class="empty-cell">No impact data loaded</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</div>
+                        <select id="service-impact-reason-filter" class="input page-toolbar-filter">
+                          <option value="">All reasons</option>
+                          <option value="upstream_dependency">Upstream dependency</option>
+                          <option value="alert_group">Alert group</option>
+                          <option value="own_status">Own status</option>
+                          <option value="maintenance">Maintenance</option>
+                          <option value="disabled">Disabled</option>
+                          <option value="none">None</option>
+                          <option value="unknown">Unknown</option>
+                        </select>
+
+                        <label class="md-checkbox page-toolbar-checkbox">
+                          <input id="service-impact-include-operational" type="checkbox" checked>
+                          <span>Show operational</span>
+                        </label>
+                      </div>
+
+              <div class="table-wrapper">
+                <table class="data-table sortable-table">
+                  <thead>
+                    <tr>
+                      <th>Service</th>
+                      <th>Reason</th>
+                      <th>Own status</th>
+                      <th>Alerts</th>
+                      <th>Dependencies</th>
+                      <th>Effective status</th>
+                      <th>Explanation</th>
+                      <th>Blast radius</th>
+                    </tr>
+                  </thead>
+                  <tbody id="service-impact-table">
+                    <tr>
+                      <td colspan="8" class="empty-cell">No impact data loaded</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
         <div id="services-tab-dependencies" class="services-tab-panel" style="display: none;">
           <div class="card-header">
@@ -292,65 +319,89 @@
           </div>
         </div>
           <div id="services-tab-analytics" class="services-tab-panel" style="display: none;">
-  <div class="card-header">
-    <div>
-      <h2>Analytics by affected system</h2>
-      <div class="card-subtitle">
-        Alert volume grouped by service for the selected scope.
-      </div>
-    </div>
+              <div class="card-header">
+                  <div>
+                      <h2>Analytics by affected system</h2>
+                      <div class="card-subtitle">
+                          Alert volume grouped by service for the selected scope.
+                      </div>
+                  </div>
+                  <div class="card-header-actions">
+                      <select id="service-analytics-days" class="input page-toolbar-filter">
+                        <option value="7">Last 7 days</option>
+                        <option value="30" selected>Last 30 days</option>
+                        <option value="90">Last 90 days</option>
+                        <option value="365">Last 365 days</option>
+                      </select>
+                      <button id="reload-service-analytics" type="button" class="btn">
+                          Reload
+                      </button>
+                  </div>
+              </div>
 
-    <div class="card-header-actions">
-      <select id="service-analytics-days" class="input page-toolbar-filter">
-        <option value="7">Last 7 days</option>
-        <option value="30" selected>Last 30 days</option>
-        <option value="90">Last 90 days</option>
-        <option value="365">Last 365 days</option>
-      </select>
+              <div class="page-toolbar is-flush-top">
+                <div class="page-toolbar-search">
+                  <span class="page-toolbar-search-icon">⌕</span>
+                  <input
+                    id="service-analytics-search"
+                    class="input"
+                    type="search"
+                    placeholder="Search services..."
+                    autocomplete="off"
+                  >
+                </div>
+              </div>
+              <div id="service-analytics-charts" class="analytics-chart-grid">
+                  <section class="analytics-chart-card">
+                    <div class="analytics-chart-header">
+                      <h3>Alert groups trend</h3>
+                      <p>Grouped alerts by day in the selected window.</p>
+                    </div>
+                    <canvas id="service-analytics-alert-groups-chart"></canvas>
+                  </section>
 
-      <button id="reload-service-analytics" type="button" class="btn">
-        Reload
-      </button>
-    </div>
-  </div>
+                  <section class="analytics-chart-card">
+                    <div class="analytics-chart-header">
+                      <h3>Raw alert volume</h3>
+                      <p>Raw alert events by day before grouping.</p>
+                    </div>
+                    <canvas id="service-analytics-raw-alerts-chart"></canvas>
+                  </section>
 
-  <div class="page-toolbar is-flush-top">
-    <div class="page-toolbar-search">
-      <span class="page-toolbar-search-icon">⌕</span>
-      <input
-        id="service-analytics-search"
-        class="input"
-        type="search"
-        placeholder="Search services..."
-        autocomplete="off"
-      >
-    </div>
-  </div>
+                  <section class="analytics-chart-card">
+                    <div class="analytics-chart-header">
+                      <h3>Firing grouped alerts</h3>
+                      <p>Firing grouped alerts by day.</p>
+                    </div>
+                    <canvas id="service-analytics-firing-chart"></canvas>
+                  </section>
+                </div>
 
-  <div class="table-wrapper">
-    <table class="data-table sortable-table">
-      <thead>
-        <tr>
-          <th>Service</th>
-          <th>Team</th>
-          <th>Status</th>
-          <th>Criticality</th>
-          <th>Open</th>
-          <th>Firing</th>
-          <th>Ack</th>
-          <th>Resolved</th>
-          <th>Critical open</th>
-          <th>Last alert</th>
-        </tr>
-      </thead>
-      <tbody id="service-analytics-table">
-        <tr>
-          <td colspan="10" class="empty-cell">No analytics loaded</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</div>
+              <div class="table-wrapper">
+                <table class="data-table sortable-table">
+                  <thead>
+                      <tr>
+                        <th>Service</th>
+                        <th>Team</th>
+                        <th>Impact</th>
+                        <th>Reason</th>
+                        <th>Open groups</th>
+                        <th>Critical open</th>
+                        <th>Raw alerts</th>
+                        <th>Dedup ratio</th>
+                        <th>MTTA</th>
+                        <th>MTTR</th>
+                        <th>Maintenance / Blast</th>
+                      </tr>
+                    </thead>
+                    <tbody id="service-analytics-table">
+                      <tr>
+                        <td colspan="11" class="empty-cell">No analytics loaded</td>
+                      </tr>
+                    </tbody>
+                </table>
+              </div>
+            </div>
       </section>
 
       <aside id="service-details-card" class="card page-details-card">
@@ -420,7 +471,7 @@
 
             <div class="form-grid-3">
               <div>
-                <label for="service-environment">Environment</label>
+                <label for="service-environment">Blast radius</label>
                 <select id="service-environment" class="input">
                   <option value="production">Production</option>
                   <option value="staging">Staging</option>

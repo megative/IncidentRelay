@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, request
 from peewee import DoesNotExist, IntegrityError
 
 from app.settings import Config
@@ -13,6 +13,7 @@ from app.views.channels_view import channels_bp
 from app.views.escalation_policies_view import escalation_policies_bp
 from app.views.docs_view import docs_bp
 from app.views.groups_view import groups_bp
+from app.views.health_view import HEALTH_PATHS, health_bp
 from app.views.profile_view import profile_bp
 from app.views.integrations_view import integrations_bp
 from app.views.pages_view import pages_bp
@@ -28,6 +29,9 @@ from app.services.db_errors import handle_integrity_error, handle_not_found_erro
 from app.views.services_view import services_bp
 from app.views.push_view import push_bp
 from app.views.notification_rules_view import notification_rules_bp
+from app.views.incidents_view import incidents_bp
+from app.views.maintenance_view import maintenance_bp
+from app.views.caldav_view import caldav_bp
 
 
 def create_app(log_role=None):
@@ -48,10 +52,17 @@ def create_app(log_role=None):
     def before_request():
         """
         Open a database connection before each request.
+
+        Health probes (/healthz, /readyz) bypass the implicit DB
+        connect: /healthz must work even when the database is down
+        (otherwise Kubernetes would restart a healthy pod for no
+        reason), and /readyz manages its own connection explicitly so
+        it can return a clean 503 on DB errors.
         """
 
-        if db.is_closed():
-            db.connect()
+        if request.path not in HEALTH_PATHS:
+            if db.is_closed():
+                db.connect()
 
         auth_response = enforce_api_authentication()
         if auth_response is not None:
@@ -77,6 +88,7 @@ def register_blueprints(flask_app):
 
     flask_app.register_blueprint(pages_bp)
     flask_app.register_blueprint(docs_bp)
+    flask_app.register_blueprint(health_bp)
     flask_app.register_blueprint(version_bp, url_prefix="/api/version")
     flask_app.register_blueprint(auth_bp, url_prefix="/api/auth")
     flask_app.register_blueprint(sso_auth_bp, url_prefix="/api/auth/sso")
@@ -87,7 +99,10 @@ def register_blueprints(flask_app):
     flask_app.register_blueprint(admin_users_bp, url_prefix="/api/admin/users")
     flask_app.register_blueprint(rotations_bp, url_prefix="/api/rotations")
     flask_app.register_blueprint(calendar_bp, url_prefix="/api/calendar")
+    flask_app.register_blueprint(caldav_bp)
     flask_app.register_blueprint(alerts_bp, url_prefix="/api/alerts")
+    flask_app.register_blueprint(incidents_bp, url_prefix="/api/incidents")
+    flask_app.register_blueprint(maintenance_bp, url_prefix="/api/maintenance-windows")
     flask_app.register_blueprint(channels_bp, url_prefix="/api/channels")
     flask_app.register_blueprint(routes_bp, url_prefix="/api/routes")
     flask_app.register_blueprint(services_bp, url_prefix="/api/services")

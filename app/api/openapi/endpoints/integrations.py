@@ -59,6 +59,169 @@ def response(description, schema=None):
     return item
 
 
+def header_param(name, description, schema=None, required=False):
+    """Build a header parameter."""
+    return {
+        "name": name,
+        "in": "header",
+        "required": required,
+        "description": description,
+        "schema": schema or {"type": "string"},
+    }
+
+
+SENTRY_WEBHOOK_BODY_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Sentry Internal Integration webhook payload. "
+        "The payload structure depends on Sentry-Hook-Resource and action. "
+        "IncidentRelay accepts event_alert, metric_alert and issue lifecycle events."
+    ),
+    "additionalProperties": True,
+    "properties": {
+        "action": {
+            "type": "string",
+            "description": "Sentry webhook action.",
+            "example": "triggered",
+        },
+        "actor": {
+            "type": "object",
+            "nullable": True,
+            "additionalProperties": True,
+            "description": "Sentry actor that caused the event, when present.",
+        },
+        "installation": {
+            "type": "object",
+            "nullable": True,
+            "additionalProperties": True,
+            "description": "Sentry integration installation object, when present.",
+        },
+        "data": {
+            "type": "object",
+            "additionalProperties": True,
+            "description": (
+                "Sentry event data. For issue alert rules this usually contains "
+                "event_alert, issue, event, project and organization. For metric "
+                "alerts it contains metric_alert. For issue lifecycle events it "
+                "contains issue."
+            ),
+            "properties": {
+                "event_alert": {
+                    "type": "object",
+                    "nullable": True,
+                    "additionalProperties": True,
+                    "description": "Sentry issue alert rule object.",
+                },
+                "metric_alert": {
+                    "type": "object",
+                    "nullable": True,
+                    "additionalProperties": True,
+                    "description": "Sentry metric alert object.",
+                },
+                "issue": {
+                    "type": "object",
+                    "nullable": True,
+                    "additionalProperties": True,
+                    "description": "Sentry issue/group object.",
+                },
+                "event": {
+                    "type": "object",
+                    "nullable": True,
+                    "additionalProperties": True,
+                    "description": "Sentry event object.",
+                },
+                "project": {
+                    "type": "object",
+                    "nullable": True,
+                    "additionalProperties": True,
+                    "description": "Sentry project object.",
+                },
+                "organization": {
+                    "type": "object",
+                    "nullable": True,
+                    "additionalProperties": True,
+                    "description": "Sentry organization object.",
+                },
+            },
+        },
+    },
+    "example": {
+        "action": "triggered",
+        "data": {
+            "event_alert": {"id": "event-rule-1", "name": "New issue alert"},
+            "issue": {
+                "id": "12345",
+                "shortId": "BACKEND-1",
+                "title": "ZeroDivisionError",
+                "level": "error",
+                "permalink": "https://sentry.example.com/issues/12345/",
+            },
+            "event": {
+                "event_id": "event-abc",
+                "environment": "production",
+                "message": "division by zero",
+            },
+            "project": {"slug": "backend-api", "name": "Backend API"},
+            "organization": {"slug": "acme", "name": "Acme"},
+        },
+    },
+}
+
+
+SENTRY_WEBHOOK_RESPONSE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": True,
+    "description": (
+        "Standard IncidentRelay incoming alert response. The exact fields match "
+        "process_incoming_alerts() output and may include created, id, status, "
+        "team_id, route_id and routing_error."
+    ),
+}
+
+SENTRY_WEBHOOK_PATH_ITEM = {
+    "post": {
+        "tags": ["integrations"],
+        "summary": "Receive Sentry webhook",
+        "description": (
+            "Receives signed webhooks from a Sentry Internal Integration. "
+            "The route id in the URL selects an IncidentRelay route with source=sentry. "
+            "The request is authenticated by Sentry-Hook-Signature using the "
+            "Sentry Client Secret stored in route integration_config. "
+            "This endpoint does not use IncidentRelay bearer intake tokens."
+        ),
+        "operationId": "receiveSentryWebhook",
+        "parameters": [
+            path_param("route_id", "Sentry IncidentRelay route id."),
+            header_param(
+                "Sentry-Hook-Signature",
+                "HMAC-SHA256 signature generated by Sentry using the Internal Integration Client Secret.",
+                {"type": "string", "minLength": 1},
+                required=True,
+            ),
+            header_param(
+                "Sentry-Hook-Resource",
+                "Sentry resource name. IncidentRelay uses this to normalize event_alert, metric_alert and issue events.",
+                {
+                    "type": "string",
+                    "enum": ["event_alert", "metric_alert", "issue"],
+                },
+                required=False,
+            ),
+        ],
+        "requestBody": json_body(
+            "Sentry Internal Integration webhook payload.",
+            SENTRY_WEBHOOK_BODY_SCHEMA,
+        ),
+        "responses": {
+            "200": response("Sentry webhook accepted.", SENTRY_WEBHOOK_RESPONSE_SCHEMA),
+            "400": response("Invalid payload or route source mismatch."),
+            "403": response("Missing or invalid Sentry-Hook-Signature, disabled route, or inactive team/group."),
+            "404": response("Sentry route was not found."),
+            "409": response("Sentry webhook secret is not configured for this route."),
+        },
+    }
+}
+
 VOICE_CALLBACK_BODY_SCHEMA = {
     "type": "object",
     "description": (
@@ -181,9 +344,10 @@ def tags():
         {
             "name": "integrations",
             "description": (
-                "Incoming alert endpoints for Alertmanager, Zabbix and generic webhooks. "
-                "Each endpoint requires a route intake token. The route token selects "
-                "the route, team, rotation and notification channels."
+                "Incoming alert endpoints for Alertmanager, Zabbix, generic webhooks "
+                "and Sentry. Alertmanager, Zabbix and generic webhooks use route "
+                "intake tokens. Sentry uses Sentry-Hook-Signature verified against "
+                "the route-specific Sentry Client Secret."
             ),
         }
     ]
@@ -676,6 +840,72 @@ def paths():
                     "200": response("Alert accepted."),
                     "400": response("Invalid Zabbix payload."),
                     "401": response("Route intake token or API token is required."),
+                },
+            }
+        },
+        "/api/integrations/sentry/{route_id}": {
+            "post": {
+                "tags": ["integrations"],
+                "summary": "Receive Sentry webhook",
+                "description": (
+                    "Receives signed webhooks from a Sentry Internal Integration. "
+                    "The route id in the URL selects an IncidentRelay route with source=sentry. "
+                    "The request is authenticated by Sentry-Hook-Signature using the "
+                    "Sentry Client Secret stored in route integration_config. "
+                    "This endpoint does not use IncidentRelay bearer intake tokens."
+                ),
+                "operationId": "receiveSentryWebhook",
+                "parameters": [
+                    path_param("route_id", "Sentry IncidentRelay route id."),
+                    {
+                        "name": "Sentry-Hook-Signature",
+                        "in": "header",
+                        "required": True,
+                        "description": (
+                            "HMAC-SHA256 signature generated by Sentry using the "
+                            "Internal Integration Client Secret."
+                        ),
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1,
+                        },
+                    },
+                    {
+                        "name": "Sentry-Hook-Resource",
+                        "in": "header",
+                        "required": False,
+                        "description": (
+                            "Sentry resource name. IncidentRelay uses this to normalize "
+                            "event_alert, metric_alert and issue events."
+                        ),
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "event_alert",
+                                "metric_alert",
+                                "issue",
+                            ],
+                        },
+                    },
+                ],
+                "requestBody": json_body(
+                    "Sentry Internal Integration webhook payload.",
+                    SENTRY_WEBHOOK_BODY_SCHEMA,
+                ),
+                "responses": {
+                    "200": response(
+                        "Sentry webhook accepted.",
+                        SENTRY_WEBHOOK_RESPONSE_SCHEMA,
+                    ),
+                    "400": response("Invalid payload or route source mismatch."),
+                    "403": response(
+                        "Missing or invalid Sentry-Hook-Signature, disabled route, "
+                        "or inactive team/group."
+                    ),
+                    "404": response("Sentry route was not found."),
+                    "409": response(
+                        "Sentry webhook secret is not configured for this route."
+                    ),
                 },
             }
         },

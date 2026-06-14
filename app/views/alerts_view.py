@@ -5,9 +5,11 @@ from app.services.alerts import acknowledge_alert, resolve_alert
 from app.services.audit import write_audit
 from app.services.rbac import get_allowed_team_ids, require_team_read, require_team_respond
 from app.services.serializers import (
-    serialize_alert_group,
     serialize_alert_event,
     serialize_alert_comment,
+    serialize_alert_group,
+    serialize_incident_responder,
+    serialize_incident_stakeholder,
 )
 from app.services.alert_comments import (
     create_group_comment,
@@ -15,6 +17,13 @@ from app.services.alert_comments import (
     update_group_comment,
     delete_group_comment,
 )
+from app.services.incidents import (
+    create_incident_responder,
+    create_incident_stakeholder,
+    set_incident_priority,
+    set_incident_responder_status,
+)
+
 alerts_bp = Blueprint("alerts_api", __name__)
 
 
@@ -497,3 +506,150 @@ def delete_alert_group_comment(alert_id, comment_id):
         "deleted": True,
         "id": comment.id,
     })
+
+
+@alerts_bp.route("/<int:alert_id>/priority", methods=["PUT"])
+def update_incident_priority(alert_id):
+    group = alerts_repo.get_alert_group(alert_id)
+
+    if not group:
+        return jsonify({"error": "not_found", "message": "Alert group not found"}), 404
+
+    if group.team_id:
+        error = require_team_respond(group.team_id)
+        if error:
+            return error
+
+    payload = request.get_json(silent=True) or {}
+    user = getattr(request, "current_user", None)
+
+    try:
+        group = set_incident_priority(
+            group_id=group.id,
+            priority=payload.get("priority"),
+            user_id=getattr(user, "id", None),
+        )
+    except ValueError as exc:
+        return jsonify({"error": "validation_error", "message": str(exc)}), 400
+
+    return jsonify(serialize_alert_group(group, current_user=user))
+
+
+@alerts_bp.route("/<int:alert_id>/responders", methods=["GET"])
+def list_incident_responders(alert_id):
+    group = alerts_repo.get_alert_group(alert_id)
+
+    if not group:
+        return jsonify({"error": "not_found", "message": "Alert group not found"}), 404
+
+    if group.team_id:
+        error = require_team_read(group.team_id)
+        if error:
+            return error
+
+    return jsonify([
+        serialize_incident_responder(responder)
+        for responder in alerts_repo.list_incident_responders(group.id)
+    ])
+
+
+@alerts_bp.route("/<int:alert_id>/responders", methods=["POST"])
+def add_incident_responder(alert_id):
+    group = alerts_repo.get_alert_group(alert_id)
+
+    if not group:
+        return jsonify({"error": "not_found", "message": "Alert group not found"}), 404
+
+    if group.team_id:
+        error = require_team_respond(group.team_id)
+        if error:
+            return error
+
+    payload = request.get_json(silent=True) or {}
+    user = getattr(request, "current_user", None)
+
+    try:
+        responder = create_incident_responder(
+            group_id=group.id,
+            payload=payload,
+            user_id=getattr(user, "id", None),
+        )
+    except ValueError as exc:
+        return jsonify({"error": "validation_error", "message": str(exc)}), 400
+
+    return jsonify(serialize_incident_responder(responder)), 201
+
+
+@alerts_bp.route("/<int:alert_id>/responders/<int:responder_id>", methods=["PUT"])
+def update_incident_responder(alert_id, responder_id):
+    group = alerts_repo.get_alert_group(alert_id)
+
+    if not group:
+        return jsonify({"error": "not_found", "message": "Alert group not found"}), 404
+
+    if group.team_id:
+        error = require_team_respond(group.team_id)
+        if error:
+            return error
+
+    payload = request.get_json(silent=True) or {}
+    user = getattr(request, "current_user", None)
+
+    try:
+        responder = set_incident_responder_status(
+            group_id=group.id,
+            responder_id=responder_id,
+            status=payload.get("status"),
+            user_id=getattr(user, "id", None),
+        )
+    except ValueError as exc:
+        return jsonify({"error": "validation_error", "message": str(exc)}), 400
+    except LookupError as exc:
+        return jsonify({"error": "not_found", "message": str(exc)}), 404
+
+    return jsonify(serialize_incident_responder(responder))
+
+
+@alerts_bp.route("/<int:alert_id>/stakeholders", methods=["GET"])
+def list_incident_stakeholders(alert_id):
+    group = alerts_repo.get_alert_group(alert_id)
+
+    if not group:
+        return jsonify({"error": "not_found", "message": "Alert group not found"}), 404
+
+    if group.team_id:
+        error = require_team_read(group.team_id)
+        if error:
+            return error
+
+    return jsonify([
+        serialize_incident_stakeholder(stakeholder)
+        for stakeholder in alerts_repo.list_incident_stakeholders(group.id)
+    ])
+
+
+@alerts_bp.route("/<int:alert_id>/stakeholders", methods=["POST"])
+def add_incident_stakeholder(alert_id):
+    group = alerts_repo.get_alert_group(alert_id)
+
+    if not group:
+        return jsonify({"error": "not_found", "message": "Alert group not found"}), 404
+
+    if group.team_id:
+        error = require_team_respond(group.team_id)
+        if error:
+            return error
+
+    payload = request.get_json(silent=True) or {}
+    user = getattr(request, "current_user", None)
+
+    try:
+        stakeholder = create_incident_stakeholder(
+            group_id=group.id,
+            payload=payload,
+            user_id=getattr(user, "id", None),
+        )
+    except ValueError as exc:
+        return jsonify({"error": "validation_error", "message": str(exc)}), 400
+
+    return jsonify(serialize_incident_stakeholder(stakeholder)), 201

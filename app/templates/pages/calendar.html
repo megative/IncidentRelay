@@ -62,6 +62,10 @@
             ›
           </button>
 
+            <button id="calendar-export" type="button" class="btn btn-secondary is-hidden">
+                Export
+            </button>
+
           <button id="reload-calendar" type="button" class="btn btn-primary">
             Reload
           </button>
@@ -122,4 +126,52 @@
       </div>
     </aside>
   </div>
+    <div id="calendar-export-modal" class="app-modal is-hidden" style="display: none;" aria-hidden="true">
+    <div class="app-modal-dialog">
+        <div class="app-modal-header">
+            <div>
+                <h2>Export calendar</h2>
+                <p class="card-subtitle">
+                    Create an Outlook-compatible ICS subscription URL for this team's on-call calendar.
+                </p>
+            </div>
+            <button id="close-calendar-export-modal" class="modal-close" type="button">×</button>
+        </div>
+
+        <div class="app-modal-body">
+            <div class="copy-fields">
+                <div class="copy-field">
+                    <label for="calendar-export-url">ICS subscription URL</label>
+                    <input
+                        id="calendar-export-url"
+                        class="input copy-field-control"
+                        type="text"
+                        readonly
+                    >
+                    <div class="help-text">
+                        Use this URL in Outlook: Calendar → Add calendar → Subscribe from web.
+                        Anyone with this URL can view this team's on-call schedule.
+                    </div>
+                </div>
+            </div>
+
+            <div id="calendar-export-status" class="inline-status"></div>
+        </div>
+
+        <div class="app-modal-footer">
+            <button id="create-calendar-export-feed" class="btn btn-secondary" type="button">
+                Create URL
+            </button>
+            <button id="copy-calendar-export-url" class="btn btn-secondary" type="button">
+                Copy URL
+            </button>
+            <button id="regenerate-calendar-export-url" class="btn btn-danger" type="button">
+                Regenerate
+            </button>
+            <button id="close-calendar-export-modal-footer" class="btn btn-primary" type="button">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
 </div>

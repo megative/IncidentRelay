@@ -1,41 +1,8 @@
-import hashlib
 import json
-
 from urllib.parse import quote
 
-
-def normalize_event_link(value):
-    """Return a clean event/source link value."""
-    if value is None:
-        return None
-
-    value = str(value).strip()
-
-    if not value:
-        return None
-
-    return value
-
-
-def first_event_link(*values):
-    """Return first non-empty event/source link."""
-    for value in values:
-        value = normalize_event_link(value)
-
-        if value:
-            return value
-
-    return None
-
-
-def add_event_link_label(labels, event_link):
-    """Store external event link in alert labels."""
-    event_link = normalize_event_link(event_link)
-
-    if event_link:
-        labels.setdefault("event_link", event_link)
-
-    return labels
+from app.services.integrations.normalizers.common import normalize_event_link, first_non_empty, first_event_link, \
+    add_event_link_label, make_dedup_key
 
 
 def build_zabbix_event_link(zabbix_url, event_id=None, trigger_id=None):
@@ -56,87 +23,6 @@ def build_zabbix_event_link(zabbix_url, event_id=None, trigger_id=None):
         f"{base_url}/zabbix.php?action=problem.view"
         f"&filter_set=1&filter_eventids%5B%5D={event_id}"
     )
-
-
-def make_hash(value):
-    """
-    Build a stable hash from a Python value.
-    """
-
-    return hashlib.sha256(repr(value).encode("utf-8")).hexdigest()
-
-
-def make_dedup_key(source, external_id=None, title=None, labels=None):
-    """
-    Create a stable deduplication key.
-    """
-
-    return make_hash({"source": source, "external_id": external_id, "title": title, "labels": labels or {}})
-
-
-def normalize_alertmanager(payload):
-    """
-    Normalize Prometheus Alertmanager payload.
-    """
-
-    result = []
-    for item in payload.get("alerts", []):
-        labels = item.get("labels", {})
-        annotations = item.get("annotations", {})
-        event_link = first_event_link(
-            annotations.get("event_link"),
-            annotations.get("event_url"),
-            annotations.get("alert_url"),
-            annotations.get("source_url"),
-            annotations.get("dashboard_url"),
-            annotations.get("panel_url"),
-            annotations.get("runbook_url"),
-            item.get("generatorURL"),
-            item.get("dashboardURL"),
-            item.get("panelURL"),
-            item.get("silenceURL"),
-            payload.get("externalURL"),
-        )
-
-        add_event_link_label(labels, event_link)
-
-        if item.get("generatorURL"):
-            labels.setdefault("generator_url", item.get("generatorURL"))
-
-        if payload.get("externalURL"):
-            labels.setdefault("alertmanager_url", payload.get("externalURL"))
-
-        title = annotations.get("summary") or labels.get("alertname") or "Alertmanager alert"
-        message = annotations.get("description") or annotations.get("message") or ""
-        external_id = item.get("fingerprint") or labels.get("alertname")
-        result.append({
-            "source": "alertmanager",
-            "team_slug": labels.get("team") or labels.get("oncall_team") or payload.get("team"),
-            "external_id": external_id,
-            "dedup_key": item.get("fingerprint") or make_dedup_key("alertmanager", external_id, title, labels),
-            "title": title,
-            "message": message,
-            "severity": labels.get("severity"),
-            "labels": labels,
-            "payload": item,
-            "status": item.get("status") or payload.get("status", "firing"),
-        })
-    return result
-
-
-def first_non_empty(*values):
-    """Return first non-empty string-like value."""
-    for value in values:
-        if value is None:
-            continue
-
-        if isinstance(value, str):
-            value = value.strip()
-
-        if value:
-            return value
-
-    return None
 
 
 def normalize_zabbix_status(value):
@@ -380,8 +266,8 @@ def normalize_zabbix(payload):
             ),
             "external_id": external_id,
             "dedup_key": (
-                payload.get("fingerprint")
-                or make_dedup_key("zabbix", external_id, title, labels)
+                    payload.get("fingerprint")
+                    or make_dedup_key("zabbix", external_id, title, labels)
             ),
             "title": title,
             "message": message or "",
@@ -389,45 +275,5 @@ def normalize_zabbix(payload):
             "labels": labels,
             "payload": payload,
             "status": status,
-        }
-    ]
-
-
-def normalize_webhook(payload):
-    """Normalize a generic webhook payload."""
-    labels = dict(payload.get("labels") or {})
-
-    event_link = first_event_link(
-        payload.get("event_link"),
-        payload.get("event_url"),
-        payload.get("alert_url"),
-        payload.get("source_url"),
-        payload.get("dashboard_url"),
-        payload.get("runbook_url"),
-        labels.get("event_link"),
-        labels.get("event_url"),
-        labels.get("alert_url"),
-        labels.get("source_url"),
-        labels.get("dashboard_url"),
-        labels.get("runbook_url"),
-    )
-
-    add_event_link_label(labels, event_link)
-
-    title = payload.get("title") or "Webhook alert"
-
-    return [
-        {
-            "source": "webhook",
-            "team_slug": payload.get("team") or labels.get("team") or labels.get("oncall_team"),
-            "external_id": payload.get("external_id"),
-            "dedup_key": payload.get("fingerprint")
-            or make_dedup_key("webhook", payload.get("external_id"), title, labels),
-            "title": title,
-            "message": payload.get("message") or "",
-            "severity": payload.get("severity") or "info",
-            "labels": labels,
-            "payload": payload,
-            "status": payload.get("status") or "firing",
         }
     ]

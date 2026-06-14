@@ -2,7 +2,7 @@ import pytest
 
 from app.modules.db import alerts_repo
 from app.services.alerts import upsert_alert
-from app.services.notification_service import notify_alert, update_alert_messages
+from app.services.notifications.delivery import notify_alert, update_alert_messages
 from tests.factories import create_group, create_route, create_team
 
 

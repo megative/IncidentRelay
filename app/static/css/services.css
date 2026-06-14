@@ -338,3 +338,41 @@ button.impact-path-node {
     background: #fffaeb;
     color: #b54708;
 }
+.analytics-chart-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    margin: 16px 0;
+}
+
+.analytics-chart-card {
+    display: grid;
+    gap: 12px;
+    min-height: 320px;
+    padding: 16px;
+    border: 1px solid var(--border-color, rgba(148, 163, 184, 0.25));
+    border-radius: 16px;
+    background: var(--surface-color, rgba(255, 255, 255, 0.02));
+}
+
+.analytics-chart-header h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.analytics-chart-header p {
+    margin: 4px 0 0;
+    color: var(--muted-text, #64748b);
+    font-size: 0.875rem;
+}
+
+.analytics-chart-card canvas {
+    width: 100% !important;
+    height: 240px !important;
+}
+
+@media (max-width: 1200px) {
+    .analytics-chart-grid {
+        grid-template-columns: 1fr;
+    }
+}

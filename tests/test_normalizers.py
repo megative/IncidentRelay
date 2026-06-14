@@ -1,10 +1,7 @@
-from app.services.normalizers import (
-    make_dedup_key,
-    make_hash,
-    normalize_alertmanager,
-    normalize_webhook,
-    normalize_zabbix,
-)
+from app.services.integrations.normalizers.webhook import normalize_webhook
+from app.services.integrations.normalizers.zabbix import normalize_zabbix
+from app.services.integrations.normalizers.alertmanager import normalize_alertmanager
+from app.services.integrations.normalizers.common import make_hash, make_dedup_key
 
 
 def test_make_hash_is_stable():

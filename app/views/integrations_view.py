@@ -2,19 +2,27 @@ import logging
 from datetime import datetime
 
 from flask import Blueprint, jsonify, request
+from peewee import DoesNotExist
 
-from app.api.schemas.integrations import AlertmanagerWebhookSchema, GenericWebhookSchema, ZabbixWebhookSchema
+from app.api.schemas.integrations import (
+    AlertmanagerWebhookSchema,
+    GenericWebhookSchema,
+    SentryWebhookSchema,
+    ZabbixWebhookSchema,
+)
 from app.settings import Config
-from app.modules.db import channels_repo, users_repo, alerts_repo
+from app.modules.db import channels_repo, users_repo, alerts_repo, routes_repo
 from app.services.alerts import acknowledge_alert, resolve_alert, upsert_alert
-from app.services.auth import require_alert_token
-from app.services.normalizers import normalize_alertmanager, normalize_webhook, normalize_zabbix
+from app.services.integrations.auth import require_alert_token
+from app.services.integrations.normalizers.sentry import normalize_sentry
+from app.services.integrations.normalizers.webhook import normalize_webhook
+from app.services.integrations.normalizers.zabbix import normalize_zabbix
+from app.services.integrations.normalizers.alertmanager import normalize_alertmanager
 from app.services.validation import validate_body
 from app.notifiers.voice.loader import create_voice_provider
-from app.services.routing import find_route_for_alert
+from app.services.routing.routing import find_route_for_alert
 from app.modules.db.models import UserNotificationDelivery
-from app.services.notification_rules import mark_delivery_failed
-
+from app.services.integrations.sentry import validate_sentry_route_signature
 
 integrations_bp = Blueprint("integrations_api", __name__)
 
@@ -56,6 +64,69 @@ def generic_webhook():
     if error:
         return error
     return process_incoming_alerts(normalize_webhook(payload.model_dump()))
+
+
+@integrations_bp.route("/sentry/<int:route_id>", methods=["POST"])
+def sentry_webhook(route_id):
+    """Receive signed webhooks from Sentry Internal Integration."""
+    try:
+        route = routes_repo.get_route(route_id)
+    except DoesNotExist:
+        return jsonify({
+            "error": "route_not_found",
+            "message": "Sentry route was not found",
+        }), 404
+
+    if route.source != "sentry":
+        return jsonify({
+            "error": "route_source_mismatch",
+            "message": "Route source must be sentry",
+        }), 400
+
+    if not route.enabled or route.deleted:
+        return jsonify({
+            "error": "route_disabled",
+            "message": "Sentry route is disabled",
+        }), 403
+
+    if not route.team or route.team.deleted or not route.team.active:
+        return jsonify({
+            "error": "route_team_inactive",
+            "message": "Sentry route team is inactive",
+        }), 403
+
+    if route.team.group and (
+        route.team.group.deleted or not route.team.group.active
+    ):
+        return jsonify({
+            "error": "route_group_inactive",
+            "message": "Sentry route group is inactive",
+        }), 403
+
+    raw_body = request.get_data(cache=True)
+
+    signature_error, status_code = validate_sentry_route_signature(
+        route,
+        raw_body,
+        request.headers,
+    )
+
+    if signature_error:
+        return jsonify(signature_error), status_code
+
+    payload, error = validate_body(SentryWebhookSchema)
+    if error:
+        return error
+
+    request.current_intake_route = route
+    request.current_auth_type = "sentry_signature"
+
+    return process_incoming_alerts(
+        normalize_sentry(
+            payload.model_dump(),
+            headers=dict(request.headers),
+        )
+    )
 
 
 def process_incoming_alerts(normalized_alerts):

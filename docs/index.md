@@ -123,11 +123,12 @@ IncidentRelay has two integration layers.
 
 ### Incoming alert sources
 
-| Source | Endpoint | Documentation |
-|---|---|---|
-| Alertmanager | `POST /api/integrations/alertmanager` | [Alertmanager](integrations/alertmanager.md) |
-| Zabbix | `POST /api/integrations/zabbix` | [Zabbix](integrations/zabbix.md) |
-| Generic webhook | `POST /api/integrations/webhook` | [Generic webhook](integrations/generic-webhook.md) |
+| Source          | Endpoint                              | Documentation                                      |
+|-----------------|---------------------------------------|----------------------------------------------------|
+| Alertmanager    | `POST /api/integrations/alertmanager` | [Alertmanager](integrations/alertmanager.md)       |
+| Zabbix          | `POST /api/integrations/zabbix`       | [Zabbix](integrations/zabbix.md)                   |
+| Sentry          | `POST /api/integrations/sentry`       | [Zabbix](integrations/sentry.md)                   |
+| Generic webhook | `POST /api/integrations/webhook`      | [Generic webhook](integrations/generic-webhook.md) |
 
 Incoming integrations use route intake tokens.
 
@@ -144,6 +145,16 @@ Incoming integrations use route intake tokens.
 | Browser/PWA push | [Browser Push Notifications](usage/browser-push.md) |
 
 Notification channels do not have intake tokens. Routes receive alerts, then send notifications to attached channels. Browser push is profile-level and is sent to the assigned user's active browser devices.
+
+### Calendar sync
+
+| Sync method | Best for | Documentation |
+|---|---|---|
+| CalDAV | Apple Calendar, Thunderbird, DAVx5 and other CalDAV clients | [CalDAV Calendar Sync](integrations/caldav.md) |
+| ICS subscription feed | Outlook, Google Calendar and web calendar subscriptions | [ICS Calendar Feed](integrations/ics-calendar-feed.md) |
+
+CalDAV uses personal API tokens with the `calendar:read` scope.
+ICS calendar feeds use secret subscription URLs and do not require login.
 
 ## API and automation
 

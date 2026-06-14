@@ -88,3 +88,190 @@
     </div>
   </div>
 </div>
+<div id="incident-responder-modal" class="app-modal is-hidden">
+    <div class="app-modal-dialog">
+        <div class="app-modal-header">
+            <div>
+                <h2>Add responder</h2>
+                <div class="card-subtitle">
+                    Request a user, team, rotation or escalation policy to help with this incident.
+                </div>
+            </div>
+
+            <button
+                type="button"
+                class="app-modal-close"
+                aria-label="Close"
+                data-modal-close
+            >
+                ×
+            </button>
+        </div>
+
+        <div class="app-modal-body">
+            <section class="card">
+                <div class="card-header">
+                    <div>
+                        <h2>Responder</h2>
+                        <div class="card-subtitle">
+                            Select target type and target ID.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-body">
+                    <div id="incident-responder-error" class="alert alert-danger is-hidden"></div>
+
+                    <label for="incident-responder-target-type">Target type</label>
+                    <select id="incident-responder-target-type" class="input">
+                        <option value="user">User</option>
+                        <option value="team">Team</option>
+                        <option value="rotation">Rotation</option>
+                        <option value="escalation_policy">Escalation policy</option>
+                    </select>
+
+                    <label id="incident-responder-target-select-label" for="incident-responder-target-select">User</label>
+                    <select id="incident-responder-target-select" class="input">
+                        <option value="">Select user</option>
+                    </select>
+
+                    <div id="incident-responder-target-help" class="help-text">
+                        Select a responder from the current incident team.
+                    </div>
+
+                    <label for="incident-responder-message">Message</label>
+                    <textarea
+                        id="incident-responder-message"
+                        class="input"
+                        rows="4"
+                    >Please help with this incident.</textarea>
+
+                    <label for="incident-responder-expires">Expires after minutes</label>
+                    <input
+                        id="incident-responder-expires"
+                        class="input"
+                        type="number"
+                        min="1"
+                        autocomplete="off"
+                    >
+
+                    <div class="help-text">
+                        Empty expiration means the responder request does not expire automatically.
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div class="app-modal-footer">
+            <button type="button" class="btn" data-modal-close>
+                Cancel
+            </button>
+            <button id="save-incident-responder" type="button" class="btn btn-primary">
+                Request responder
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="incident-stakeholder-modal" class="app-modal is-hidden">
+    <div class="app-modal-dialog">
+        <div class="app-modal-header">
+            <div>
+                <h2>Add stakeholder</h2>
+                <div class="card-subtitle">
+                    Add a person who should receive incident updates.
+                </div>
+            </div>
+
+            <button
+                type="button"
+                class="app-modal-close"
+                aria-label="Close"
+                data-modal-close
+            >
+                ×
+            </button>
+        </div>
+
+        <div class="app-modal-body">
+            <section class="card">
+                <div class="card-header">
+                    <div>
+                        <h2>Stakeholder</h2>
+                        <div class="card-subtitle">
+                            Use either an existing user ID or an email address.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-body">
+                    <div id="incident-stakeholder-error" class="alert alert-danger is-hidden"></div>
+
+                    <label for="incident-stakeholder-email">Email</label>
+                    <input
+                        id="incident-stakeholder-email"
+                        class="input"
+                        type="email"
+                        autocomplete="off"
+                    >
+
+                    <label for="incident-stakeholder-user-select">Existing user</label>
+                    <select id="incident-stakeholder-user-select" class="input">
+                        <option value="">No existing user</option>
+                    </select>
+
+                    <div class="help-text">
+                        Select an existing user or enter an external email below.
+                    </div>
+
+                    <label for="incident-stakeholder-display-name">Display name</label>
+                    <input
+                        id="incident-stakeholder-display-name"
+                        class="input"
+                        type="text"
+                        autocomplete="off"
+                    >
+
+                    <label for="incident-stakeholder-role">Role</label>
+                    <select id="incident-stakeholder-role" class="input">
+                        <option value="stakeholder">Stakeholder</option>
+                        <option value="business_owner">Business owner</option>
+                        <option value="technical_owner">Technical owner</option>
+                        <option value="manager">Manager</option>
+                    </select>
+
+                    <div class="form-section">
+                        <label class="md-checkbox">
+                            <input id="incident-stakeholder-notify-created" type="checkbox" checked>
+                            <span>Notify on created</span>
+                        </label>
+
+                        <label class="md-checkbox">
+                            <input id="incident-stakeholder-notify-priority" type="checkbox" checked>
+                            <span>Notify on priority change</span>
+                        </label>
+
+                        <label class="md-checkbox">
+                            <input id="incident-stakeholder-notify-status" type="checkbox" checked>
+                            <span>Notify on status change</span>
+                        </label>
+
+                        <label class="md-checkbox">
+                            <input id="incident-stakeholder-notify-resolved" type="checkbox" checked>
+                            <span>Notify on resolved</span>
+                        </label>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div class="app-modal-footer">
+            <button type="button" class="btn" data-modal-close>
+                Cancel
+            </button>
+            <button id="save-incident-stakeholder" type="button" class="btn btn-primary">
+                Add stakeholder
+            </button>
+        </div>
+    </div>
+</div>

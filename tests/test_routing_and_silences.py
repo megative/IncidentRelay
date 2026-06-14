@@ -1,4 +1,4 @@
-from app.services.routing import build_group_key, find_route_for_alert, is_route_active
+from app.services.routing.routing import build_group_key, find_route_for_alert, is_route_active
 from app.services.silences import find_active_silence
 from tests.factories import create_group, create_route, create_silence, create_team
 from app.modules.db import alerts_repo

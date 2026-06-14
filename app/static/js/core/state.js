@@ -7,6 +7,7 @@ const routes = {
     "/calendar": { page: "calendar", title: "Calendar", subtitle: "On-call calendar by team", load: function () { loadCalendar(); } },
     "/routes": { page: "routes", title: "Routes", subtitle: "Connect alert sources, rotations and channels", load: function () { loadRoutes(); } },
     "/services": { page: "services", title: "Services", subtitle: "Technical services, ownership and status", load: function () { loadServices(); } },
+    "/maintenance-windows": { page: "maintenance-windows", title: "Maintenance Windows", subtitle: "Planned maintenance, notification suppression and escalation handling", load: function () {loadMaintenanceWindows();}},
     "/escalation-policies": { page: "escalation-policies", title: "Escalation Policies", subtitle: "Define alert escalation chains by team", load: function () { loadEscalationPolicies(); } },
     "/channels": { page: "channels", title: "Channels", subtitle: "Notification channels", load: function () { loadChannels(); } },
     "/silences": { page: "silences", title: "Silences", subtitle: "Mute alerts by matchers", load: function () { loadSilences(); } },

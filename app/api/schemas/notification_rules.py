@@ -1,7 +1,7 @@
 from pydantic import Field, field_validator
 
 from app.api.schemas.base import ApiModel
-from app.services.notification_rules import NOTIFICATION_RULE_METHODS
+from app.services.notifications.rules import NOTIFICATION_RULE_METHODS
 from app.services.severity import normalize_severity_list
 
 

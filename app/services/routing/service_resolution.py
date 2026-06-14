@@ -1,5 +1,5 @@
 from app.modules.db import services_repo
-from app.services.matchers import match_alert
+from app.services.routing.matchers import match_alert
 
 
 def resolve_alert_service(route, alert_data):

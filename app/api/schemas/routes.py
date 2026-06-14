@@ -13,13 +13,14 @@ class RouteBaseSchema(ApiModel):
 
     team_id: int = Field(ge=1)
     name: str = Field(min_length=2, max_length=120)
-    source: str = Field(pattern=r"^(alertmanager|zabbix|webhook)$")
+    source: str = Field(pattern=r"^(alertmanager|zabbix|webhook|sentry)$")
     rotation_id: int | None = Field(default=None, ge=1)
     channel_ids: List[int] = Field(default_factory=list)
     matchers: Dict[str, Any] = Field(default_factory=dict)
     group_by: List[str] = Field(
         default_factory=lambda: ["alertname", "severity"]
     )
+    integration_config: Dict[str, Any] = Field(default_factory=dict)
     enabled: bool = True
 
     escalation_mode: str = Field(

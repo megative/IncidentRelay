@@ -2,6 +2,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.modules.common import as_utc_aware as common_as_utc_aware
+
 
 class ApiModel(BaseModel):
     """
@@ -27,3 +29,8 @@ class IdBody(ApiModel):
 
 JsonDict = Dict[str, Any]
 JsonList = List[Any]
+
+
+def as_utc_aware(value):
+    """Treat naive datetimes as UTC and return aware UTC datetime."""
+    return common_as_utc_aware(value)

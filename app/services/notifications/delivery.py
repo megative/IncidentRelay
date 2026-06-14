@@ -5,8 +5,8 @@ from app.modules.db import alerts_repo, notifications_repo, routes_repo
 from app.notifiers.registry import get_notifier
 from app.services.links import build_alert_web_url
 from app.services.severity import normalize_severity, normalize_severity_list
-from app.services.service_context import format_service_context_plain, service_display_name
-from app.services import notification_rules
+from app.services.routing.service_context import format_service_context_plain, service_display_name
+from app.services.notifications import rules
 
 EDITABLE_EVENTS = {"acknowledged", "resolved"}
 
@@ -153,7 +153,7 @@ def has_matching_notification_channel(alert):
             if channel_matches_alert_severity(channel, alert):
                 return True
 
-    return notification_rules.has_deliverable_user_notification(alert)
+    return rules.has_deliverable_user_notification(alert)
 
 
 def notify_alert(group, event_type="notification"):
@@ -322,7 +322,7 @@ def notify_alert(group, event_type="notification"):
                 )
 
     try:
-        user_sent_count = notification_rules.enqueue_user_notifications(
+        user_sent_count = rules.enqueue_user_notifications(
             group,
             event_type=event_type,
         )

@@ -24,4 +24,5 @@ Recommended reading order:
 4. [Channels](channels.md)
 5. [Reminders and Escalations](reminders-and-escalations.md)
 6. [Escalation policy](escalation-policies.md)
-7. [Service](service.md)
+7. [Service](services.md)
+8. [Maintenance window](maintenance-windows.md)
